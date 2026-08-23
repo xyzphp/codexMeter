@@ -148,7 +148,7 @@ webView.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
 
 `git tag v1.0.0 && git push origin v1.0.0`
 
-工作流会自动创建 GitHub Release，并上传 Windows amd64、Linux amd64 和 Linux arm64 三个平台的压缩包。每个发布包包含对应平台的可执行文件、内嵌的 HTML 页面、`config.example.json` 和中文 README，不包含独立的 `web` 目录和真实的 `config.json`。
+工作流会自动创建 GitHub Release，并上传 Windows amd64、Linux amd64 和 Linux arm64 三个平台的压缩包。每个发布包包含对应平台的可执行文件、内嵌的 HTML 页面、`config.example.json`、OpenAPI 文件和 `docs/` 中文文档，不包含独立的 `web` 目录和真实的 `config.json`。
 
 ## 配置项
 
@@ -170,6 +170,8 @@ webView.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
 | `USAGE_CACHE_TTL` | `cache_ttl` | 缓存时长，默认 `10m` |
 
 配置页面支持修改 Token、账号 ID、User-Agent、代理和缓存时长。查询模式固定为 `wham/usage`，不能切换到其他模式。保存配置时，在支持的系统上会使用 `0600` 文件权限。
+
+OpenAI/ChatGPT OAuth 凭证、Account ID、代理和配置文件的获取与填写方法见 [OpenAI 配置接入说明](docs/openai-config.md)。本项目不实现 OAuth 登录或 Token 刷新，也不接受普通 OpenAI API Key 作为 `wham` 凭证。
 
 ## 数据接口
 

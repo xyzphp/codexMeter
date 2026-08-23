@@ -2,6 +2,8 @@
 
 本项目提供的是一个用于展示 ChatGPT/Codex 额度和统计数据的 Go 服务。接口定义位于仓库根目录的 [`openapi.yaml`](../openapi.yaml)，可以直接导入 Swagger UI、Postman、Apifox 或其他支持 OpenAPI 3.0 的工具。
 
+OpenAI/ChatGPT OAuth 凭证的准备、Account ID 的确认和 `config.json` 填写方法，请先阅读 [OpenAI 配置接入说明](openai-config.md)。
+
 ## 1. 接入边界
 
 项目服务端使用配置的 ChatGPT OAuth Bearer Token 请求上游 `wham/usage` 和统计接口，再向调用方返回整理后的数据。调用方不需要、也不应该直接携带 OAuth Token。
