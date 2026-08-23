@@ -1,6 +1,6 @@
 # GitHub Actions 自动发布
 
-仓库使用 GitHub Actions 自动完成测试、静态检查、跨平台构建和 GitHub Release 发布，工作流文件位于 [.github/workflows/release.yml](../.github/workflows/release.yml)。
+仓库使用 GitHub Actions 自动完成测试、静态检查、跨平台构建、Docker 镜像构建验证和 GitHub Release 发布，工作流文件位于 [.github/workflows/release.yml](../.github/workflows/release.yml)。
 
 ## 自动触发
 
@@ -26,7 +26,8 @@ git push origin v1.0.0
    - Linux amd64
    - Linux arm64
 4. 将各平台文件打包为 ZIP 或 tar.gz。
-5. 版本标签触发时，自动创建 GitHub Release 并上传全部构建包。
+5. 构建 `codex-meter:ci` Docker 镜像，验证 Dockerfile 和容器构建流程。
+6. 版本标签触发时，自动创建 GitHub Release 并上传全部构建包。
 
 ## 发布包内容
 
@@ -36,7 +37,7 @@ git push origin v1.0.0
 - `config.example.json`；
 - `openapi.yaml`；
 - `README.md`；
-- `docs/` 中文文档目录和效果演示素材。
+- `docs/` 中文文档目录和效果演示素材，其中包含 Docker 运行说明。
 
 HTML 页面通过 Go 的 `//go:embed` 嵌入可执行文件，因此发布包不需要额外携带 `web/` 目录。运行时使用的 `config.json` 不会进入发布包，需要在部署服务器上单独创建，也不应提交到 Git 仓库。
 
@@ -47,6 +48,7 @@ HTML 页面通过 Go 的 `//go:embed` 嵌入可执行文件，因此发布包不
 ```bash
 go test ./...
 go vet ./...
+docker build --pull --tag codex-meter:ci .
 git diff --check
 ```
 

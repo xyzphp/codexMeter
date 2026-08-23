@@ -73,7 +73,7 @@ jobs:
           go build -trimpath -ldflags="-s -w" -o "${package_dir}/codex-meter${{ matrix.extension }}" .
           cp README.md config.example.json openapi.yaml "${package_dir}/"
           mkdir -p "${package_dir}/docs"
-          cp docs/openapi.md docs/openai-config.md docs/frontend-ui.md docs/github-actions.md "${package_dir}/docs/"
+          cp docs/openapi.md docs/openai-config.md docs/frontend-ui.md docs/github-actions.md docs/docker.md "${package_dir}/docs/"
           cp -R docs/media "${package_dir}/docs/"
           if [ "${{ matrix.archive }}" = "zip" ]; then
             (cd package && zip -r "../dist/${package_name}.zip" "${package_name}")
@@ -87,10 +87,22 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  docker:
+    name: Docker image
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build Docker image
+        run: docker build --pull --tag codex-meter:ci .
+
   release:
     name: Create GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, docker]
     runs-on: ubuntu-latest
     steps:
       - name: 下载构建产物

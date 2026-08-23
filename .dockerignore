@@ -1,0 +1,11 @@
+.git
+.github
+.chrome-diagnostic
+.chrome-diagnostic-logs
+config.json
+*.exe
+*.out
+*.test
+docs
+README.md
+openapi.yaml

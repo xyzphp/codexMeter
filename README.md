@@ -70,6 +70,20 @@ go run .
 
 默认只监听本机地址。启用管理密钥或 Basic Auth 后，请按照[配置接入文档](docs/openai-config.md)完成配置。
 
+### Docker 运行
+
+Docker 构建、Compose 启停、配置挂载和反向代理说明见 [Docker 运行文档](docs/docker.md)。快速启动：
+
+```bash
+cp config.example.json config.json
+```
+
+```bash
+docker compose up -d --build
+```
+
+默认访问端口为 `8123`。配置文件通过卷挂载到容器中，设置页面保存的配置会保留在宿主机的 `config.json`。
+
 ## 前端与 UI 文档
 
 前端页面结构、Go 内嵌构建方式、Android WebView 设置和 UI 适配验收规范见 [docs/frontend-ui.md](docs/frontend-ui.md)。
