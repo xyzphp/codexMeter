@@ -1,72 +1,76 @@
-# ChatGPT & Codex OAuth Usage Dashboard
+# ChatGPT & Codex 使用额度面板
 
-This is a single-binary Go backend and embedded HTML frontend for the LX04 Android WebView dashboard. It uses the read-only ChatGPT internal quota endpoint by default:
+这是一个使用 Go 编写的单文件后端应用，内嵌 HTML 前端页面，适用于 LX04 Android WebView 额度面板。
 
-```text
-GET https://chatgpt.com/backend-api/wham/usage
-```
+默认使用 ChatGPT 的只读接口：`GET https://chatgpt.com/backend-api/wham/usage`。
 
-The default `wham` mode does not submit a model prompt. The legacy `probe` mode can call `POST /backend-api/codex/responses` and may consume quota, so it is disabled by default in the configuration UI.
+默认 `wham` 模式不会提交模型提示词。旧版 `probe` 模式会调用 `POST /backend-api/codex/responses`，可能消耗额度，因此默认关闭。
 
-## Run
+## 主要功能
 
-Copy `config.example.json` to `config.json`, fill in the OAuth access token and ChatGPT account ID, then run:
+- 查询 ChatGPT OAuth 账号额度、Token 使用量和重置时间
+- 显示本周剩余额度、近七天使用量和各模型占比
+- 查询最近七个已完成日期的 Token、对话轮次和模型使用情况
+- 对接公开的 Codex Reset 预测接口
+- 支持自动刷新、额度区间提示音、HTTP Basic Auth、API Key 和代理
+- 前端页面内嵌到 Go 二进制文件中
 
-```powershell
-go run .
-```
+## 运行
 
-Open the dashboard at `http://127.0.0.1:8080/` and the configuration page at `http://127.0.0.1:8080/settings`.
+复制 `config.example.json` 为 `config.json`，填写 OAuth Access Token 和 ChatGPT Account ID，然后执行 `go run .`。
 
-The default bind address is localhost. If `app_api_key` or `APP_API_KEY` is set, enter the same key on `/settings`; it is kept in browser session storage and then used by the dashboard API calls.
-
-## Authentication sent to `wham/usage`
-
-The backend keeps the OAuth token server-side and sends these upstream headers:
+默认页面地址：
 
 ```text
-Authorization: Bearer <OPENAI_ACCESS_TOKEN>
-chatgpt-account-id: <CHATGPT_ACCOUNT_ID>
-openai-beta: codex-1
-oai-language: zh-CN
-originator: Codex Desktop
-accept: application/json
-sec-fetch-site: none
-sec-fetch-mode: no-cors
-sec-fetch-dest: empty
-priority: u=4, i
-User-Agent: <OPENAI_USER_AGENT>
+额度页面：http://127.0.0.1:8080/
+配置页面：http://127.0.0.1:8080/settings
 ```
 
-When enabled, `x-openai-fedramp: true` is also sent. The OAuth token and account ID are required. Cookies are not required by this implementation.
+默认只监听本机地址。配置 `app_api_key` 或 `APP_API_KEY` 后，需要在配置页面输入相同的 Key。
 
-## Configuration
+## 配置项
 
-Configuration can be stored in `config.json` or supplied through environment variables. `CONFIG_FILE` selects another JSON file.
+配置可以写入 `config.json`，也可以通过环境变量提供；`CONFIG_FILE` 可以指定其他 JSON 配置文件。
 
-| Variable | JSON field | Meaning |
+| 环境变量 | JSON 配置项 | 说明 |
 |---|---|---|
-| `OPENAI_ACCESS_TOKEN` | `openai.access_token` | OAuth access token |
-| `CHATGPT_ACCOUNT_ID` | `openai.chatgpt_account_id` | ChatGPT account ID |
-| `USAGE_MODE` | `usage_mode` | `wham` (recommended) or `probe` |
-| `OPENAI_USER_AGENT` | `openai.user_agent` | Upstream User-Agent |
-| `OPENAI_FEDRAMP` | `openai.fedramp` | Send the FedRAMP header |
-| `UPSTREAM_PROXY` | `proxy.url` | HTTP/HTTPS proxy |
-| `APP_API_KEY` | `app_api_key` | Protect local API endpoints |
-| `BASIC_AUTH_ENABLED` | `basic_auth.enabled` | Enable HTTP Basic Auth for pages and APIs |
-| `BASIC_AUTH_USER` | `basic_auth.username` | Basic Auth username |
-| `BASIC_AUTH_PASSWORD` | `basic_auth.password` | Basic Auth password |
-| `BIND_ADDR` | `bind_addr` | Listen address, default `127.0.0.1:8080` |
-| `USAGE_CACHE_TTL` | `cache_ttl` | Cache duration, default `10m` |
-| `CODEX_MODEL` | `openai.model` | Displayed model; used by `probe` mode |
+| `OPENAI_ACCESS_TOKEN` | `openai.access_token` | OpenAI OAuth Access Token |
+| `CHATGPT_ACCOUNT_ID` | `openai.chatgpt_account_id` | ChatGPT 账号 ID |
+| `USAGE_MODE` | `usage_mode` | `wham`（推荐）或 `probe` |
+| `OPENAI_USER_AGENT` | `openai.user_agent` | 上游请求 User-Agent |
+| `OPENAI_FEDRAMP` | `openai.fedramp` | 是否发送 FedRAMP 请求头 |
+| `UPSTREAM_PROXY` | `proxy.url` | HTTP/HTTPS 代理地址 |
+| `APP_API_KEY` | `app_api_key` | 保护本地 API 接口 |
+| `BASIC_AUTH_ENABLED` | `basic_auth.enabled` | 是否启用 HTTP Basic Auth |
+| `BASIC_AUTH_USER` | `basic_auth.username` | Basic Auth 用户名 |
+| `BASIC_AUTH_PASSWORD` | `basic_auth.password` | Basic Auth 密码 |
+| `BIND_ADDR` | `bind_addr` | 监听地址，默认 `127.0.0.1:8080` |
+| `USAGE_CACHE_TTL` | `cache_ttl` | 缓存时长，默认 `10m` |
+| `CODEX_MODEL` | `openai.model` | 页面显示模型名称 |
 
-The config page also allows changing the token, account ID, query mode, User-Agent, proxy and cache duration. Saving writes `config.json` with file mode `0600` on supported systems.
+配置页面支持修改 Token、账号 ID、查询模式、User-Agent、代理和缓存时长。保存配置时，在支持的系统上会使用 `0600` 文件权限。
 
-The dashboard uses different built-in alert sounds for quota bands: no sound above 80%, the existing sound from 50% to 80%, a warning sound from above 20% through 50%, and a critical sound at or below 20%. The active alert repeats once after each automatic refresh. It does not use TTS; if browser autoplay is blocked, the sound is retried after the next touch or click.
+## 数据接口
 
-When Basic Auth is enabled, the browser prompts for the configured username and password before serving the dashboard, settings page, health endpoint, or API. The reverse proxy must pass through the `Authorization` header.
+面板后端使用服务器端 OAuth 凭证请求：
 
-## API
+```text
+/backend-api/wham/usage
+/backend-api/wham/usage/daily-token-usage-breakdown
+/backend-api/wham/analytics/daily-workspace-usage-counts
+```
+
+`/api/usage/analytics` 会合并每日 Token、工作区对话轮次和模型使用数据，返回最近七个已完成日期；当前未完成日期会被排除。
+
+预测页面通过代理请求：
+
+```text
+https://codex-resets.com/api/v1/status
+```
+
+预测数据仅供参考，不会修改账号额度，也不会消耗 OpenAI 使用额度。
+
+## 本地 API
 
 ```text
 GET /healthz
@@ -80,15 +84,26 @@ GET /api/config
 PUT /api/config
 ```
 
-`/api/usage` returns normalized `five_hour` and `seven_day` windows, reset timestamps, cache status, and a small usage history for the frontend trend line.
+## Basic Auth 和 Nginx
 
-`/api/usage/analytics` requests ChatGPT's daily token-usage breakdown and daily workspace-usage counts with the server-side OAuth credentials, merges both responses, includes per-model daily usage, and returns the seven completed dates ending yesterday for the detail-page charts. The incomplete current date is intentionally excluded. The result is cached using the configured cache duration.
+启用 Basic Auth 后，额度页面、配置页面、健康检查和 API 都需要输入配置的用户名和密码。使用 Nginx 反向代理时，需要透传 `Authorization` 请求头：
 
-`/api/prediction` reads the public `https://codex-resets.com/api/v1/status` endpoint through the configured proxy and caches its result using the same cache duration. It returns the latest public reset announcement, any active watch, and aggregate reset statistics. This public signal is informational only; it never changes the account quota and does not consume OpenAI usage.
+```nginx
+location /codex/ {
+    proxy_pass http://127.0.0.1:8123/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Authorization $http_authorization;
+}
+```
 
-## Security notes
+## 安全注意事项
 
-- Do not put the OAuth token in HTML, an APK, or frontend JavaScript.
-- Keep the service on `127.0.0.1` unless it is behind HTTPS and an access-control layer.
-- `chatgpt.com/backend-api` and its response schema are internal interfaces and can change without notice.
-- The `probe` path is retained only as an explicit compatibility option; use `wham` for quota display.
+- 不要把 OAuth Token 写入 HTML、APK 或前端 JavaScript。
+- 不要提交真实的 `config.json`，该文件已加入 `.gitignore`。
+- 服务对外提供时请使用 HTTPS 和访问控制。
+- `chatgpt.com/backend-api` 属于内部接口，返回结构可能随时变化。
+- 请妥善保管 Basic Auth 密码、API Key 和 OAuth 凭证。
