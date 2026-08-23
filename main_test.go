@@ -110,6 +110,19 @@ func TestWhamRequestUsesOAuthHeadersAndGET(t *testing.T) {
 	}
 }
 
+func TestOnlyWhamUsageModeIsAccepted(t *testing.T) {
+	service := &UsageService{cfg: Config{
+		AccessToken:      "oauth-token",
+		ChatGPTAccountID: "account-id",
+		UsageMode:        defaultUsageMode,
+		CacheTTL:         time.Minute,
+	}}
+	unsupported := "legacy"
+	if _, err := service.UpdateConfig(ConfigUpdate{UsageMode: &unsupported}); err == nil {
+		t.Fatal("expected non-wham usage mode to be rejected")
+	}
+}
+
 func TestDailyUsageAnalyticsUsesBothEndpoints(t *testing.T) {
 	var paths []string
 	service := &UsageService{

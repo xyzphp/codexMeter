@@ -4,7 +4,7 @@
 
 默认使用 ChatGPT 的只读接口：`GET https://chatgpt.com/backend-api/wham/usage`。
 
-默认 `wham` 模式不会提交模型提示词。旧版 `probe` 模式会调用 `POST /backend-api/codex/responses`，可能消耗额度，因此默认关闭。
+当前只使用 `wham` 只读模式，不提交模型提示词，也不会发起模型探测请求，因此额度查询不会通过发送对话请求来获取数据。
 
 ## 主要功能
 
@@ -158,7 +158,7 @@ webView.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
 |---|---|---|
 | `OPENAI_ACCESS_TOKEN` | `openai.access_token` | OpenAI OAuth Access Token |
 | `CHATGPT_ACCOUNT_ID` | `openai.chatgpt_account_id` | ChatGPT 账号 ID |
-| `USAGE_MODE` | `usage_mode` | `wham`（推荐）或 `probe` |
+| `USAGE_MODE` | `usage_mode` | 仅支持 `wham` 只读模式 |
 | `OPENAI_USER_AGENT` | `openai.user_agent` | 上游请求 User-Agent |
 | `OPENAI_FEDRAMP` | `openai.fedramp` | 是否发送 FedRAMP 请求头 |
 | `UPSTREAM_PROXY` | `proxy.url` | HTTP/HTTPS 代理地址 |
@@ -168,9 +168,8 @@ webView.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
 | `BASIC_AUTH_PASSWORD` | `basic_auth.password` | Basic Auth 密码 |
 | `BIND_ADDR` | `bind_addr` | 监听地址，默认 `127.0.0.1:8080` |
 | `USAGE_CACHE_TTL` | `cache_ttl` | 缓存时长，默认 `10m` |
-| `CODEX_MODEL` | `openai.model` | 页面显示模型名称 |
 
-配置页面支持修改 Token、账号 ID、查询模式、User-Agent、代理和缓存时长。保存配置时，在支持的系统上会使用 `0600` 文件权限。
+配置页面支持修改 Token、账号 ID、User-Agent、代理和缓存时长。查询模式固定为 `wham/usage`，不能切换到其他模式。保存配置时，在支持的系统上会使用 `0600` 文件权限。
 
 ## 数据接口
 

@@ -23,10 +23,7 @@ import (
 
 const (
 	defaultBindAddr             = "127.0.0.1:8080"
-	defaultModel                = "gpt-5.6-luna"
-	defaultCodexVersion         = "0.146.0"
 	defaultUserAgent            = "codex-tui/0.146.0 (Ubuntu 22.4.0; x86_64) xterm-256color"
-	defaultInstructions         = "You are a helpful assistant."
 	defaultUsageMode            = "wham"
 	defaultCacheTTL             = 10 * time.Minute
 	upstreamRequestTimeout      = 15 * time.Second
@@ -53,10 +50,7 @@ type Config struct {
 	AccessToken       string
 	ChatGPTAccountID  string
 	AppAPIKey         string
-	Model             string
-	CodexVersion      string
 	UserAgent         string
-	Instructions      string
 	UpstreamProxy     string
 	CacheTTL          time.Duration
 	CORSOrigin        string
@@ -80,10 +74,7 @@ type fileConfig struct {
 	OpenAI     struct {
 		AccessToken      string `json:"access_token"`
 		ChatGPTAccountID string `json:"chatgpt_account_id"`
-		Model            string `json:"model"`
-		CodexVersion     string `json:"codex_version"`
 		UserAgent        string `json:"user_agent"`
-		Instructions     string `json:"instructions"`
 		FedRAMP          bool   `json:"fedramp"`
 	} `json:"openai"`
 	Proxy struct {
@@ -99,14 +90,11 @@ func loadConfig() (Config, error) {
 	}
 
 	cfg := Config{
-		BindAddr:     defaultBindAddr,
-		Model:        defaultModel,
-		CodexVersion: defaultCodexVersion,
-		UserAgent:    defaultUserAgent,
-		Instructions: defaultInstructions,
-		CacheTTL:     defaultCacheTTL,
-		ConfigPath:   configPath,
-		UsageMode:    defaultUsageMode,
+		BindAddr:   defaultBindAddr,
+		UserAgent:  defaultUserAgent,
+		CacheTTL:   defaultCacheTTL,
+		ConfigPath: configPath,
+		UsageMode:  defaultUsageMode,
 	}
 
 	if raw, err := os.ReadFile(configPath); err == nil {
@@ -134,8 +122,8 @@ func loadConfig() (Config, error) {
 	if cfg.ChatGPTAccountID == "" {
 		return Config{}, errors.New("CHATGPT_ACCOUNT_ID is required")
 	}
-	if cfg.UsageMode != "wham" && cfg.UsageMode != "probe" {
-		return Config{}, fmt.Errorf("invalid USAGE_MODE %q; use wham or probe", cfg.UsageMode)
+	if cfg.UsageMode != defaultUsageMode {
+		return Config{}, fmt.Errorf("invalid USAGE_MODE %q; only wham is supported", cfg.UsageMode)
 	}
 	if cfg.BasicAuthEnabled && (cfg.BasicAuthUsername == "" || cfg.BasicAuthPassword == "") {
 		return Config{}, errors.New("BASIC_AUTH_USER and BASIC_AUTH_PASSWORD are required when Basic Auth is enabled")
@@ -177,17 +165,8 @@ func applyFileConfig(cfg *Config, stored fileConfig) {
 	if stored.OpenAI.ChatGPTAccountID != "" {
 		cfg.ChatGPTAccountID = strings.TrimSpace(stored.OpenAI.ChatGPTAccountID)
 	}
-	if stored.OpenAI.Model != "" {
-		cfg.Model = strings.TrimSpace(stored.OpenAI.Model)
-	}
-	if stored.OpenAI.CodexVersion != "" {
-		cfg.CodexVersion = strings.TrimSpace(stored.OpenAI.CodexVersion)
-	}
 	if stored.OpenAI.UserAgent != "" {
 		cfg.UserAgent = strings.TrimSpace(stored.OpenAI.UserAgent)
-	}
-	if stored.OpenAI.Instructions != "" {
-		cfg.Instructions = stored.OpenAI.Instructions
 	}
 	if stored.Proxy.URL != "" {
 		cfg.UpstreamProxy = strings.TrimSpace(stored.Proxy.URL)
@@ -212,10 +191,7 @@ func applyEnvironmentConfig(cfg *Config) error {
 	overrideString(&cfg.AppAPIKey, "APP_API_KEY")
 	overrideString(&cfg.BasicAuthUsername, "BASIC_AUTH_USER")
 	overrideString(&cfg.BasicAuthPassword, "BASIC_AUTH_PASSWORD")
-	overrideString(&cfg.Model, "CODEX_MODEL")
-	overrideString(&cfg.CodexVersion, "CODEX_VERSION")
 	overrideString(&cfg.UserAgent, "OPENAI_USER_AGENT")
-	overrideString(&cfg.Instructions, "CODEX_INSTRUCTIONS")
 	overrideString(&cfg.UpstreamProxy, "UPSTREAM_PROXY")
 	overrideString(&cfg.CORSOrigin, "CORS_ORIGIN")
 	overrideString(&cfg.UsageMode, "USAGE_MODE")
@@ -269,7 +245,6 @@ type Window struct {
 
 type UsageResponse struct {
 	Source                string         `json:"source"`
-	Model                 string         `json:"model"`
 	PlanType              string         `json:"plan_type,omitempty"`
 	Email                 string         `json:"email,omitempty"`
 	RateLimitAllowed      bool           `json:"rate_limit_allowed"`
@@ -534,8 +509,8 @@ func (s *UsageService) Get(ctx context.Context, force bool) (*UsageResponse, err
 		}
 	}
 
-	// Serialize upstream probes and check the cache again after waiting. This
-	// prevents concurrent WebView refreshes from producing duplicate probes.
+	// Serialize upstream usage requests and check the cache again after waiting.
+	// This prevents concurrent WebView refreshes from producing duplicate requests.
 	s.refreshMu.Lock()
 	defer s.refreshMu.Unlock()
 
@@ -546,7 +521,7 @@ func (s *UsageService) Get(ctx context.Context, force bool) (*UsageResponse, err
 		}
 	}
 
-	usage, err := s.probe(ctx)
+	usage, err := s.queryWhamUsage(ctx, s.currentConfig())
 	if err != nil {
 		return nil, err
 	}
@@ -836,7 +811,6 @@ func (s *UsageService) queryResetPrediction(ctx context.Context) (*ResetPredicti
 }
 
 type ConfigView struct {
-	Model            string `json:"model"`
 	BasePath         string `json:"base_path"`
 	BasicAuthEnabled bool   `json:"basic_auth_enabled"`
 	ChatGPTAccountID string `json:"chatgpt_account_id"`
@@ -853,7 +827,6 @@ type ConfigView struct {
 type ConfigUpdate struct {
 	AccessToken      *string `json:"access_token"`
 	ChatGPTAccountID *string `json:"chatgpt_account_id"`
-	Model            *string `json:"model"`
 	UsageMode        *string `json:"usage_mode"`
 	UserAgent        *string `json:"user_agent"`
 	FedRAMP          *bool   `json:"fedramp"`
@@ -880,7 +853,6 @@ func (s *UsageService) ConfigView() ConfigView {
 		tokenHint = "****" + cfg.AccessToken[len(cfg.AccessToken)-4:]
 	}
 	return ConfigView{
-		Model:            cfg.Model,
 		BasePath:         cfg.BasePath,
 		BasicAuthEnabled: cfg.BasicAuthEnabled,
 		ChatGPTAccountID: cfg.ChatGPTAccountID,
@@ -903,9 +875,6 @@ func (s *UsageService) UpdateConfig(update ConfigUpdate) (ConfigView, error) {
 	}
 	if update.ChatGPTAccountID != nil {
 		next.ChatGPTAccountID = strings.TrimSpace(*update.ChatGPTAccountID)
-	}
-	if update.Model != nil {
-		next.Model = strings.TrimSpace(*update.Model)
 	}
 	if update.UsageMode != nil {
 		next.UsageMode = strings.ToLower(strings.TrimSpace(*update.UsageMode))
@@ -935,11 +904,8 @@ func (s *UsageService) UpdateConfig(update ConfigUpdate) (ConfigView, error) {
 	if next.ChatGPTAccountID == "" {
 		return ConfigView{}, errors.New("chatgpt_account_id cannot be empty")
 	}
-	if next.Model == "" {
-		return ConfigView{}, errors.New("model cannot be empty")
-	}
-	if next.UsageMode != "wham" && next.UsageMode != "probe" {
-		return ConfigView{}, errors.New("usage_mode must be wham or probe")
+	if next.UsageMode != defaultUsageMode {
+		return ConfigView{}, errors.New("usage_mode only supports wham")
 	}
 
 	proxyFunc, err := buildProxyFunc(next.UpstreamProxy)
@@ -966,8 +932,8 @@ func (s *UsageService) UpdateConfig(update ConfigUpdate) (ConfigView, error) {
 	s.cfg = next
 	s.cfgMu.Unlock()
 
-	// A changed model, token, account, proxy, or cache policy must not reuse an
-	// earlier account snapshot.
+	// A changed token, account, proxy, or cache policy must not reuse an earlier
+	// account snapshot.
 	s.cacheMu.Lock()
 	s.cached = nil
 	s.cachedAt = time.Time{}
@@ -994,10 +960,7 @@ func persistConfig(cfg Config) error {
 	stored.BasicAuth.Password = cfg.BasicAuthPassword
 	stored.OpenAI.AccessToken = cfg.AccessToken
 	stored.OpenAI.ChatGPTAccountID = cfg.ChatGPTAccountID
-	stored.OpenAI.Model = cfg.Model
-	stored.OpenAI.CodexVersion = cfg.CodexVersion
 	stored.OpenAI.UserAgent = cfg.UserAgent
-	stored.OpenAI.Instructions = cfg.Instructions
 	stored.OpenAI.FedRAMP = cfg.FedRAMP
 	stored.Proxy.URL = cfg.UpstreamProxy
 
@@ -1088,14 +1051,6 @@ func cloneUsage(input *UsageResponse) *UsageResponse {
 	return &output
 }
 
-func (s *UsageService) probe(ctx context.Context) (*UsageResponse, error) {
-	cfg := s.currentConfig()
-	if cfg.UsageMode == "wham" {
-		return s.queryWhamUsage(ctx, cfg)
-	}
-	return s.probeCodexHeaders(ctx, cfg)
-}
-
 func (s *UsageService) queryWhamUsage(ctx context.Context, cfg Config) (*UsageResponse, error) {
 	var upstream whamUsageResponse
 	if err := s.queryWhamJSON(ctx, cfg, "https://chatgpt.com/backend-api/wham/usage", &upstream); err != nil {
@@ -1122,7 +1077,6 @@ func (s *UsageService) queryWhamUsage(ctx context.Context, cfg Config) (*UsageRe
 	secondary := rawWindowFromWham(rateLimit.SecondaryWindow)
 	usage := &UsageResponse{
 		Source:                "wham_usage",
-		Model:                 cfg.Model,
 		PlanType:              upstream.PlanType,
 		Email:                 upstream.Email,
 		RateLimitAllowed:      rateLimit.Allowed,
@@ -1157,108 +1111,6 @@ func rawWindowFromWham(input *whamWindow) rawWindow {
 		raw.ResetAfterSeconds = &seconds
 	}
 	return raw
-}
-
-func (s *UsageService) probeCodexHeaders(ctx context.Context, cfg Config) (*UsageResponse, error) {
-	payload := map[string]any{
-		"model": cfg.Model,
-		"input": []map[string]any{
-			{
-				"role": "user",
-				"content": []map[string]any{
-					{"type": "input_text", "text": "hi"},
-				},
-			},
-		},
-		"stream":       true,
-		"store":        false,
-		"instructions": cfg.Instructions,
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("marshal upstream payload: %w", err)
-	}
-
-	requestCtx, cancel := context.WithTimeout(ctx, upstreamRequestTimeout)
-	defer cancel()
-	request, err := http.NewRequestWithContext(
-		requestCtx,
-		http.MethodPost,
-		"https://chatgpt.com/backend-api/codex/responses",
-		strings.NewReader(string(body)),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create upstream request: %w", err)
-	}
-
-	request.Host = "chatgpt.com"
-	request.Header.Set("Authorization", "Bearer "+cfg.AccessToken)
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "text/event-stream")
-	request.Header.Set("OpenAI-Beta", "responses=experimental")
-	request.Header.Set("Originator", "codex-tui")
-	request.Header.Set("Version", cfg.CodexVersion)
-	request.Header.Set("User-Agent", cfg.UserAgent)
-	request.Header.Set("chatgpt-account-id", cfg.ChatGPTAccountID)
-
-	response, err := s.currentClient().Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("upstream request failed: %w", err)
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, fmt.Errorf("upstream returned HTTP %d", response.StatusCode)
-	}
-
-	fetchedAt := time.Now().UTC()
-	usage := &UsageResponse{
-		Source:    "codex_probe_headers",
-		Model:     cfg.Model,
-		FetchedAt: fetchedAt.Format(time.RFC3339),
-	}
-
-	primary := parseRawWindow(response, "primary")
-	secondary := parseRawWindow(response, "secondary")
-	usage.FiveHour, usage.SevenDay = normalizeWindows(primary, secondary, fetchedAt)
-
-	if usage.FiveHour == nil && usage.SevenDay == nil {
-		return nil, errors.New("upstream response did not contain x-codex rate-limit headers")
-	}
-	return usage, nil
-}
-
-func parseRawWindow(response *http.Response, prefix string) rawWindow {
-	return rawWindow{
-		UsedPercent:       parseFloatHeader(response, "x-codex-"+prefix+"-used-percent"),
-		WindowMinutes:     parseIntHeader(response, "x-codex-"+prefix+"-window-minutes"),
-		ResetAfterSeconds: parseIntHeader(response, "x-codex-"+prefix+"-reset-after-seconds"),
-	}
-}
-
-func parseFloatHeader(response *http.Response, name string) *float64 {
-	value := strings.TrimSpace(response.Header.Get(name))
-	if value == "" {
-		return nil
-	}
-	parsed, err := strconv.ParseFloat(value, 64)
-	if err != nil {
-		return nil
-	}
-	return &parsed
-}
-
-func parseIntHeader(response *http.Response, name string) *int {
-	value := strings.TrimSpace(response.Header.Get(name))
-	if value == "" {
-		return nil
-	}
-	parsed, err := strconv.Atoi(value)
-	if err != nil {
-		return nil
-	}
-	return &parsed
 }
 
 func normalizeWindows(primary, secondary rawWindow, fetchedAt time.Time) (*Window, *Window) {
@@ -1473,7 +1325,7 @@ func (s *Server) handleUsage(response http.ResponseWriter, request *http.Request
 
 	usage, err := s.usage.Get(request.Context(), force)
 	if err != nil {
-		slog.Error("usage probe failed", "error", err)
+		slog.Error("usage request failed", "error", err)
 		writeJSON(response, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
 	}

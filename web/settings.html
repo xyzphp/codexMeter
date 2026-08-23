@@ -50,24 +50,10 @@
       <p class="intro">配置保存在后端的 <code>config.json</code> 中。OAuth Token 只发送到当前 Go 后端，不会返回给浏览器；留空 Token 表示保持原值。</p>
       <form id="configForm">
         <div class="grid">
-          <div class="field">
-            <label for="model">探测模型</label>
-            <select id="model">
-              <option value="gpt-5.6-luna">gpt-5.6-luna</option>
-              <option value="gpt-5.6-sol">gpt-5.6-sol</option>
-              <option value="gpt-5.6">gpt-5.6</option>
-              <option value="gpt-5.5">gpt-5.5</option>
-              <option value="gpt-5.4">gpt-5.4</option>
-            </select>
-            <span class="hint">也可以输入自定义模型名。</span>
-          </div>
-          <div class="field">
+          <div class="field full">
             <label for="usageMode">Usage query mode</label>
-            <select id="usageMode">
-              <option value="wham">wham/usage (read-only, recommended)</option>
-              <option value="probe">codex/responses (sends a model request)</option>
-            </select>
-            <span class="hint">wham does not send a prompt. probe is kept only for compatibility and may consume quota.</span>
+            <input id="usageMode" value="wham/usage（只读）" readonly>
+            <span class="hint">当前仅支持 wham/usage，只读取额度数据，不提交模型提示词，也不会发起模型探测请求。</span>
           </div>
           <div class="field full">
             <label for="userAgent">Upstream User-Agent</label>
@@ -153,12 +139,7 @@ priority: u=4, i</code>
           if (!response.ok) throw new Error(response.status === 401 ? '需要填写管理接口密钥' : 'API ' + response.status);
           return response.json();
         }).then(function (config) {
-          var model = document.getElementById('model');
-          if (!Array.prototype.some.call(model.options, function (option) { return option.value === config.model; })) {
-            var custom = document.createElement('option'); custom.value = config.model; custom.textContent = config.model; model.appendChild(custom);
-          }
-          model.value = config.model || 'gpt-5.6-luna';
-          document.getElementById('usageMode').value = config.usage_mode || 'wham';
+          document.getElementById('usageMode').value = 'wham/usage（只读）';
           document.getElementById('userAgent').value = config.user_agent || '';
           document.getElementById('accountId').value = config.chatgpt_account_id || '';
           document.getElementById('proxyUrl').value = config.proxy_url || '';
@@ -171,8 +152,6 @@ priority: u=4, i</code>
       form.addEventListener('submit', function (event) {
         event.preventDefault();
         var body = {
-          model: document.getElementById('model').value,
-          usage_mode: document.getElementById('usageMode').value,
           user_agent: document.getElementById('userAgent').value.trim(),
           fedramp: document.getElementById('fedramp').checked,
           chatgpt_account_id: document.getElementById('accountId').value.trim(),

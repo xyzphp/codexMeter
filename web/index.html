@@ -603,7 +603,7 @@
         setText('detailRemaining', formatPercent(remaining) + '%');
         setText('detailReset', formatDate(window.reset_at));
         setText('detailPlan', formatPlan(usage.plan_type));
-        setText('detailModel', formatPlan(usage.plan_type || usage.model));
+        setText('detailModel', formatPlan(usage.plan_type));
         var status = usage.rate_limit_reached ? '已达上限' : (usage.rate_limit_allowed ? '正常' : '未知');
         setText('detailStatus', status);
         setClass('detailStatus', 'metric-value' + (status === '正常' ? ' ok' : ''));
