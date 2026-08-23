@@ -1,0 +1,7 @@
+*.exe
+config.json
+*.out
+*.test
+.env
+.chrome-diagnostic/
+.chrome-diagnostic-logs/

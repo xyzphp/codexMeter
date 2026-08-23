@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChatGPT &amp; Codex 设置</title>
+  <style>
+    :root { color-scheme: light; --page:#f7f7f8; --card:#fff; --text:#202123; --muted:#6e6e80; --border:#e4e4e7; --accent:#10a37f; --danger:#c2413b; }
+    * { box-sizing: border-box; }
+    html, body { margin:0; min-height:100%; background:var(--page); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; }
+    body { padding:28px 16px; }
+    .shell { width:min(680px,100%); margin:0 auto; }
+    .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+    h1 { font-size:24px; margin:0; letter-spacing:-.5px; }
+    .back { color:var(--accent); text-decoration:none; font-size:14px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:20px; box-shadow:0 12px 30px rgba(32,33,35,.07); }
+    .intro { color:var(--muted); font-size:13px; line-height:1.6; margin:0 0 18px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .field { display:flex; flex-direction:column; gap:6px; }
+    .field.full { grid-column:1/-1; }
+    label { font-size:13px; font-weight:650; }
+    input, select { width:100%; height:40px; padding:0 11px; border:1px solid var(--border); border-radius:9px; background:var(--card); color:var(--text); font:inherit; outline:none; }
+    input:focus, select:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(16,163,127,.12); }
+    .hint { color:var(--muted); font-size:11px; line-height:1.45; }
+    .actions { display:flex; align-items:center; gap:10px; margin-top:20px; }
+    button { border:0; border-radius:9px; padding:10px 18px; font:inherit; cursor:pointer; }
+    .primary { color:#fff; background:var(--accent); font-weight:650; }
+    .secondary { color:var(--text); background:var(--border); }
+    .status { min-height:20px; color:var(--muted); font-size:12px; }
+    .status.error { color:var(--danger); }
+    .status.ok { color:var(--accent); }
+    .security { margin-top:18px; padding:12px; background:rgba(16,163,127,.08); border-radius:10px; color:var(--muted); font-size:12px; line-height:1.55; }
+    .auth-box { margin-top:18px; padding:13px; border:1px solid var(--border); border-radius:10px; background:rgba(0,0,0,.025); }
+    .auth-box strong { display:block; margin-bottom:8px; font-size:13px; }
+    .auth-box code { display:block; color:var(--muted); font:11px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:pre-wrap; word-break:break-word; }
+    .audio-preview { margin-top:18px; padding:13px; border:1px solid var(--border); border-radius:10px; background:rgba(0,0,0,.025); }
+    .audio-preview strong { display:block; margin-bottom:5px; font-size:13px; }
+    .audio-preview .hint { display:block; margin-bottom:10px; }
+    .audio-buttons { display:flex; flex-wrap:wrap; gap:8px; }
+    .audio-button { color:var(--text); background:var(--border); padding:8px 12px; font-size:12px; }
+    .checkbox { display:flex; flex-direction:row; align-items:center; gap:8px; font-weight:500; }
+    .checkbox input { width:16px; height:16px; }
+    @media (max-width:560px) { body { padding:14px 10px; } .grid { grid-template-columns:1fr; } .field.full { grid-column:auto; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="header"><h1>ChatGPT &amp; Codex 设置</h1><a class="back" href="./">返回额度页面</a></header>
+    <section class="card">
+      <p class="intro">配置保存在后端的 <code>config.json</code> 中。OAuth Token 只发送到当前 Go 后端，不会返回给浏览器；留空 Token 表示保持原值。</p>
+      <form id="configForm">
+        <div class="grid">
+          <div class="field">
+            <label for="model">探测模型</label>
+            <select id="model">
+              <option value="gpt-5.6-luna">gpt-5.6-luna</option>
+              <option value="gpt-5.6-sol">gpt-5.6-sol</option>
+              <option value="gpt-5.6">gpt-5.6</option>
+              <option value="gpt-5.5">gpt-5.5</option>
+              <option value="gpt-5.4">gpt-5.4</option>
+            </select>
+            <span class="hint">也可以输入自定义模型名。</span>
+          </div>
+          <div class="field">
+            <label for="usageMode">Usage query mode</label>
+            <select id="usageMode">
+              <option value="wham">wham/usage (read-only, recommended)</option>
+              <option value="probe">codex/responses (sends a model request)</option>
+            </select>
+            <span class="hint">wham does not send a prompt. probe is kept only for compatibility and may consume quota.</span>
+          </div>
+          <div class="field full">
+            <label for="userAgent">Upstream User-Agent</label>
+            <input id="userAgent" autocomplete="off" placeholder="Codex client User-Agent">
+          </div>
+          <div class="field">
+            <label for="accountId">ChatGPT Account ID</label>
+            <input id="accountId" autocomplete="off" placeholder="例如：org-...">
+          </div>
+          <div class="field full">
+            <label for="accessToken">OpenAI OAuth Access Token</label>
+            <input id="accessToken" type="password" autocomplete="new-password" placeholder="留空保持当前 Token">
+            <span id="tokenHint" class="hint">当前状态：检查中</span>
+          </div>
+          <div class="field full">
+            <label for="proxyUrl">代理地址</label>
+            <input id="proxyUrl" autocomplete="off" placeholder="例如：http://127.0.0.1:7890；留空表示不使用代理">
+          </div>
+          <div class="field">
+            <label for="cacheTTL">缓存时间</label>
+            <input id="cacheTTL" value="10m" placeholder="例如：10m">
+          </div>
+          <div class="field">
+            <label for="appKey">管理接口密钥</label>
+            <input id="appKey" type="password" autocomplete="off" placeholder="如果服务端配置了 APP_API_KEY">
+            <span class="hint">只保存在当前浏览器，用于访问配置 API。</span>
+          </div>
+        </div>
+        <div class="field full" style="margin-top:14px">
+          <label class="checkbox"><input id="fedramp" type="checkbox"> Send <code>x-openai-fedramp: true</code></label>
+          <span class="hint">Enable only when the target account or environment explicitly requires FedRAMP.</span>
+        </div>
+        <div class="auth-box">
+          <strong>wham/usage request authentication</strong>
+          <code>GET https://chatgpt.com/backend-api/wham/usage
+Authorization: Bearer &lt;OAuth access token&gt;
+chatgpt-account-id: &lt;ChatGPT account id&gt;
+openai-beta: codex-1
+oai-language: zh-CN
+originator: Codex Desktop
+accept: application/json
+sec-fetch-site: none
+sec-fetch-mode: no-cors
+sec-fetch-dest: empty
+priority: u=4, i</code>
+          <span class="hint">The OAuth token is kept by the Go backend and is never returned in full to this page.</span>
+        </div>
+        <div class="audio-preview">
+          <strong>额度提示音试听</strong>
+          <span class="hint">点击后打开额度页面并播放对应提示音。若设备禁止自动播放，请在额度页面点击一次后再试听。</span>
+          <div class="audio-buttons">
+            <button class="audio-button" type="button" data-preview-audio="normal">试听 50%–80%</button>
+            <button class="audio-button" type="button" data-preview-audio="warning">试听 20%–50%</button>
+            <button class="audio-button" type="button" data-preview-audio="critical">试听 0%–20%</button>
+          </div>
+        </div>
+        <div class="security">安全提示：不要把 OAuth Token 放入 HTML、安卓 APK 或前端代码。建议后端只监听 127.0.0.1，远程部署时使用 HTTPS 和管理密钥。</div>
+        <div class="actions"><button class="primary" type="submit">保存配置</button><button id="reload" class="secondary" type="button">重新读取</button><span id="status" class="status"></span></div>
+      </form>
+    </section>
+  </main>
+  <script>
+    (function () {
+      'use strict';
+      var form = document.getElementById('configForm');
+      var status = document.getElementById('status');
+      var keyInput = document.getElementById('appKey');
+      var storedKey = '';
+      try { storedKey = sessionStorage.getItem('codex-admin-key') || ''; } catch (_) {}
+      keyInput.value = storedKey;
+      function headers() {
+        var key = keyInput.value.trim();
+        if (key) {
+          try { sessionStorage.setItem('codex-admin-key', key); } catch (_) {}
+          return { 'X-App-API-Key': key };
+        }
+        return {};
+      }
+      function setStatus(text, kind) { status.textContent = text; status.className = 'status ' + (kind || ''); }
+      function loadConfig() {
+        setStatus('读取中…');
+        return fetch('api/config', { headers: headers(), credentials:'same-origin', cache:'no-store' }).then(function (response) {
+          if (!response.ok) throw new Error(response.status === 401 ? '需要填写管理接口密钥' : 'API ' + response.status);
+          return response.json();
+        }).then(function (config) {
+          var model = document.getElementById('model');
+          if (!Array.prototype.some.call(model.options, function (option) { return option.value === config.model; })) {
+            var custom = document.createElement('option'); custom.value = config.model; custom.textContent = config.model; model.appendChild(custom);
+          }
+          model.value = config.model || 'gpt-5.6-luna';
+          document.getElementById('usageMode').value = config.usage_mode || 'wham';
+          document.getElementById('userAgent').value = config.user_agent || '';
+          document.getElementById('accountId').value = config.chatgpt_account_id || '';
+          document.getElementById('proxyUrl').value = config.proxy_url || '';
+          document.getElementById('cacheTTL').value = config.cache_ttl || '10m';
+          document.getElementById('fedramp').checked = !!config.fedramp;
+          document.getElementById('tokenHint').textContent = config.token_configured ? '当前状态：已配置 ' + (config.token_hint || '') : '当前状态：未配置';
+          setStatus('配置已读取', 'ok');
+        }).catch(function (error) { setStatus(error.message, 'error'); });
+      }
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var body = {
+          model: document.getElementById('model').value,
+          usage_mode: document.getElementById('usageMode').value,
+          user_agent: document.getElementById('userAgent').value.trim(),
+          fedramp: document.getElementById('fedramp').checked,
+          chatgpt_account_id: document.getElementById('accountId').value.trim(),
+          proxy_url: document.getElementById('proxyUrl').value.trim(),
+          cache_ttl: document.getElementById('cacheTTL').value.trim()
+        };
+        var token = document.getElementById('accessToken').value.trim();
+        if (token) body.access_token = token;
+        setStatus('保存中…');
+        fetch('api/config', { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(body) })
+          .then(function (response) { return response.json().then(function (data) { if (!response.ok) throw new Error(data.error || '保存失败'); return data; }); })
+          .then(function (config) {
+            document.getElementById('accessToken').value = '';
+            document.getElementById('tokenHint').textContent = config.token_configured ? '当前状态：已配置 ' + (config.token_hint || '') : '当前状态：未配置';
+            setStatus('已保存并立即生效', 'ok');
+          }).catch(function (error) { setStatus(error.message, 'error'); });
+      });
+      document.getElementById('reload').addEventListener('click', loadConfig);
+      Array.prototype.forEach.call(document.querySelectorAll('[data-preview-audio]'), function (button) {
+        button.addEventListener('click', function () {
+          var kind = button.getAttribute('data-preview-audio');
+          window.location.assign('./?audio_preview=' + encodeURIComponent(kind));
+        });
+      });
+      loadConfig();
+    }());
+  </script>
+</body>
+</html>
