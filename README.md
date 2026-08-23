@@ -2,9 +2,9 @@
 
 这是一个使用 Go 编写的单文件后端应用，内嵌 HTML 前端页面，适用于 LX04 Android WebView 额度面板。
 
-默认使用 ChatGPT 的只读接口：`GET https://chatgpt.com/backend-api/wham/usage`。
+默认显示 ChatGPT 的只读额度和统计数据。
 
-当前只使用 `wham` 只读模式，不提交模型提示词，也不会发起模型探测请求，因此额度查询不会通过发送对话请求来获取数据。
+数据查询不会提交模型提示词，也不会发起模型探测请求，因此额度查询不会通过发送对话请求来获取数据。
 
 ## 主要功能
 
@@ -154,68 +154,9 @@ webView.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
 
 配置文件、环境变量、认证、代理和 OpenAI/ChatGPT 凭证的完整说明见 [OpenAI 配置接入说明](docs/openai-config.md)。
 
-## 数据接口
+## 接口文档
 
-面板后端使用服务器端 OAuth 凭证请求：
-
-```text
-/backend-api/wham/usage
-/backend-api/wham/usage/daily-token-usage-breakdown
-/backend-api/wham/analytics/daily-workspace-usage-counts
-```
-
-`/api/usage/analytics` 会合并每日 Token、工作区对话轮次和模型使用数据，返回最近七个已完成日期；当前未完成日期会被排除。
-
-预测页面通过代理请求：
-
-```text
-https://codex-resets.com/api/v1/status
-```
-
-预测数据仅供参考，不会修改账号额度，也不会消耗 OpenAI 使用额度。
-
-## 本地 API
-
-完整的 OpenAPI 3.0 接口定义和中文接入说明见：
+接口路径、OpenAPI 3.0 定义、认证、反向代理、调用示例和错误处理见：
 
 - [openapi.yaml](openapi.yaml)：可导入 Swagger UI、Postman、Apifox；
-- [docs/openapi.md](docs/openapi.md)：认证、反向代理、调用示例和安全说明。
-
-```text
-GET /healthz
-GET /api/usage
-GET /api/usage?force=true
-GET /api/usage/analytics
-GET /api/usage/analytics?force=true
-GET /api/prediction
-GET /api/prediction?force=true
-GET /api/config
-PUT /api/config
-GET /audio?kind=normal|warning|critical
-```
-
-`/audio` 返回内嵌的额度提示音，设置页面会直接预加载并播放，不会跳转到额度页面。
-
-## Basic Auth 和 Nginx
-
-启用 Basic Auth 后，额度页面、配置页面、健康检查和 API 都需要输入配置的用户名和密码。使用 Nginx 反向代理时，需要透传 `Authorization` 请求头：
-
-```nginx
-location /codex/ {
-    proxy_pass http://127.0.0.1:8123/;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header Authorization $http_authorization;
-}
-```
-
-## 安全注意事项
-
-- 不要把 OAuth Token 写入 HTML、APK 或前端 JavaScript。
-- 不要提交真实的 `config.json`，该文件已加入 `.gitignore`。
-- 服务对外提供时请使用 HTTPS 和访问控制。
-- `chatgpt.com/backend-api` 属于内部接口，返回结构可能随时变化。
-- 请妥善保管 Basic Auth 密码、API Key 和 OAuth 凭证。
+- [docs/openapi.md](docs/openapi.md)：中文接口接入和部署说明。

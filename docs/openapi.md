@@ -187,3 +187,27 @@ curl -u '用户名:密码' \
 - `502`：上游额度、统计或预测接口请求失败。
 
 上游错误时不要把 OAuth Token 或完整上游响应直接展示给最终用户；建议记录脱敏后的状态码和 request ID，并根据 `from_cache` 判断是否仍有可用缓存。
+
+## 7. Basic Auth 与 Nginx
+
+启用 Basic Auth 后，额度页面、配置页面、健康检查和 API 都需要输入配置的用户名和密码。使用 Nginx 反向代理时，需要透传 `Authorization` 请求头：
+
+```nginx
+location /codex/ {
+    proxy_pass http://127.0.0.1:8123/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Authorization $http_authorization;
+}
+```
+
+## 8. 安全注意事项
+
+- 不要把 OAuth Token 写入 HTML、APK 或前端 JavaScript；
+- 不要提交真实的 `config.json`，该文件已加入 `.gitignore`；
+- 服务对外提供时请使用 HTTPS 和访问控制；
+- `chatgpt.com/backend-api` 属于内部接口，返回结构可能随时变化；
+- 请妥善保管 Basic Auth 密码、API Key 和 OAuth 凭证。
