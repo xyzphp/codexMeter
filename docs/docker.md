@@ -18,10 +18,16 @@ cp config.example.json config.json
 
 编辑 `config.json`，填写 `openai.access_token` 和 `openai.chatgpt_account_id`。如需从设备或公网访问，将 `bind_addr` 保持为 `0.0.0.0:8123`，并按需启用 Basic Auth。
 
-构建镜像并启动服务：
+从 GitHub Container Registry 拉取最新镜像：
 
 ```bash
-docker compose up -d --build
+docker compose pull
+```
+
+启动服务：
+
+```bash
+docker compose up -d
 ```
 
 查看容器日志：
@@ -52,7 +58,25 @@ docker compose down
 
 ## 使用 docker run 启动
 
-也可以手动构建并启动容器：
+版本标签发布后，可以直接拉取 GHCR 镜像：
+
+```bash
+docker pull ghcr.io/xyzphp/codexmeter:latest
+```
+
+PowerShell：
+
+```powershell
+docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "${PWD}/config.json:/app/config.json" -e BIND_ADDR=0.0.0.0:8123 ghcr.io/xyzphp/codexmeter:latest
+```
+
+Linux 或 macOS：
+
+```bash
+docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "$(pwd)/config.json:/app/config.json" -e BIND_ADDR=0.0.0.0:8123 ghcr.io/xyzphp/codexmeter:latest
+```
+
+如果需要从当前源码构建，也可以执行：
 
 ```bash
 docker build -t codex-meter:local .
@@ -79,6 +103,27 @@ Compose 会将宿主机的 `config.json` 挂载到容器的 `/app/config.json`�
 ## 反向代理部署
 
 如果通过 Nginx 使用 `/codex/` 等路径转发，容器内部仍监听 `8123`，宿主机端口映射保持 `8123:8123`。反向代理需要把对应前缀转发到容器，并根据部署路径设置 `base_path`；完整的路由和代理说明见[接口文档](openapi.md)。
+
+## 镜像地址和发布规则
+
+GitHub Actions 在推送 `v*` 版本标签时，自动将镜像发布到：
+
+```text
+ghcr.io/xyzphp/codexmeter:<版本标签>
+ghcr.io/xyzphp/codexmeter:latest
+```
+
+例如：
+
+```bash
+docker pull ghcr.io/xyzphp/codexmeter:v1.0.0
+```
+
+如果 GHCR 包是私有的，需要先登录：
+
+```bash
+docker login ghcr.io
+```
 
 ## 镜像构建方式
 

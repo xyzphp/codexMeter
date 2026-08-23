@@ -79,10 +79,14 @@ cp config.example.json config.json
 ```
 
 ```bash
-docker compose up -d --build
+docker compose pull
 ```
 
-默认访问端口为 `8123`。配置文件通过卷挂载到容器中，设置页面保存的配置会保留在宿主机的 `config.json`。
+```bash
+docker compose up -d
+```
+
+默认访问端口为 `8123`。版本标签发布后，镜像地址为 `ghcr.io/xyzphp/codexmeter:latest`。配置文件通过卷挂载到容器中，设置页面保存的配置会保留在宿主机的 `config.json`。
 
 ## 前端与 UI 文档
 
