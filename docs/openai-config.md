@@ -121,6 +121,29 @@ chmod 600 config.json
 | `base_path` | 否 | 反向代理前缀，例如 `/codex` |
 | `cache_ttl` | 否 | 缓存时长，例如 `10m`、`30s` 或 `0` |
 
+### 环境变量与 JSON 配置项
+
+环境变量优先级高于 JSON 文件中的同名配置。完整对应关系如下：
+
+| 环境变量 | JSON 配置项 | 说明 |
+| --- | --- | --- |
+| `OPENAI_ACCESS_TOKEN` | `openai.access_token` | ChatGPT OAuth Access Token |
+| `CHATGPT_ACCOUNT_ID` | `openai.chatgpt_account_id` | ChatGPT Account ID |
+| `OPENAI_USER_AGENT` | `openai.user_agent` | 上游请求 User-Agent |
+| `OPENAI_FEDRAMP` | `openai.fedramp` | 是否发送 FedRAMP 请求头 |
+| `UPSTREAM_PROXY` | `proxy.url` | HTTP/HTTPS 代理地址 |
+| `APP_API_KEY` | `app_api_key` | 保护本地 API 接口的管理密钥 |
+| `BASIC_AUTH_ENABLED` | `basic_auth.enabled` | 是否启用 HTTP Basic Auth |
+| `BASIC_AUTH_USER` | `basic_auth.username` | Basic Auth 用户名 |
+| `BASIC_AUTH_PASSWORD` | `basic_auth.password` | Basic Auth 密码 |
+| `BIND_ADDR` | `bind_addr` | 监听地址，默认 `127.0.0.1:8080` |
+| `BASE_PATH` | `base_path` | 反向代理前缀，例如 `/codex` |
+| `USAGE_CACHE_TTL` | `cache_ttl` | 缓存时长，默认 `10m` |
+| `CORS_ORIGIN` | `cors_origin` | 允许的跨域来源，按需设置 |
+| `CONFIG_FILE` | — | 指定 JSON 配置文件路径 |
+
+配置页面支持修改 Token、账号 ID、User-Agent、代理和缓存时长。服务端固定读取额度和统计接口，不提供查询模式切换。保存配置时，在支持的系统上会使用 `0600` 文件权限。
+
 代理地址必须包含协议和端口，例如：
 
 ```text

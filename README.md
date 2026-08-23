@@ -26,7 +26,7 @@
 配置页面：http://127.0.0.1:8080/settings
 ```
 
-默认只监听本机地址。配置 `app_api_key` 或 `APP_API_KEY` 后，需要在配置页面输入相同的 Key。
+默认只监听本机地址。启用管理密钥或 Basic Auth 后，请按照[配置接入文档](docs/openai-config.md)完成配置。
 
 ## 前端页面与构建方式
 
@@ -150,27 +150,9 @@ webView.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
 
 工作流会自动创建 GitHub Release，并上传 Windows amd64、Linux amd64 和 Linux arm64 三个平台的压缩包。每个发布包包含对应平台的可执行文件、内嵌的 HTML 页面、`config.example.json`、OpenAPI 文件和 `docs/` 中文文档，不包含独立的 `web` 目录和真实的 `config.json`。
 
-## 配置项
+## 配置文档
 
-配置可以写入 `config.json`，也可以通过环境变量提供；`CONFIG_FILE` 可以指定其他 JSON 配置文件。
-
-| 环境变量 | JSON 配置项 | 说明 |
-|---|---|---|
-| `OPENAI_ACCESS_TOKEN` | `openai.access_token` | OpenAI OAuth Access Token |
-| `CHATGPT_ACCOUNT_ID` | `openai.chatgpt_account_id` | ChatGPT 账号 ID |
-| `OPENAI_USER_AGENT` | `openai.user_agent` | 上游请求 User-Agent |
-| `OPENAI_FEDRAMP` | `openai.fedramp` | 是否发送 FedRAMP 请求头 |
-| `UPSTREAM_PROXY` | `proxy.url` | HTTP/HTTPS 代理地址 |
-| `APP_API_KEY` | `app_api_key` | 保护本地 API 接口 |
-| `BASIC_AUTH_ENABLED` | `basic_auth.enabled` | 是否启用 HTTP Basic Auth |
-| `BASIC_AUTH_USER` | `basic_auth.username` | Basic Auth 用户名 |
-| `BASIC_AUTH_PASSWORD` | `basic_auth.password` | Basic Auth 密码 |
-| `BIND_ADDR` | `bind_addr` | 监听地址，默认 `127.0.0.1:8080` |
-| `USAGE_CACHE_TTL` | `cache_ttl` | 缓存时长，默认 `10m` |
-
-配置页面支持修改 Token、账号 ID、User-Agent、代理和缓存时长。服务端固定读取额度和统计接口，不提供查询模式切换。保存配置时，在支持的系统上会使用 `0600` 文件权限。
-
-OpenAI/ChatGPT OAuth 凭证、Account ID、代理和配置文件的获取与填写方法见 [OpenAI 配置接入说明](docs/openai-config.md)。本项目不实现 OAuth 登录或 Token 刷新，也不接受普通 OpenAI API Key 作为 `wham` 凭证。
+配置文件、环境变量、认证、代理和 OpenAI/ChatGPT 凭证的完整说明见 [OpenAI 配置接入说明](docs/openai-config.md)。
 
 ## 数据接口
 
