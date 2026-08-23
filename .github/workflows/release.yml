@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: '1.22.x'
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 配置 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: 运行测试
+        run: go test ./...
+      - name: 运行静态检查
+        run: go vet ./...
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-amd64
+            goos: windows
+            goarch: amd64
+            extension: .exe
+            archive: zip
+          - name: linux-amd64
+            goos: linux
+            goarch: amd64
+            extension: ''
+            archive: tar.gz
+          - name: linux-arm64
+            goos: linux
+            goarch: arm64
+            extension: ''
+            archive: tar.gz
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 配置 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: 构建发布包
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          set -euo pipefail
+          package_name="codex-meter-${{ matrix.name }}"
+          package_dir="package/${package_name}"
+          mkdir -p "dist" "${package_dir}"
+          go build -trimpath -ldflags="-s -w" -o "${package_dir}/codex-meter${{ matrix.extension }}" .
+          cp README.md config.example.json "${package_dir}/"
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            (cd package && zip -r "../dist/${package_name}.zip" "${package_name}")
+          else
+            tar -C package -czf "dist/${package_name}.tar.gz" "${package_name}"
+          fi
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-meter-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: 下载构建产物
+        uses: actions/download-artifact@v4
+        with:
+          pattern: codex-meter-*
+          path: release-files
+          merge-multiple: true
+      - name: 创建 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" release-files/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "Codex Meter ${GITHUB_REF_NAME}" \
+            --generate-notes

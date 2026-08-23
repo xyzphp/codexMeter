@@ -28,6 +28,14 @@
 
 默认只监听本机地址。配置 `app_api_key` 或 `APP_API_KEY` 后，需要在配置页面输入相同的 Key。
 
+## GitHub Actions 自动发布
+
+仓库已配置 GitHub Actions 发布工作流。推送版本标签后，会自动运行测试、静态检查并构建发布包：
+
+`git tag v1.0.0 && git push origin v1.0.0`
+
+工作流会自动创建 GitHub Release，并上传 Windows amd64、Linux amd64 和 Linux arm64 三个平台的压缩包。每个发布包包含对应平台的可执行文件、`config.example.json` 和中文 README，不包含真实的 `config.json`。
+
 ## 配置项
 
 配置可以写入 `config.json`，也可以通过环境变量提供；`CONFIG_FILE` 可以指定其他 JSON 配置文件。
