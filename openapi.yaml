@@ -1,0 +1,650 @@
+openapi: 3.0.3
+info:
+  title: Codex Usage Dashboard API
+  version: 1.0.0
+  description: |
+    当前项目的本地管理 API。服务端使用配置的 ChatGPT OAuth Bearer Token
+    读取 wham/usage 和统计接口，前端或其他客户端只需要调用本项目的
+    /api/* 接口，不需要直接接触 OAuth 凭证。
+
+    这不是 OpenAI 官方 API，也不是聊天请求代理；它只提供额度、统计、预测、
+    配置和提示音资源。
+servers:
+  - url: http://127.0.0.1:8123
+    description: 本地服务示例
+  - url: https://codex.your-domain.invalid/codex
+    description: 通过反向代理发布时的示例地址，请替换域名和路径
+tags:
+  - name: service
+    description: 服务健康检查
+  - name: usage
+    description: 当前额度和统计数据
+  - name: prediction
+    description: 公共重置预测数据
+  - name: config
+    description: 服务端运行配置
+  - name: assets
+    description: 前端资源
+paths:
+  /healthz:
+    get:
+      tags: [service]
+      operationId: healthCheck
+      summary: 健康检查
+      description: 返回服务是否正常运行。
+      security:
+        - basicAuth: []
+      responses:
+        '200':
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/usage:
+    get:
+      tags: [usage]
+      operationId: getUsage
+      summary: 获取当前额度
+      description: |
+        服务端读取 ChatGPT 的 wham/usage，并转换为前端使用的稳定结构。
+        force=true 会绕过本地缓存并立即请求上游；省略 force 或设为 false
+        时使用服务端缓存策略。
+      security:
+        - basicAuth: []
+        - appApiKey: []
+        - appBearer: []
+      parameters:
+        - $ref: '#/components/parameters/Force'
+      responses:
+        '200':
+          description: 当前额度
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /api/usage/analytics:
+    get:
+      tags: [usage]
+      operationId: getUsageAnalytics
+      summary: 获取近七天使用统计
+      description: |
+        服务端聚合最近七个已完成日期（不包含今天）的
+        daily-token-usage-breakdown 和 daily-workspace-usage-counts 数据，返回
+        每日 token、额度、工作区统计以及按模型的使用占比。上游统计不可用时返回 502。
+      security:
+        - basicAuth: []
+        - appApiKey: []
+        - appBearer: []
+      parameters:
+        - $ref: '#/components/parameters/Force'
+      responses:
+        '200':
+          description: 近七天统计
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageAnalytics'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /api/prediction:
+    get:
+      tags: [prediction]
+      operationId: getResetPrediction
+      summary: 获取重置预测
+      description: |
+        从 codex-resets.com 的公开接口读取最新重置公告、active_watch 和统计数据。
+        该数据是公共预测信息，不代表当前账户已经完成额度重置。
+      security:
+        - basicAuth: []
+        - appApiKey: []
+        - appBearer: []
+      parameters:
+        - $ref: '#/components/parameters/Force'
+      responses:
+        '200':
+          description: 重置预测数据
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetPrediction'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /api/config:
+    get:
+      tags: [config]
+      operationId: getConfig
+      summary: 获取非敏感配置
+      description: |
+        返回当前运行配置。OAuth Token 不会原文返回，只返回 token_configured
+        和 token_hint。
+      security:
+        - basicAuth: []
+        - appApiKey: []
+        - appBearer: []
+      responses:
+        '200':
+          description: 非敏感配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      tags: [config]
+      operationId: updateConfig
+      summary: 更新运行配置
+      description: |
+        部分更新配置。未提供的字段保持原值。access_token 和
+        chatgpt_account_id 必须同时有效，否则服务端拒绝保存。usage_mode
+        只接受 wham；cache_ttl 使用 Go duration 格式，例如 10m、30s 或 0。
+
+        请求中的 access_token 会写入服务端配置文件，请仅从可信的管理端调用，
+        不要把它放进浏览器端代码、日志或 URL。
+      security:
+        - basicAuth: []
+        - appApiKey: []
+        - appBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigUpdate'
+            example:
+              access_token: eyJhbGciOi...
+              chatgpt_account_id: 00000000-0000-0000-0000-000000000000
+              usage_mode: wham
+              user_agent: codex-meter/1.0
+              proxy_url: http://127.0.0.1:7890
+              cache_ttl: 10m
+              fedramp: false
+      responses:
+        '200':
+          description: 更新后的非敏感配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigView'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /audio:
+    get:
+      tags: [assets]
+      operationId: getAudio
+      summary: 获取内置提示音
+      description: |
+        返回嵌入在前端页面中的 WAV 提示音。kind 为 normal、warning 或 critical。
+        此资源不需要 app API key，但如果服务启用了 Basic Auth，仍然需要 Basic Auth。
+      security:
+        - basicAuth: []
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          description: 提示音级别
+          schema:
+            type: string
+            enum: [normal, warning, critical]
+      responses:
+        '200':
+          description: WAV 音频
+          content:
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: 服务端启用 Basic Auth 时使用。
+    appApiKey:
+      type: apiKey
+      in: header
+      name: X-App-API-Key
+      description: 配置 app_api_key 后使用的管理密钥。
+    appBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: API key
+      description: "与 X-App-API-Key 等价的 Authorization: Bearer 方式。"
+
+  parameters:
+    Force:
+      name: force
+      in: query
+      required: false
+      description: 是否绕过本地缓存直接请求上游。
+      schema:
+        type: boolean
+        default: false
+
+  responses:
+    BadRequest:
+      description: 请求参数或配置无效
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: force must be true or false
+    Unauthorized:
+      description: 未通过认证或未提供管理密钥
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: unauthorized
+    UpstreamError:
+      description: 上游额度、统计或预测服务请求失败
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: 资源不存在或 kind 无效
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+
+    Window:
+      type: object
+      required: [used_percent, reset_at, remaining_seconds]
+      properties:
+        used_percent:
+          type: number
+          format: double
+          description: 当前窗口已使用百分比，0 到 100。
+        window_minutes:
+          type: integer
+          description: 窗口长度（分钟）。
+        reset_after_seconds:
+          type: integer
+          description: 上游返回的距离重置秒数。
+        reset_at:
+          type: string
+          format: date-time
+        remaining_seconds:
+          type: integer
+          format: int64
+          description: 服务端计算的距离重置剩余秒数。
+
+    Credits:
+      type: object
+      properties:
+        has_credits:
+          type: boolean
+        unlimited:
+          type: boolean
+        overage_limit_reached:
+          type: boolean
+        balance:
+          description: 上游返回的余额值，通常是字符串。
+        approx_local_messages:
+          type: array
+          items: {type: integer}
+        approx_cloud_messages:
+          type: array
+          items: {type: integer}
+
+    SpendControl:
+      type: object
+      properties:
+        reached:
+          type: boolean
+        individual_limit: {}
+
+    ResetCredits:
+      type: object
+      properties:
+        available_count:
+          type: integer
+        applicable_available_count:
+          type: integer
+
+    HistoryPoint:
+      type: object
+      required: [at, used_percent]
+      properties:
+        at:
+          type: string
+          format: date-time
+        used_percent:
+          type: number
+          format: double
+
+    UsageResponse:
+      type: object
+      required: [source, rate_limit_allowed, rate_limit_reached, fetched_at, from_cache]
+      properties:
+        source:
+          type: string
+          example: wham_usage
+        plan_type:
+          type: string
+          example: plus
+        email:
+          type: string
+          format: email
+        rate_limit_allowed:
+          type: boolean
+        rate_limit_reached:
+          type: boolean
+        rate_limit_reached_type:
+          type: string
+        credits:
+          allOf:
+            - $ref: '#/components/schemas/Credits'
+        spend_control:
+          allOf:
+            - $ref: '#/components/schemas/SpendControl'
+        rate_limit_reset_credits:
+          allOf:
+            - $ref: '#/components/schemas/ResetCredits'
+        fetched_at:
+          type: string
+          format: date-time
+        from_cache:
+          type: boolean
+        five_hour:
+          allOf:
+            - $ref: '#/components/schemas/Window'
+        seven_day:
+          allOf:
+            - $ref: '#/components/schemas/Window'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoryPoint'
+
+    UsageAnalyticsModel:
+      type: object
+      required: [model, usage_percent]
+      properties:
+        model:
+          type: string
+        usage_percent:
+          type: number
+          format: double
+
+    UsageAnalyticsDay:
+      type: object
+      required: [date, token_usage_percent, credits, users, threads, turns, text_total_tokens]
+      properties:
+        date:
+          type: string
+          description: 日期，格式通常为 YYYY-MM-DD。
+        token_usage_percent:
+          type: number
+          format: double
+        credits:
+          type: number
+          format: double
+        users:
+          type: integer
+          format: int64
+        threads:
+          type: integer
+          format: int64
+        turns:
+          type: integer
+          format: int64
+        uncached_text_input_tokens:
+          type: integer
+          format: int64
+        cached_text_input_tokens:
+          type: integer
+          format: int64
+        text_output_tokens:
+          type: integer
+          format: int64
+        text_total_tokens:
+          type: integer
+          format: int64
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/UsageAnalyticsModel'
+
+    UsageAnalyticsSummary:
+      type: object
+      required: [token_usage_percent, credits, users, threads, turns, text_total_tokens]
+      properties:
+        token_usage_percent:
+          type: number
+          format: double
+        credits:
+          type: number
+          format: double
+        users:
+          type: integer
+          format: int64
+        threads:
+          type: integer
+          format: int64
+        turns:
+          type: integer
+          format: int64
+        text_total_tokens:
+          type: integer
+          format: int64
+
+    UsageAnalytics:
+      type: object
+      required: [source, fetched_at, from_cache, days, summary]
+      properties:
+        source:
+          type: string
+          example: wham_daily_usage
+        fetched_at:
+          type: string
+          format: date-time
+        from_cache:
+          type: boolean
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/UsageAnalyticsDay'
+        summary:
+          $ref: '#/components/schemas/UsageAnalyticsSummary'
+
+    ResetSource:
+      type: object
+      properties:
+        type:
+          type: string
+        author:
+          type: string
+        url:
+          type: string
+          format: uri
+
+    ResetEvent:
+      type: object
+      required: [id, reset_type, announced_at, text]
+      properties:
+        id:
+          type: string
+        reset_type:
+          type: string
+        announced_at:
+          type: string
+          format: date-time
+        text:
+          type: string
+        source:
+          allOf:
+            - $ref: '#/components/schemas/ResetSource'
+
+    ResetWatch:
+      type: object
+      properties:
+        reset_chance_percent:
+          type: number
+          format: double
+        forecast_window:
+          type: string
+        observed_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        level:
+          type: string
+
+    ResetStats:
+      type: object
+      required: [total, last_reset_at, days_since_last, avg_interval_days]
+      properties:
+        total:
+          type: integer
+        last_reset_at:
+          type: string
+          format: date-time
+        days_since_last:
+          type: number
+          format: double
+        avg_interval_days:
+          type: number
+          format: double
+
+    ResetPrediction:
+      type: object
+      required: [source, fetched_at, from_cache, stats]
+      properties:
+        source:
+          type: string
+          example: codex_resets_status
+        fetched_at:
+          type: string
+          format: date-time
+        from_cache:
+          type: boolean
+        latest_reset:
+          allOf:
+            - $ref: '#/components/schemas/ResetEvent'
+        active_watch:
+          allOf:
+            - $ref: '#/components/schemas/ResetWatch'
+        stats:
+          $ref: '#/components/schemas/ResetStats'
+
+    ConfigView:
+      type: object
+      required:
+        - base_path
+        - basic_auth_enabled
+        - chatgpt_account_id
+        - usage_mode
+        - user_agent
+        - fedramp
+        - token_configured
+        - cache_ttl
+        - config_file
+      properties:
+        base_path:
+          type: string
+          example: /codex
+        basic_auth_enabled:
+          type: boolean
+        chatgpt_account_id:
+          type: string
+        usage_mode:
+          type: string
+          enum: [wham]
+        user_agent:
+          type: string
+        fedramp:
+          type: boolean
+        token_configured:
+          type: boolean
+        token_hint:
+          type: string
+          description: 仅显示 Token 最后四位的脱敏提示。
+        proxy_url:
+          type: string
+          format: uri
+        cache_ttl:
+          type: string
+          example: 5m0s
+        config_file:
+          type: string
+
+    ConfigUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        access_token:
+          type: string
+          writeOnly: true
+          description: ChatGPT OAuth Bearer Token，仅在服务端保存。
+        chatgpt_account_id:
+          type: string
+        usage_mode:
+          type: string
+          enum: [wham]
+          default: wham
+        user_agent:
+          type: string
+        fedramp:
+          type: boolean
+        proxy_url:
+          type: string
+          format: uri
+          description: 支持 http、https、socks5 代理 URL；留空表示不使用代理。
+        cache_ttl:
+          type: string
+          description: Go duration，例如 10m、30s、0。

@@ -71,7 +71,9 @@ jobs:
           package_dir="package/${package_name}"
           mkdir -p "dist" "${package_dir}"
           go build -trimpath -ldflags="-s -w" -o "${package_dir}/codex-meter${{ matrix.extension }}" .
-          cp README.md config.example.json "${package_dir}/"
+          cp README.md config.example.json openapi.yaml "${package_dir}/"
+          mkdir -p "${package_dir}/docs"
+          cp docs/openapi.md "${package_dir}/docs/"
           if [ "${{ matrix.archive }}" = "zip" ]; then
             (cd package && zip -r "../dist/${package_name}.zip" "${package_name}")
           else

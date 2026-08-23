@@ -193,6 +193,11 @@ https://codex-resets.com/api/v1/status
 
 ## 本地 API
 
+完整的 OpenAPI 3.0 接口定义和中文接入说明见：
+
+- [openapi.yaml](openapi.yaml)：可导入 Swagger UI、Postman、Apifox；
+- [docs/openapi.md](docs/openapi.md)：认证、反向代理、调用示例和安全说明。
+
 ```text
 GET /healthz
 GET /api/usage
