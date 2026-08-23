@@ -17,7 +17,17 @@
 
 ## 运行
 
-复制 `config.example.json` 为 `config.json`，填写 OAuth Access Token 和 ChatGPT Account ID，然后执行 `go run .`。
+复制配置模板：
+
+```bash
+cp config.example.json config.json
+```
+
+填写 OAuth Access Token 和 ChatGPT Account ID 后，启动服务：
+
+```bash
+go run .
+```
 
 默认页面地址：
 
