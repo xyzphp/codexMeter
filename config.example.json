@@ -8,7 +8,6 @@
     "password": ""
   },
   "cache_ttl": "10m",
-  "usage_mode": "wham",
   "openai": {
     "access_token": "replace-with-oauth-access-token",
     "chatgpt_account_id": "replace-with-chatgpt-account-id",

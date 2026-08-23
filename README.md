@@ -158,7 +158,6 @@ webView.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
 |---|---|---|
 | `OPENAI_ACCESS_TOKEN` | `openai.access_token` | OpenAI OAuth Access Token |
 | `CHATGPT_ACCOUNT_ID` | `openai.chatgpt_account_id` | ChatGPT 账号 ID |
-| `USAGE_MODE` | `usage_mode` | 仅支持 `wham` 只读模式 |
 | `OPENAI_USER_AGENT` | `openai.user_agent` | 上游请求 User-Agent |
 | `OPENAI_FEDRAMP` | `openai.fedramp` | 是否发送 FedRAMP 请求头 |
 | `UPSTREAM_PROXY` | `proxy.url` | HTTP/HTTPS 代理地址 |
@@ -169,7 +168,7 @@ webView.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
 | `BIND_ADDR` | `bind_addr` | 监听地址，默认 `127.0.0.1:8080` |
 | `USAGE_CACHE_TTL` | `cache_ttl` | 缓存时长，默认 `10m` |
 
-配置页面支持修改 Token、账号 ID、User-Agent、代理和缓存时长。查询模式固定为 `wham/usage`，不能切换到其他模式。保存配置时，在支持的系统上会使用 `0600` 文件权限。
+配置页面支持修改 Token、账号 ID、User-Agent、代理和缓存时长。服务端固定读取额度和统计接口，不提供查询模式切换。保存配置时，在支持的系统上会使用 `0600` 文件权限。
 
 OpenAI/ChatGPT OAuth 凭证、Account ID、代理和配置文件的获取与填写方法见 [OpenAI 配置接入说明](docs/openai-config.md)。本项目不实现 OAuth 登录或 Token 刷新，也不接受普通 OpenAI API Key 作为 `wham` 凭证。
 

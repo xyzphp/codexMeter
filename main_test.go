@@ -73,7 +73,6 @@ func TestWhamRequestUsesOAuthHeadersAndGET(t *testing.T) {
 			AccessToken:      "oauth-token",
 			ChatGPTAccountID: "account-id",
 			UserAgent:        "test-user-agent",
-			UsageMode:        "wham",
 		},
 		client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 			captured = request
@@ -110,16 +109,18 @@ func TestWhamRequestUsesOAuthHeadersAndGET(t *testing.T) {
 	}
 }
 
-func TestOnlyWhamUsageModeIsAccepted(t *testing.T) {
+func TestConfigViewDoesNotExposeUsageProvider(t *testing.T) {
 	service := &UsageService{cfg: Config{
 		AccessToken:      "oauth-token",
 		ChatGPTAccountID: "account-id",
-		UsageMode:        defaultUsageMode,
 		CacheTTL:         time.Minute,
 	}}
-	unsupported := "legacy"
-	if _, err := service.UpdateConfig(ConfigUpdate{UsageMode: &unsupported}); err == nil {
-		t.Fatal("expected non-wham usage mode to be rejected")
+	data, err := json.Marshal(service.ConfigView())
+	if err != nil {
+		t.Fatalf("marshal config view: %v", err)
+	}
+	if strings.Contains(string(data), `"usage`) {
+		t.Fatalf("config view exposes removed usage provider setting: %s", data)
 	}
 }
 

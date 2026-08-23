@@ -4,7 +4,7 @@
 
 ## 1. 先区分两类凭证
 
-本项目当前只支持 `usage_mode: wham`，请求的是 ChatGPT/Codex Web 后端的只读额度和统计接口。因此它需要的是：
+本项目固定请求 ChatGPT/Codex Web 后端的只读额度和统计接口。因此它需要的是：
 
 | 配置 | 用途 | 能否替代 |
 | --- | --- | --- |
@@ -18,7 +18,27 @@
 
 本项目没有实现 OAuth 登录、回调和 Token 刷新流程，也不会为账户生成凭证。应使用你有权访问的 ChatGPT/Codex 客户端提供的登录和授权流程，并通过该客户端支持的凭证交接方式取得 Access Token。
 
-如果授权客户端没有提供 Token 导出或交接功能，请不要从浏览器 Cookie、Local Storage、网页抓包或第三方 Token 解码网站中复制凭证。OAuth Token 等同于账户会话凭证，泄露后可能导致账户被他人使用；本项目也不能替你判断 Token 是否仍然有效。
+如果你是在自己有权访问的 ChatGPT Web 账号上准备配置，可以按下面的方式定位请求字段。浏览器 Network 面板中的 OAuth Token 等同于账户会话凭证，只能配置到自己的服务端，不能分享给他人。
+
+### ChatGPT Web 端操作步骤
+
+1. 打开 [ChatGPT](https://chatgpt.com/) 并登录自己的账号。
+2. 打开 **设置 → 使用情况**，进入使用限额页面。
+3. 按 `F12` 打开开发者工具，切换到 **Network/网络** 面板；可勾选 Preserve log，并在过滤框输入 `usage` 或 `wham/usage`。
+4. 在请求列表中找到 `/backend-api/wham/usage`，确认状态码为 `200` 后打开详情。
+5. 在 **Headers → Request Headers** 中找到 `Authorization`。它通常形如 `Bearer <token>`，项目配置时只复制 `Bearer ` 后面的 Token，不要把 `Bearer ` 前缀再次写入 `access_token`。
+6. 如果同一请求包含 `chatgpt-account-id`，将它的值配置到 `openai.chatgpt_account_id`；如果没有该请求头，则按“如何确认 Account ID”一节在本机离线确认。
+
+字段对应关系：
+
+| Network 请求字段 | 项目配置字段 | 处理方式 |
+| --- | --- | --- |
+| `Authorization: Bearer <token>` | `openai.access_token` | 只复制 `<token>`，不要复制 `Bearer ` |
+| `chatgpt-account-id: <id>` | `openai.chatgpt_account_id` | 复制 `<id>` 原值 |
+
+只需要上述两个账户相关字段。`Cookie`、`oai-session-id`、`oai-device-id`、`oai-client-build-number`、`sec-ch-ua` 等浏览器或设备请求头不要写入配置文件。
+
+如果授权客户端没有提供 Token 导出或交接功能，也不要把 Cookie、Local Storage 或完整 Token 上传到第三方网站。不要使用在线 JWT 解码网站解析 Token；需要确认字段时只在本机离线处理。
 
 取得 Token 后，只在服务端配置一次，不要放到：
 
@@ -74,7 +94,6 @@ chmod 600 config.json
     "password": "管理密码"
   },
   "cache_ttl": "10m",
-  "usage_mode": "wham",
   "openai": {
     "access_token": "你的 ChatGPT OAuth Access Token",
     "chatgpt_account_id": "你的 ChatGPT Account ID",
@@ -95,7 +114,6 @@ chmod 600 config.json
 | --- | --- | --- |
 | `openai.access_token` | 是 | ChatGPT OAuth Access Token；服务端保存，前端不读取原文 |
 | `openai.chatgpt_account_id` | 是 | 与 Token 对应的 ChatGPT Account ID |
-| `usage_mode` | 是 | 固定为 `wham` |
 | `openai.user_agent` | 否 | 上游请求 User-Agent；留空时使用项目默认值 |
 | `openai.fedramp` | 否 | 仅在明确需要 FedRAMP 请求头时设为 `true` |
 | `proxy.url` | 否 | 代理 URL，建议写完整的 `http://host:port` 或 `https://host:port` |
@@ -117,7 +135,6 @@ CHATGPT_ACCOUNT_ID
 OPENAI_USER_AGENT
 OPENAI_FEDRAMP
 UPSTREAM_PROXY
-USAGE_MODE=wham
 CONFIG_FILE=/path/to/config.json
 ```
 

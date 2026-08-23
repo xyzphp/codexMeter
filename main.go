@@ -26,7 +26,6 @@ import (
 const (
 	defaultBindAddr             = "127.0.0.1:8080"
 	defaultUserAgent            = "codex-tui/0.146.0 (Ubuntu 22.4.0; x86_64) xterm-256color"
-	defaultUsageMode            = "wham"
 	defaultCacheTTL             = 10 * time.Minute
 	upstreamRequestTimeout      = 15 * time.Second
 	resetStatusEndpoint         = "https://codex-resets.com/api/v1/status"
@@ -57,7 +56,6 @@ type Config struct {
 	CacheTTL          time.Duration
 	CORSOrigin        string
 	ConfigPath        string
-	UsageMode         string
 	FedRAMP           bool
 }
 
@@ -71,7 +69,6 @@ type fileConfig struct {
 		Password string `json:"password"`
 	} `json:"basic_auth"`
 	CacheTTL   string `json:"cache_ttl"`
-	UsageMode  string `json:"usage_mode"`
 	CORSOrigin string `json:"cors_origin"`
 	OpenAI     struct {
 		AccessToken      string `json:"access_token"`
@@ -96,7 +93,6 @@ func loadConfig() (Config, error) {
 		UserAgent:  defaultUserAgent,
 		CacheTTL:   defaultCacheTTL,
 		ConfigPath: configPath,
-		UsageMode:  defaultUsageMode,
 	}
 
 	if raw, err := os.ReadFile(configPath); err == nil {
@@ -123,9 +119,6 @@ func loadConfig() (Config, error) {
 	}
 	if cfg.ChatGPTAccountID == "" {
 		return Config{}, errors.New("CHATGPT_ACCOUNT_ID is required")
-	}
-	if cfg.UsageMode != defaultUsageMode {
-		return Config{}, fmt.Errorf("invalid USAGE_MODE %q; only wham is supported", cfg.UsageMode)
 	}
 	if cfg.BasicAuthEnabled && (cfg.BasicAuthUsername == "" || cfg.BasicAuthPassword == "") {
 		return Config{}, errors.New("BASIC_AUTH_USER and BASIC_AUTH_PASSWORD are required when Basic Auth is enabled")
@@ -154,9 +147,6 @@ func applyFileConfig(cfg *Config, stored fileConfig) {
 	}
 	if stored.CORSOrigin != "" {
 		cfg.CORSOrigin = strings.TrimSpace(stored.CORSOrigin)
-	}
-	if stored.UsageMode != "" {
-		cfg.UsageMode = strings.TrimSpace(stored.UsageMode)
 	}
 	if stored.OpenAI.FedRAMP {
 		cfg.FedRAMP = true
@@ -196,7 +186,6 @@ func applyEnvironmentConfig(cfg *Config) error {
 	overrideString(&cfg.UserAgent, "OPENAI_USER_AGENT")
 	overrideString(&cfg.UpstreamProxy, "UPSTREAM_PROXY")
 	overrideString(&cfg.CORSOrigin, "CORS_ORIGIN")
-	overrideString(&cfg.UsageMode, "USAGE_MODE")
 	if raw := strings.TrimSpace(os.Getenv("OPENAI_FEDRAMP")); raw != "" {
 		fedRAMP, err := strconv.ParseBool(raw)
 		if err != nil {
@@ -816,7 +805,6 @@ type ConfigView struct {
 	BasePath         string `json:"base_path"`
 	BasicAuthEnabled bool   `json:"basic_auth_enabled"`
 	ChatGPTAccountID string `json:"chatgpt_account_id"`
-	UsageMode        string `json:"usage_mode"`
 	UserAgent        string `json:"user_agent"`
 	FedRAMP          bool   `json:"fedramp"`
 	TokenConfigured  bool   `json:"token_configured"`
@@ -829,7 +817,6 @@ type ConfigView struct {
 type ConfigUpdate struct {
 	AccessToken      *string `json:"access_token"`
 	ChatGPTAccountID *string `json:"chatgpt_account_id"`
-	UsageMode        *string `json:"usage_mode"`
 	UserAgent        *string `json:"user_agent"`
 	FedRAMP          *bool   `json:"fedramp"`
 	ProxyURL         *string `json:"proxy_url"`
@@ -858,7 +845,6 @@ func (s *UsageService) ConfigView() ConfigView {
 		BasePath:         cfg.BasePath,
 		BasicAuthEnabled: cfg.BasicAuthEnabled,
 		ChatGPTAccountID: cfg.ChatGPTAccountID,
-		UsageMode:        cfg.UsageMode,
 		UserAgent:        cfg.UserAgent,
 		FedRAMP:          cfg.FedRAMP,
 		TokenConfigured:  cfg.AccessToken != "",
@@ -877,9 +863,6 @@ func (s *UsageService) UpdateConfig(update ConfigUpdate) (ConfigView, error) {
 	}
 	if update.ChatGPTAccountID != nil {
 		next.ChatGPTAccountID = strings.TrimSpace(*update.ChatGPTAccountID)
-	}
-	if update.UsageMode != nil {
-		next.UsageMode = strings.ToLower(strings.TrimSpace(*update.UsageMode))
 	}
 	if update.UserAgent != nil {
 		next.UserAgent = strings.TrimSpace(*update.UserAgent)
@@ -906,10 +889,6 @@ func (s *UsageService) UpdateConfig(update ConfigUpdate) (ConfigView, error) {
 	if next.ChatGPTAccountID == "" {
 		return ConfigView{}, errors.New("chatgpt_account_id cannot be empty")
 	}
-	if next.UsageMode != defaultUsageMode {
-		return ConfigView{}, errors.New("usage_mode only supports wham")
-	}
-
 	proxyFunc, err := buildProxyFunc(next.UpstreamProxy)
 	if err != nil {
 		return ConfigView{}, err
@@ -954,7 +933,6 @@ func persistConfig(cfg Config) error {
 		BasePath:   cfg.BasePath,
 		AppAPIKey:  cfg.AppAPIKey,
 		CacheTTL:   cfg.CacheTTL.String(),
-		UsageMode:  cfg.UsageMode,
 		CORSOrigin: cfg.CORSOrigin,
 	}
 	stored.BasicAuth.Enabled = cfg.BasicAuthEnabled

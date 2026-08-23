@@ -160,8 +160,8 @@ paths:
       summary: 更新运行配置
       description: |
         部分更新配置。未提供的字段保持原值。access_token 和
-        chatgpt_account_id 必须同时有效，否则服务端拒绝保存。usage_mode
-        只接受 wham；cache_ttl 使用 Go duration 格式，例如 10m、30s 或 0。
+        chatgpt_account_id 必须同时有效，否则服务端拒绝保存。cache_ttl 使用
+        Go duration 格式，例如 10m、30s 或 0。
 
         请求中的 access_token 会写入服务端配置文件，请仅从可信的管理端调用，
         不要把它放进浏览器端代码、日志或 URL。
@@ -178,7 +178,6 @@ paths:
             example:
               access_token: eyJhbGciOi...
               chatgpt_account_id: 00000000-0000-0000-0000-000000000000
-              usage_mode: wham
               user_agent: codex-meter/1.0
               proxy_url: http://127.0.0.1:7890
               cache_ttl: 10m
@@ -588,7 +587,6 @@ components:
         - base_path
         - basic_auth_enabled
         - chatgpt_account_id
-        - usage_mode
         - user_agent
         - fedramp
         - token_configured
@@ -602,9 +600,6 @@ components:
           type: boolean
         chatgpt_account_id:
           type: string
-        usage_mode:
-          type: string
-          enum: [wham]
         user_agent:
           type: string
         fedramp:
@@ -633,10 +628,6 @@ components:
           description: ChatGPT OAuth Bearer Token，仅在服务端保存。
         chatgpt_account_id:
           type: string
-        usage_mode:
-          type: string
-          enum: [wham]
-          default: wham
         user_agent:
           type: string
         fedramp:

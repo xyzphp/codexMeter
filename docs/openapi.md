@@ -147,7 +147,6 @@ curl -X PUT \
   -d '{
     "chatgpt_account_id": "你的 ChatGPT Account ID",
     "access_token": "你的 OAuth Bearer Token",
-    "usage_mode": "wham",
     "proxy_url": "http://127.0.0.1:7890",
     "cache_ttl": "10m"
   }' \
@@ -157,7 +156,6 @@ curl -X PUT \
 安全注意事项：
 
 - `GET /api/config` 永远不会返回完整 OAuth Token；
-- `usage_mode` 只支持 `wham`；
 - Token 会写入服务端配置文件，请限制配置文件权限；
 - 不要把这个 PUT 接口直接暴露给不可信的浏览器端用户。
 
