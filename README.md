@@ -12,12 +12,9 @@
 
 ![LX04 设备实机效果](docs/media/codex-meter-device.png)
 
-### 操作演示视频
+### 操作演示动画
 
-<video controls preload="metadata" width="100%" poster="https://github.com/xyzphp/codexMeter/raw/refs/heads/main/docs/media/codex-meter-device.png">
-  <source src="https://github.com/xyzphp/codexMeter/raw/refs/heads/main/docs/media/codex-meter-demo.mp4" type="video/mp4">
-  当前浏览器不支持 HTML5 视频播放。
-</video>
+![操作演示动画](docs/media/codex-meter-demo.gif)
 
 ## 主要功能
 
