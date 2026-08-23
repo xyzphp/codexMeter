@@ -1,6 +1,6 @@
 services:
   codex-meter:
-    image: ghcr.io/xyzphp/codexmeter:latest
+    image: ghcr.io/xyzphp/codexmeter:v1.0.1
     build:
       context: .
       dockerfile: Dockerfile

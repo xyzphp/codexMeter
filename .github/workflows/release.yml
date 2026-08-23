@@ -135,10 +135,39 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+  update-compose:
+    name: Update Compose image version
+    needs: docker-publish
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Pin Compose image to release version
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          sed -i -E "s#^(    image: ghcr.io/xyzphp/codexmeter:).*$#\1${RELEASE_VERSION}#" docker-compose.yml
+          if git diff --quiet -- docker-compose.yml; then
+            echo "docker-compose.yml already points to ${RELEASE_VERSION}"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docker-compose.yml
+          git commit -m "chore: pin Docker Compose image to ${RELEASE_VERSION}"
+          git push origin HEAD:main
+
   release:
     name: Create GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, docker, docker-publish]
+    needs: [build, docker, docker-publish, update-compose]
     runs-on: ubuntu-latest
     steps:
       - name: 下载构建产物

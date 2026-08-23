@@ -28,7 +28,8 @@ git push origin v1.0.0
 4. 将各平台文件打包为 ZIP 或 tar.gz。
 5. 构建 `codex-meter:ci` Docker 镜像，验证 Dockerfile 和容器构建流程。
 6. 版本标签触发时，将镜像推送到 `ghcr.io/xyzphp/codexmeter`，同时生成版本标签和 `latest` 标签。
-7. 版本标签触发时，自动创建 GitHub Release 并上传全部构建包。
+7. 镜像发布成功后，自动将 `docker-compose.yml` 更新为本次版本号并提交到 `main`。
+8. 版本标签触发时，自动创建 GitHub Release 并上传全部构建包。
 
 ## 发布包内容
 

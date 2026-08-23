@@ -18,7 +18,7 @@ cp config.example.json config.json
 
 编辑 `config.json`，填写 `openai.access_token` 和 `openai.chatgpt_account_id`。如需从设备或公网访问，将 `bind_addr` 保持为 `0.0.0.0:8123`，并按需启用 Basic Auth。
 
-从 GitHub Container Registry 拉取最新镜像：
+从 GitHub Container Registry 拉取 Compose 文件中锁定的版本镜像：
 
 ```bash
 docker compose pull
@@ -124,6 +124,8 @@ docker pull ghcr.io/xyzphp/codexmeter:v1.0.0
 ```bash
 docker login ghcr.io
 ```
+
+`docker-compose.yml` 使用具体版本号而不是 `latest`。每次新的 `v*` 标签完成镜像发布后，GitHub Actions 会自动将 Compose 文件更新为对应版本并提交到 `main`，后续执行 `docker compose pull` 即可获取当前锁定版本。
 
 ## 镜像构建方式
 
