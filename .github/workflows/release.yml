@@ -44,7 +44,7 @@ jobs:
             echo "版本标签 ${RELEASE_VERSION} 已存在"
             exit 1
           fi
-          sed -i -E "s#^(    image: ghcr.io/xyzphp/codexmeter:).*$#\1${RELEASE_VERSION}#" docker-compose.yml
+          sed -i -E "s|^(    image: ghcr.io/xyzphp/codexmeter:).*$|\1${RELEASE_VERSION}|" docker-compose.yml
           if ! git diff --quiet -- docker-compose.yml; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
