@@ -121,7 +121,7 @@ jobs:
           package_dir="package/${package_name}"
           mkdir -p "dist" "${package_dir}"
           go build -trimpath -ldflags="-s -w" -o "${package_dir}/codex-meter${{ matrix.extension }}" .
-          cp README.md config.example.json openapi.yaml docker-compose.yml "${package_dir}/"
+          cp README.md config.example.json openapi.yaml docker-compose.yml docker-compose.local.yml "${package_dir}/"
           mkdir -p "${package_dir}/docs"
           cp docs/openapi.md docs/openai-config.md docs/frontend-ui.md docs/github-actions.md docs/docker.md "${package_dir}/docs/"
           cp -R docs/media "${package_dir}/docs/"

@@ -39,6 +39,7 @@
 - `openapi.yaml`；
 - `README.md`；
 - 与本次版本对应的 `docker-compose.yml`；
+- `docker-compose.local.yml`；
 - `docs/` 中文文档目录和效果演示素材，其中包含 Docker 运行说明。
 
 HTML 页面通过 Go 的 `//go:embed` 嵌入可执行文件，因此发布包不需要额外携带 `web/` 目录。运行时使用的 `config.json` 不会进入发布包，需要在部署服务器上单独创建，也不应提交到 Git 仓库。

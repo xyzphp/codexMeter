@@ -10,6 +10,8 @@
 
 ## 使用 Docker Compose 启动
 
+`docker-compose.yml` 是部署配置，只使用 GHCR 中的已发布镜像，不包含本地 `build` 配置。
+
 先在项目根目录复制配置模板：
 
 ```bash
@@ -56,6 +58,26 @@ docker compose down
 健康检查：http://127.0.0.1:8123/healthz
 ```
 
+## 从当前源码本地构建
+
+`docker-compose.local.yml` 用于本地源码构建，包含 `build` 配置：
+
+```bash
+docker compose -f docker-compose.local.yml up -d --build
+```
+
+查看本地构建容器日志：
+
+```bash
+docker compose -f docker-compose.local.yml logs -f codex-meter
+```
+
+停止本地构建容器：
+
+```bash
+docker compose -f docker-compose.local.yml down
+```
+
 ## 使用 docker run 启动
 
 版本标签发布后，可以直接拉取 GHCR 镜像：
@@ -76,7 +98,7 @@ Linux 或 macOS：
 docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "$(pwd)/config.json:/app/config.json" -e BIND_ADDR=0.0.0.0:8123 ghcr.io/xyzphp/codexmeter:latest
 ```
 
-如果需要从当前源码构建，也可以执行：
+如果不使用本地 Compose，也可以手动从当前源码构建：
 
 ```bash
 docker build -t codex-meter:local .
