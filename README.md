@@ -28,13 +28,26 @@
 
 默认只监听本机地址。配置 `app_api_key` 或 `APP_API_KEY` 后，需要在配置页面输入相同的 Key。
 
+## 前端页面与构建方式
+
+前端页面使用原生 HTML、CSS 和 JavaScript，源文件位于：
+
+```text
+web/index.html       额度首页
+web/settings.html    配置页面
+```
+
+Go 服务通过 `//go:embed` 将这两个 HTML 文件嵌入可执行文件中，并分别提供 `/` 和 `/settings` 页面。因此，Release 压缩包不需要额外携带 `web` 目录，解压后直接运行对应平台的可执行文件即可访问页面。
+
+页面修改后需要重新执行 Go 构建，修改内容才会进入新的可执行文件。运行时的 `config.json` 不会嵌入程序，OAuth Token、账号 ID、代理和 Basic Auth 等配置需要在服务器上单独创建或通过环境变量提供。
+
 ## GitHub Actions 自动发布
 
 仓库已配置 GitHub Actions 发布工作流。推送版本标签后，会自动运行测试、静态检查并构建发布包：
 
 `git tag v1.0.0 && git push origin v1.0.0`
 
-工作流会自动创建 GitHub Release，并上传 Windows amd64、Linux amd64 和 Linux arm64 三个平台的压缩包。每个发布包包含对应平台的可执行文件、`config.example.json` 和中文 README，不包含真实的 `config.json`。
+工作流会自动创建 GitHub Release，并上传 Windows amd64、Linux amd64 和 Linux arm64 三个平台的压缩包。每个发布包包含对应平台的可执行文件、内嵌的 HTML 页面、`config.example.json` 和中文 README，不包含独立的 `web` 目录和真实的 `config.json`。
 
 ## 配置项
 
