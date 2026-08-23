@@ -16,6 +16,22 @@
 
 ![操作演示动画](docs/media/codex-meter-demo.gif)
 
+## 项目关系与协同使用
+
+本项目需要配合 [xyzAiMeter](https://github.com/xyzphp/xyzAiMeter) 使用，才能在 LX04 Android 设备上达到完整的额度监控效果。
+
+- [codexMeter](https://github.com/xyzphp/codexMeter)：Go 后端和 Web 监控页面，负责请求 ChatGPT/Codex 相关接口、整理额度与使用统计，并提供可访问的页面地址。
+- [xyzAiMeter](https://github.com/xyzphp/xyzAiMeter)：Android WebView 壳应用，负责在 LX04 设备上加载 codexMeter 页面，并提供 URL、Basic Auth 等配置入口。
+
+两个项目的配合顺序如下：
+
+1. 先部署并启动 `codexMeter`，获得可访问的页面地址。
+2. 如果服务启用了 Basic Auth，在 `xyzAiMeter` 设置页填写对应用户名和密码。
+3. 安装并启动 `xyzAiMeter`，填写 `codexMeter` 页面 URL。
+4. Android WebView 加载页面，在设备上显示额度、统计和预测信息。
+
+![codexMeter 与 xyzAiMeter 项目关系图](docs/media/project-relationship.svg)
+
 ## 主要功能
 
 - 查询 ChatGPT OAuth 账号额度、Token 使用量和重置时间
