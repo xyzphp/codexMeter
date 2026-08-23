@@ -74,6 +74,7 @@ jobs:
           cp README.md config.example.json openapi.yaml "${package_dir}/"
           mkdir -p "${package_dir}/docs"
           cp docs/openapi.md docs/openai-config.md docs/frontend-ui.md docs/github-actions.md "${package_dir}/docs/"
+          cp -R docs/media "${package_dir}/docs/"
           if [ "${{ matrix.archive }}" = "zip" ]; then
             (cd package && zip -r "../dist/${package_name}.zip" "${package_name}")
           else

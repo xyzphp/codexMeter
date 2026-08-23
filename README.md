@@ -6,6 +6,16 @@
 
 数据查询不会提交模型提示词，也不会发起模型探测请求，因此额度查询不会通过发送对话请求来获取数据。
 
+## 效果演示
+
+### 设备实机效果
+
+![LX04 设备实机效果](docs/media/codex-meter-device.png)
+
+### 操作演示视频
+
+[播放或下载演示视频](docs/media/codex-meter-demo.mp4)
+
 ## 主要功能
 
 - 查询 ChatGPT OAuth 账号额度、Token 使用量和重置时间

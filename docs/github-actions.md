@@ -36,7 +36,7 @@ git push origin v1.0.0
 - `config.example.json`；
 - `openapi.yaml`；
 - `README.md`；
-- `docs/` 中文文档目录。
+- `docs/` 中文文档目录和效果演示素材。
 
 HTML 页面通过 Go 的 `//go:embed` 嵌入可执行文件，因此发布包不需要额外携带 `web/` 目录。运行时使用的 `config.json` 不会进入发布包，需要在部署服务器上单独创建，也不应提交到 Git 仓库。
 
