@@ -14,8 +14,8 @@
 
 ### 操作演示视频
 
-<video controls preload="metadata" width="100%" poster="https://raw.githubusercontent.com/xyzphp/codexMeter/main/docs/media/codex-meter-device.png">
-  <source src="https://raw.githubusercontent.com/xyzphp/codexMeter/main/docs/media/codex-meter-demo.mp4" type="video/mp4">
+<video controls preload="metadata" width="100%" poster="https://github.com/xyzphp/codexMeter/raw/refs/heads/main/docs/media/codex-meter-device.png">
+  <source src="https://github.com/xyzphp/codexMeter/raw/refs/heads/main/docs/media/codex-meter-demo.mp4" type="video/mp4">
   当前浏览器不支持 HTML5 视频播放。
 </video>
 
