@@ -32,13 +32,9 @@
 
 前端页面结构、Go 内嵌构建方式、Android WebView 设置和 UI 适配验收规范见 [docs/frontend-ui.md](docs/frontend-ui.md)。
 
-## GitHub Actions 自动发布
+## 发布文档
 
-仓库已配置 GitHub Actions 发布工作流。推送版本标签后，会自动运行测试、静态检查并构建发布包：
-
-`git tag v1.0.0 && git push origin v1.0.0`
-
-工作流会自动创建 GitHub Release，并上传 Windows amd64、Linux amd64 和 Linux arm64 三个平台的压缩包。每个发布包包含对应平台的可执行文件、内嵌的 HTML 页面、`config.example.json`、OpenAPI 文件和 `docs/` 中文文档，不包含独立的 `web` 目录和真实的 `config.json`。
+GitHub Actions 自动发布、触发方式、构建平台和发布包内容见 [docs/github-actions.md](docs/github-actions.md)。
 
 ## 配置文档
 
