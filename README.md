@@ -14,7 +14,10 @@
 
 ### 操作演示视频
 
-[播放或下载演示视频](docs/media/codex-meter-demo.mp4)
+<video controls preload="metadata" width="100%" poster="https://raw.githubusercontent.com/xyzphp/codexMeter/main/docs/media/codex-meter-device.png">
+  <source src="https://raw.githubusercontent.com/xyzphp/codexMeter/main/docs/media/codex-meter-demo.mp4" type="video/mp4">
+  当前浏览器不支持 HTML5 视频播放。
+</video>
 
 ## 主要功能
 
