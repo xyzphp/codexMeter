@@ -32,6 +32,12 @@
 
 ![codexMeter 与 xyzAiMeter 项目关系图](docs/media/project-relationship.svg)
 
+### 项目架构与交互逻辑
+
+下图展示 Android WebView、codexMeter 后端、认证与缓存层，以及 ChatGPT Wham 和公共预测接口之间的请求与返回关系：
+
+![codexMeter 项目架构与交互逻辑](docs/media/project-architecture.svg)
+
 ## 主要功能
 
 - 查询 ChatGPT OAuth 账号额度、Token 使用量和重置时间
