@@ -29,11 +29,11 @@ cp config.example.json config.json
 go run .
 ```
 
-默认页面地址：
+当前部署页面地址：
 
 ```text
-额度页面：http://127.0.0.1:8080/
-配置页面：http://127.0.0.1:8080/settings
+额度页面：http://127.0.0.1:8123/
+配置页面：http://127.0.0.1:8123/settings
 ```
 
 默认只监听本机地址。启用管理密钥或 Basic Auth 后，请按照[配置接入文档](docs/openai-config.md)完成配置。
