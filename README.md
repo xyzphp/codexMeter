@@ -203,7 +203,10 @@ GET /api/prediction
 GET /api/prediction?force=true
 GET /api/config
 PUT /api/config
+GET /audio?kind=normal|warning|critical
 ```
+
+`/audio` 返回内嵌的额度提示音，设置页面会直接预加载并播放，不会跳转到额度页面。
 
 ## Basic Auth 和 Nginx
 

@@ -123,6 +123,18 @@ func TestOnlyWhamUsageModeIsAccepted(t *testing.T) {
 	}
 }
 
+func TestEmbeddedAudioDecodes(t *testing.T) {
+	for _, kind := range []string{"normal", "warning", "critical"} {
+		data, err := embeddedAudio(kind)
+		if err != nil {
+			t.Fatalf("decode %s audio: %v", kind, err)
+		}
+		if len(data) < 12 || string(data[:4]) != "RIFF" || string(data[8:12]) != "WAVE" {
+			t.Fatalf("%s audio is not a WAV payload", kind)
+		}
+	}
+}
+
 func TestDailyUsageAnalyticsUsesBothEndpoints(t *testing.T) {
 	var paths []string
 	service := &UsageService{

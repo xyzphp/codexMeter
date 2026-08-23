@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1216,6 +1218,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux, prefix string) {
 	mux.HandleFunc("GET "+route("/healthz"), s.handleHealth)
 	mux.HandleFunc("GET "+route("/"), s.handleIndex)
 	mux.HandleFunc("GET "+route("/settings"), s.handleSettings)
+	mux.HandleFunc("GET "+route("/audio"), s.handleAudio)
 	mux.HandleFunc("GET "+route("/api/usage"), s.handleUsage)
 	mux.HandleFunc("GET "+route("/api/usage/analytics"), s.handleUsageAnalytics)
 	mux.HandleFunc("GET "+route("/api/prediction"), s.handlePrediction)
@@ -1302,6 +1305,47 @@ func (s *Server) handleSettings(response http.ResponseWriter, _ *http.Request) {
 	response.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 	response.WriteHeader(http.StatusOK)
 	_, _ = response.Write(settingsHTML)
+}
+
+func (s *Server) handleAudio(response http.ResponseWriter, request *http.Request) {
+	kind := strings.TrimSpace(request.URL.Query().Get("kind"))
+	data, err := embeddedAudio(kind)
+	if err != nil {
+		writeJSON(response, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+	response.Header().Set("Content-Type", "audio/wav")
+	response.Header().Set("Cache-Control", "public, max-age=3600")
+	response.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	response.WriteHeader(http.StatusOK)
+	_, _ = response.Write(data)
+}
+
+func embeddedAudio(kind string) ([]byte, error) {
+	markers := map[string]string{
+		"normal":   "quotaAlertAudio = new Audio('data:audio/wav;base64,",
+		"warning":  "quotaAlertAudioWarning = new Audio('data:audio/wav;base64,",
+		"critical": "quotaAlertAudioCritical = new Audio('data:audio/wav;base64,",
+	}
+	marker, ok := markers[kind]
+	if !ok {
+		return nil, fmt.Errorf("unknown audio kind %q", kind)
+	}
+	start := bytes.Index(indexHTML, []byte(marker))
+	if start < 0 {
+		return nil, fmt.Errorf("embedded audio %q was not found", kind)
+	}
+	start += len(marker)
+	endOffset := bytes.Index(indexHTML[start:], []byte("');"))
+	if endOffset < 0 {
+		return nil, fmt.Errorf("embedded audio %q is malformed", kind)
+	}
+	encoded := bytes.TrimSpace(indexHTML[start : start+endOffset])
+	decoded, err := base64.StdEncoding.DecodeString(string(encoded))
+	if err != nil {
+		return nil, fmt.Errorf("decode embedded audio %q: %w", kind, err)
+	}
+	return decoded, nil
 }
 
 func (s *Server) handleBaseRedirect(response http.ResponseWriter, request *http.Request) {
