@@ -90,6 +90,28 @@ docker compose up -d
 
 `docker-compose.yml` 用于部署已发布的 GHCR 镜像；`docker-compose.local.yml` 用于从当前源码构建和启动本地镜像。
 
+### 本地源码构建
+
+如果需要使用当前目录的源码构建镜像，请使用本地 Compose 文件：
+
+```bash
+docker compose -f docker-compose.local.yml up -d --build
+```
+
+查看本地容器日志：
+
+```bash
+docker compose -f docker-compose.local.yml logs -f
+```
+
+停止本地容器：
+
+```bash
+docker compose -f docker-compose.local.yml down
+```
+
+本地构建使用 `Dockerfile` 生成 `codex-meter:local` 镜像，不会推送到 GHCR；部署已发布版本时，请使用上面的 `docker-compose.yml`。
+
 ## 前端与 UI 文档
 
 前端页面结构、Go 内嵌构建方式、Android WebView 设置和 UI 适配验收规范见 [docs/frontend-ui.md](docs/frontend-ui.md)。
