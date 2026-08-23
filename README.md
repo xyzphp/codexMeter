@@ -86,7 +86,7 @@ docker compose pull
 docker compose up -d
 ```
 
-默认访问端口为 `8123`。Compose 文件使用具体版本号的镜像，后续发布新版本后会由 GitHub Actions 自动更新；手动使用时也可以拉取 `ghcr.io/xyzphp/codexmeter:latest`。配置文件通过卷挂载到容器中，设置页面保存的配置会保留在宿主机的 `config.json`。
+默认访问端口为 `8123`。创建新发布版本时，GitHub Actions 会先将 Compose 文件更新为对应版本号，再执行构建和发布；手动使用时也可以拉取 `ghcr.io/xyzphp/codexmeter:latest`。配置文件通过卷挂载到容器中，设置页面保存的配置会保留在宿主机的 `config.json`。
 
 ## 前端与 UI 文档
 

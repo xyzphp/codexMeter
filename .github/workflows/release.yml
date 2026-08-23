@@ -1,10 +1,12 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: "发布版本号，例如 v1.0.2"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -14,12 +16,57 @@ env:
   GO_VERSION: '1.22.x'
 
 jobs:
+  prepare-release:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.prepare.outputs.version }}
+      commit_sha: ${{ steps.prepare.outputs.commit_sha }}
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Update Compose and create release tag
+        id: prepare
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${RELEASE_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "版本号必须符合 vMAJOR.MINOR.PATCH，例如 v1.0.2"
+            exit 1
+          fi
+          if git ls-remote --exit-code --refs origin "refs/tags/${RELEASE_VERSION}" >/dev/null 2>&1; then
+            echo "版本标签 ${RELEASE_VERSION} 已存在"
+            exit 1
+          fi
+          sed -i -E "s#^(    image: ghcr.io/xyzphp/codexmeter:).*$#\1${RELEASE_VERSION}#" docker-compose.yml
+          if ! git diff --quiet -- docker-compose.yml; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add docker-compose.yml
+            git commit -m "chore: pin Docker Compose image to ${RELEASE_VERSION}"
+            git push origin HEAD:main
+          fi
+          commit_sha="$(git rev-parse HEAD)"
+          git tag "${RELEASE_VERSION}" "${commit_sha}"
+          git push origin "${RELEASE_VERSION}"
+          echo "version=${RELEASE_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "commit_sha=${commit_sha}" >> "${GITHUB_OUTPUT}"
+
   test:
     name: Test
+    needs: prepare-release
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.commit_sha }}
       - name: 配置 Go
         uses: actions/setup-go@v5
         with:
@@ -32,7 +79,7 @@ jobs:
 
   build:
     name: Build ${{ matrix.name }}
-    needs: test
+    needs: [prepare-release, test]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -56,6 +103,8 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.commit_sha }}
       - name: 配置 Go
         uses: actions/setup-go@v5
         with:
@@ -72,7 +121,7 @@ jobs:
           package_dir="package/${package_name}"
           mkdir -p "dist" "${package_dir}"
           go build -trimpath -ldflags="-s -w" -o "${package_dir}/codex-meter${{ matrix.extension }}" .
-          cp README.md config.example.json openapi.yaml "${package_dir}/"
+          cp README.md config.example.json openapi.yaml docker-compose.yml "${package_dir}/"
           mkdir -p "${package_dir}/docs"
           cp docs/openapi.md docs/openai-config.md docs/frontend-ui.md docs/github-actions.md docs/docker.md "${package_dir}/docs/"
           cp -R docs/media "${package_dir}/docs/"
@@ -90,11 +139,13 @@ jobs:
 
   docker:
     name: Docker image
-    needs: test
+    needs: [prepare-release, test]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.commit_sha }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Build Docker image
@@ -102,8 +153,7 @@ jobs:
 
   docker-publish:
     name: Publish Docker image
-    needs: [test, docker]
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [prepare-release, test, docker, release]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -111,6 +161,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.commit_sha }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Log in to GitHub Container Registry
@@ -125,7 +177,7 @@ jobs:
         with:
           images: ghcr.io/xyzphp/codexmeter
           tags: |
-            type=ref,event=tag
+            type=raw,value=${{ needs.prepare-release.outputs.version }}
             type=raw,value=latest
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -135,39 +187,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  update-compose:
-    name: Update Compose image version
-    needs: docker-publish
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout main branch
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-      - name: Pin Compose image to release version
-        env:
-          RELEASE_VERSION: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          sed -i -E "s#^(    image: ghcr.io/xyzphp/codexmeter:).*$#\1${RELEASE_VERSION}#" docker-compose.yml
-          if git diff --quiet -- docker-compose.yml; then
-            echo "docker-compose.yml already points to ${RELEASE_VERSION}"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docker-compose.yml
-          git commit -m "chore: pin Docker Compose image to ${RELEASE_VERSION}"
-          git push origin HEAD:main
-
   release:
     name: Create GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, docker, docker-publish, update-compose]
+    needs: [prepare-release, build, docker]
     runs-on: ubuntu-latest
     steps:
       - name: 下载构建产物
@@ -179,8 +201,11 @@ jobs:
       - name: 创建 GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
+          RELEASE_COMMIT: ${{ needs.prepare-release.outputs.commit_sha }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" release-files/* \
+          gh release create "${RELEASE_VERSION}" release-files/* \
             --repo "${GITHUB_REPOSITORY}" \
-            --title "Codex Meter ${GITHUB_REF_NAME}" \
+            --target "${RELEASE_COMMIT}" \
+            --title "Codex Meter ${RELEASE_VERSION}" \
             --generate-notes

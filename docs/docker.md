@@ -106,7 +106,7 @@ Compose 会将宿主机的 `config.json` 挂载到容器的 `/app/config.json`�
 
 ## 镜像地址和发布规则
 
-GitHub Actions 在推送 `v*` 版本标签时，自动将镜像发布到：
+GitHub Actions 在 `Release` 工作流中输入 `v*` 版本号后，自动将镜像发布到：
 
 ```text
 ghcr.io/xyzphp/codexmeter:<版本标签>
@@ -125,7 +125,7 @@ docker pull ghcr.io/xyzphp/codexmeter:v1.0.0
 docker login ghcr.io
 ```
 
-`docker-compose.yml` 使用具体版本号而不是 `latest`。每次新的 `v*` 标签完成镜像发布后，GitHub Actions 会自动将 Compose 文件更新为对应版本并提交到 `main`，后续执行 `docker compose pull` 即可获取当前锁定版本。
+`docker-compose.yml` 使用具体版本号而不是 `latest`。每次发布前，GitHub Actions 会先将 Compose 文件更新为对应版本并提交到 `main`，然后再构建发布包、创建 GitHub Release 和发布 Docker 镜像。
 
 ## 镜像构建方式
 
