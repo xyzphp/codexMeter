@@ -39,7 +39,7 @@
 
 默认情况下只需要上述两个账户字段。如果浏览器中的同一个 `/backend-api/wham/usage` 请求在服务端返回 `401`，而浏览器请求依赖 `credentials: include` 携带 Cookie，可以把浏览器 Network 请求中的完整 Cookie 串配置到 `openai.cookie`。项目只会在服务端向上游发送该 Cookie，不会返回给前端或写入普通请求日志。
 
-`oai-session-id`、`oai-device-id`、`oai-client-build-number`、`sec-ch-ua` 等其他浏览器或设备请求头目前不作为认证配置项；不要把它们拼接进 Cookie。
+如果浏览器请求返回 `200`，但项目请求返回 `401` 或 `403`，需要同步当前浏览器请求中的客户端上下文。字段提取和更新步骤见[ChatGPT Web cURL 配置更新指南](browser-curl-config.md)。不要把 `oai-*` 字段拼接进 Cookie，也不要把整段 cURL 原样写入配置文件。
 
 如果授权客户端没有提供 Token 导出或交接功能，也不要把 Cookie、Local Storage 或完整 Token 上传到第三方网站。不要使用在线 JWT 解码网站解析 Token；需要确认字段时只在本机离线处理。
 
@@ -229,7 +229,19 @@ curl -u '管理用户名:管理密码' \
 
 正常时返回 `source: "wham_usage"`。如果使用了 `app_api_key`，也可以改用 `X-App-API-Key` 请求头。
 
-## 7. 常见问题
+## 7. 浏览器 cURL 更新流程
+
+当 ChatGPT Web 更新后出现认证失败，或浏览器可以打开而项目不能打开时，请按照[ChatGPT Web cURL 配置更新指南](browser-curl-config.md)重新抓取当前成功请求，并更新 Token、Cookie 和客户端上下文字段。
+
+该指南包括：
+
+- 从 Network 面板复制当前成功的 `/backend-api/wham/usage` 请求；
+- 从 `Authorization`、`Cookie` 和 `oai-*` 请求头提取配置；
+- 使用 JSON 或环境变量更新服务端配置；
+- 重启 Docker/Go 服务并验证 `200` 响应；
+- `401`、`403`、代理和会话过期的排查顺序。
+
+## 8. 常见问题
 
 ### 返回 401 或 403
 
