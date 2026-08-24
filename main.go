@@ -49,6 +49,7 @@ type Config struct {
 	BasicAuthUsername string
 	BasicAuthPassword string
 	AccessToken       string
+	UpstreamCookie    string
 	ChatGPTAccountID  string
 	AppAPIKey         string
 	UserAgent         string
@@ -72,6 +73,7 @@ type fileConfig struct {
 	CORSOrigin string `json:"cors_origin"`
 	OpenAI     struct {
 		AccessToken      string `json:"access_token"`
+		Cookie           string `json:"cookie"`
 		ChatGPTAccountID string `json:"chatgpt_account_id"`
 		UserAgent        string `json:"user_agent"`
 		FedRAMP          bool   `json:"fedramp"`
@@ -154,6 +156,9 @@ func applyFileConfig(cfg *Config, stored fileConfig) {
 	if stored.OpenAI.AccessToken != "" {
 		cfg.AccessToken = strings.TrimSpace(stored.OpenAI.AccessToken)
 	}
+	if stored.OpenAI.Cookie != "" {
+		cfg.UpstreamCookie = strings.TrimSpace(stored.OpenAI.Cookie)
+	}
 	if stored.OpenAI.ChatGPTAccountID != "" {
 		cfg.ChatGPTAccountID = strings.TrimSpace(stored.OpenAI.ChatGPTAccountID)
 	}
@@ -179,6 +184,7 @@ func applyEnvironmentConfig(cfg *Config) error {
 	overrideString(&cfg.BindAddr, "BIND_ADDR")
 	overrideString(&cfg.BasePath, "BASE_PATH")
 	overrideString(&cfg.AccessToken, "OPENAI_ACCESS_TOKEN")
+	overrideString(&cfg.UpstreamCookie, "OPENAI_COOKIE")
 	overrideString(&cfg.ChatGPTAccountID, "CHATGPT_ACCOUNT_ID")
 	overrideString(&cfg.AppAPIKey, "APP_API_KEY")
 	overrideString(&cfg.BasicAuthUsername, "BASIC_AUTH_USER")
@@ -699,6 +705,9 @@ func newWhamRequest(ctx context.Context, endpoint string, cfg Config) (*http.Req
 	// only account-specific values; the rest are protocol hints.
 	request.Host = "chatgpt.com"
 	request.Header.Set("Authorization", "Bearer "+cfg.AccessToken)
+	if cfg.UpstreamCookie != "" {
+		request.Header.Set("Cookie", cfg.UpstreamCookie)
+	}
 	request.Header.Set("chatgpt-account-id", cfg.ChatGPTAccountID)
 	request.Header.Set("OpenAI-Beta", "codex-1")
 	request.Header.Set("oai-language", "zh-CN")
@@ -939,6 +948,7 @@ func persistConfig(cfg Config) error {
 	stored.BasicAuth.Username = cfg.BasicAuthUsername
 	stored.BasicAuth.Password = cfg.BasicAuthPassword
 	stored.OpenAI.AccessToken = cfg.AccessToken
+	stored.OpenAI.Cookie = cfg.UpstreamCookie
 	stored.OpenAI.ChatGPTAccountID = cfg.ChatGPTAccountID
 	stored.OpenAI.UserAgent = cfg.UserAgent
 	stored.OpenAI.FedRAMP = cfg.FedRAMP

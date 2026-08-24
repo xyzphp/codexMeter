@@ -71,6 +71,7 @@ func TestWhamRequestUsesOAuthHeadersAndGET(t *testing.T) {
 	service := &UsageService{
 		cfg: Config{
 			AccessToken:      "oauth-token",
+			UpstreamCookie:   "oai-did=device-id; session=test",
 			ChatGPTAccountID: "account-id",
 			UserAgent:        "test-user-agent",
 		},
@@ -95,6 +96,7 @@ func TestWhamRequestUsesOAuthHeadersAndGET(t *testing.T) {
 	}
 	wantHeaders := map[string]string{
 		"Authorization":      "Bearer oauth-token",
+		"Cookie":             "oai-did=device-id; session=test",
 		"ChatGPT-Account-Id": "account-id",
 		"Openai-Beta":        "codex-1",
 		"Oai-Language":       "zh-CN",
@@ -138,6 +140,7 @@ func TestEmbeddedAudioDecodes(t *testing.T) {
 
 func TestDailyUsageAnalyticsUsesBothEndpoints(t *testing.T) {
 	var paths []string
+	testDate := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 	service := &UsageService{
 		cfg: Config{
 			AccessToken:      "oauth-token",
@@ -148,10 +151,10 @@ func TestDailyUsageAnalyticsUsesBothEndpoints(t *testing.T) {
 			paths = append(paths, request.URL.Path)
 			body := `{"data":[]}`
 			if request.URL.Path == "/backend-api/wham/usage/daily-token-usage-breakdown" {
-				body = `{"data":[{"date":"2026-08-22","product_surface_usage_values":{"desktop_app":12.5},"models":[{"model":"gpt-5.6-luna","speed":"standard","credits":10},{"model":"gpt-5.6-luna","speed":"fast","credits":2.5}]}]}`
+				body = fmt.Sprintf(`{"data":[{"date":"%s","product_surface_usage_values":{"desktop_app":12.5},"models":[{"model":"gpt-5.6-luna","speed":"standard","credits":10},{"model":"gpt-5.6-luna","speed":"fast","credits":2.5}]}]}`, testDate)
 			}
 			if request.URL.Path == "/backend-api/wham/analytics/daily-workspace-usage-counts" {
-				body = `{"data":[{"date":"2026-08-22","totals":{"users":1,"threads":2,"turns":3,"credits":12.5,"uncached_text_input_tokens":10,"cached_text_input_tokens":20,"text_output_tokens":30,"text_total_tokens":60}}]}`
+				body = fmt.Sprintf(`{"data":[{"date":"%s","totals":{"users":1,"threads":2,"turns":3,"credits":12.5,"uncached_text_input_tokens":10,"cached_text_input_tokens":20,"text_output_tokens":30,"text_total_tokens":60}}]}`, testDate)
 			}
 			return &http.Response{
 				StatusCode: http.StatusOK,
@@ -168,7 +171,7 @@ func TestDailyUsageAnalyticsUsesBothEndpoints(t *testing.T) {
 	if len(paths) != 2 || paths[0] != "/backend-api/wham/usage/daily-token-usage-breakdown" || paths[1] != "/backend-api/wham/analytics/daily-workspace-usage-counts" {
 		t.Fatalf("upstream paths = %#v", paths)
 	}
-	if len(analytics.Days) != 7 || analytics.Days[6].Date != "2026-08-22" || analytics.Days[6].TokenUsagePercent != 12.5 || analytics.Days[6].Turns != 3 || analytics.Days[6].TextTotalTokens != 60 || len(analytics.Days[6].Models) != 1 || analytics.Days[6].Models[0].Model != "gpt-5.6-luna" || analytics.Days[6].Models[0].UsagePercent != 12.5 {
+	if len(analytics.Days) != 7 || analytics.Days[6].Date != testDate || analytics.Days[6].TokenUsagePercent != 12.5 || analytics.Days[6].Turns != 3 || analytics.Days[6].TextTotalTokens != 60 || len(analytics.Days[6].Models) != 1 || analytics.Days[6].Models[0].Model != "gpt-5.6-luna" || analytics.Days[6].Models[0].UsagePercent != 12.5 {
 		t.Fatalf("unexpected analytics payload: %#v", analytics)
 	}
 }

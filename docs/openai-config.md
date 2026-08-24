@@ -9,6 +9,7 @@
 | 配置 | 用途 | 能否替代 |
 | --- | --- | --- |
 | ChatGPT OAuth Access Token | 请求 `chatgpt.com/backend-api/wham/*` | 不能用普通 OpenAI API Key 替代 |
+| ChatGPT Web Cookie（可选） | 当上游要求浏览器会话时随请求发送 Cookie | 不能替代 OAuth Access Token |
 | ChatGPT Account ID | 通过 `chatgpt-account-id` 识别账户 | 不是 OpenAI Organization ID 或 Project ID |
 | OpenAI API Key | `api.openai.com/v1/*` 的官方 API 请求 | 不能直接用于本项目的 `wham` 接口 |
 
@@ -36,7 +37,9 @@
 | `Authorization: Bearer <token>` | `openai.access_token` | 只复制 `<token>`，不要复制 `Bearer ` |
 | `chatgpt-account-id: <id>` | `openai.chatgpt_account_id` | 复制 `<id>` 原值 |
 
-只需要上述两个账户相关字段。`Cookie`、`oai-session-id`、`oai-device-id`、`oai-client-build-number`、`sec-ch-ua` 等浏览器或设备请求头不要写入配置文件。
+默认情况下只需要上述两个账户字段。如果浏览器中的同一个 `/backend-api/wham/usage` 请求在服务端返回 `401`，而浏览器请求依赖 `credentials: include` 携带 Cookie，可以把浏览器 Network 请求中的完整 Cookie 串配置到 `openai.cookie`。项目只会在服务端向上游发送该 Cookie，不会返回给前端或写入普通请求日志。
+
+`oai-session-id`、`oai-device-id`、`oai-client-build-number`、`sec-ch-ua` 等其他浏览器或设备请求头目前不作为认证配置项；不要把它们拼接进 Cookie。
 
 如果授权客户端没有提供 Token 导出或交接功能，也不要把 Cookie、Local Storage 或完整 Token 上传到第三方网站。不要使用在线 JWT 解码网站解析 Token；需要确认字段时只在本机离线处理。
 
@@ -96,6 +99,7 @@ chmod 600 config.json
   "cache_ttl": "10m",
   "openai": {
     "access_token": "你的 ChatGPT OAuth Access Token",
+    "cookie": "浏览器 Request Headers 中的完整 Cookie（可选）",
     "chatgpt_account_id": "你的 ChatGPT Account ID",
     "user_agent": "codex-tui/0.146.0",
     "fedramp": false
@@ -113,6 +117,7 @@ chmod 600 config.json
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
 | `openai.access_token` | 是 | ChatGPT OAuth Access Token；服务端保存，前端不读取原文 |
+| `openai.cookie` | 否 | 浏览器 Request Headers 中的完整 Cookie；仅在上游要求浏览器会话时配置 |
 | `openai.chatgpt_account_id` | 是 | 与 Token 对应的 ChatGPT Account ID |
 | `openai.user_agent` | 否 | 上游请求 User-Agent；留空时使用项目默认值 |
 | `openai.fedramp` | 否 | 仅在明确需要 FedRAMP 请求头时设为 `true` |
@@ -128,6 +133,7 @@ chmod 600 config.json
 | 环境变量 | JSON 配置项 | 说明 |
 | --- | --- | --- |
 | `OPENAI_ACCESS_TOKEN` | `openai.access_token` | ChatGPT OAuth Access Token |
+| `OPENAI_COOKIE` | `openai.cookie` | ChatGPT Web 完整 Cookie 串；服务端仅用于上游请求 |
 | `CHATGPT_ACCOUNT_ID` | `openai.chatgpt_account_id` | ChatGPT Account ID |
 | `OPENAI_USER_AGENT` | `openai.user_agent` | 上游请求 User-Agent |
 | `OPENAI_FEDRAMP` | `openai.fedramp` | 是否发送 FedRAMP 请求头 |
@@ -142,7 +148,7 @@ chmod 600 config.json
 | `CORS_ORIGIN` | `cors_origin` | 允许的跨域来源，按需设置 |
 | `CONFIG_FILE` | — | 指定 JSON 配置文件路径 |
 
-配置页面支持修改 Token、账号 ID、User-Agent、代理和缓存时长。服务端固定读取额度和统计接口，不提供查询模式切换。保存配置时，在支持的系统上会使用 `0600` 文件权限。
+配置页面支持修改 Token、账号 ID、User-Agent、代理和缓存时长。Cookie 建议直接写入 `config.json` 或通过 `OPENAI_COOKIE` 环境变量配置，配置页面不会回显 Cookie。服务端固定读取额度和统计接口，不提供查询模式切换。保存配置时，在支持的系统上会使用 `0600` 文件权限。
 
 代理地址必须包含协议和端口，例如：
 
@@ -215,7 +221,7 @@ curl -u '管理用户名:管理密码' \
 
 ### 返回 401 或 403
 
-通常是 OAuth Token 过期、被撤销、Account ID 不匹配，或者误填了普通 OpenAI API Key。请重新通过授权客户端取得凭证，并核对 Account ID。
+通常是 OAuth Token 过期、被撤销、Account ID 不匹配、缺少浏览器 Cookie，或者误填了普通 OpenAI API Key。请确认浏览器请求本身为 `200`，必要时复制完整 Cookie 到 `openai.cookie`，并核对 Account ID。
 
 ### 返回 502
 
