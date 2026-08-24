@@ -12,6 +12,12 @@
     "access_token": "replace-with-oauth-access-token",
     "cookie": "",
     "chatgpt_account_id": "replace-with-chatgpt-account-id",
+    "client_build_number": "",
+    "client_version": "",
+    "device_id": "",
+    "session_id": "",
+    "client_observation": "",
+    "referer": "",
     "user_agent": "codex-tui/0.146.0 (Ubuntu 22.4.0; x86_64) xterm-256color",
     "fedramp": false
   },

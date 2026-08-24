@@ -119,6 +119,12 @@ chmod 600 config.json
 | `openai.access_token` | 是 | ChatGPT OAuth Access Token；服务端保存，前端不读取原文 |
 | `openai.cookie` | 否 | 浏览器 Request Headers 中的完整 Cookie；仅在上游要求浏览器会话时配置 |
 | `openai.chatgpt_account_id` | 是 | 与 Token 对应的 ChatGPT Account ID |
+| `openai.client_build_number` | 否 | 浏览器 `oai-client-build-number` |
+| `openai.client_version` | 否 | 浏览器 `oai-client-version` |
+| `openai.device_id` | 否 | 浏览器 `oai-device-id` |
+| `openai.session_id` | 否 | 当前浏览器会话的 `oai-session-id` |
+| `openai.client_observation` | 否 | 浏览器 `x-oai-is-client-observation` |
+| `openai.referer` | 否 | 上游请求 Referer，例如 ChatGPT 使用情况页面 |
 | `openai.user_agent` | 否 | 上游请求 User-Agent；留空时使用项目默认值 |
 | `openai.fedramp` | 否 | 仅在明确需要 FedRAMP 请求头时设为 `true` |
 | `proxy.url` | 否 | 代理 URL，建议写完整的 `http://host:port` 或 `https://host:port` |
@@ -135,6 +141,12 @@ chmod 600 config.json
 | `OPENAI_ACCESS_TOKEN` | `openai.access_token` | ChatGPT OAuth Access Token |
 | `OPENAI_COOKIE` | `openai.cookie` | ChatGPT Web 完整 Cookie 串；服务端仅用于上游请求 |
 | `CHATGPT_ACCOUNT_ID` | `openai.chatgpt_account_id` | ChatGPT Account ID |
+| `OPENAI_CLIENT_BUILD_NUMBER` | `openai.client_build_number` | ChatGPT Web 客户端构建号 |
+| `OPENAI_CLIENT_VERSION` | `openai.client_version` | ChatGPT Web 客户端版本 |
+| `OPENAI_DEVICE_ID` | `openai.device_id` | ChatGPT Web 设备 ID |
+| `OPENAI_SESSION_ID` | `openai.session_id` | 当前 ChatGPT Web 会话 ID |
+| `OPENAI_CLIENT_OBSERVATION` | `openai.client_observation` | ChatGPT Web 客户端观察标识 |
+| `OPENAI_REFERER` | `openai.referer` | 上游请求 Referer |
 | `OPENAI_USER_AGENT` | `openai.user_agent` | 上游请求 User-Agent |
 | `OPENAI_FEDRAMP` | `openai.fedramp` | 是否发送 FedRAMP 请求头 |
 | `UPSTREAM_PROXY` | `proxy.url` | HTTP/HTTPS 代理地址 |

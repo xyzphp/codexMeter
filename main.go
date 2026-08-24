@@ -51,6 +51,12 @@ type Config struct {
 	AccessToken       string
 	UpstreamCookie    string
 	ChatGPTAccountID  string
+	ClientBuildNumber string
+	ClientVersion     string
+	DeviceID          string
+	SessionID         string
+	ClientObservation string
+	UpstreamReferer   string
 	AppAPIKey         string
 	UserAgent         string
 	UpstreamProxy     string
@@ -72,11 +78,17 @@ type fileConfig struct {
 	CacheTTL   string `json:"cache_ttl"`
 	CORSOrigin string `json:"cors_origin"`
 	OpenAI     struct {
-		AccessToken      string `json:"access_token"`
-		Cookie           string `json:"cookie"`
-		ChatGPTAccountID string `json:"chatgpt_account_id"`
-		UserAgent        string `json:"user_agent"`
-		FedRAMP          bool   `json:"fedramp"`
+		AccessToken       string `json:"access_token"`
+		Cookie            string `json:"cookie"`
+		ChatGPTAccountID  string `json:"chatgpt_account_id"`
+		ClientBuildNumber string `json:"client_build_number"`
+		ClientVersion     string `json:"client_version"`
+		DeviceID          string `json:"device_id"`
+		SessionID         string `json:"session_id"`
+		ClientObservation string `json:"client_observation"`
+		Referer           string `json:"referer"`
+		UserAgent         string `json:"user_agent"`
+		FedRAMP           bool   `json:"fedramp"`
 	} `json:"openai"`
 	Proxy struct {
 		URL string `json:"url"`
@@ -162,6 +174,24 @@ func applyFileConfig(cfg *Config, stored fileConfig) {
 	if stored.OpenAI.ChatGPTAccountID != "" {
 		cfg.ChatGPTAccountID = strings.TrimSpace(stored.OpenAI.ChatGPTAccountID)
 	}
+	if stored.OpenAI.ClientBuildNumber != "" {
+		cfg.ClientBuildNumber = strings.TrimSpace(stored.OpenAI.ClientBuildNumber)
+	}
+	if stored.OpenAI.ClientVersion != "" {
+		cfg.ClientVersion = strings.TrimSpace(stored.OpenAI.ClientVersion)
+	}
+	if stored.OpenAI.DeviceID != "" {
+		cfg.DeviceID = strings.TrimSpace(stored.OpenAI.DeviceID)
+	}
+	if stored.OpenAI.SessionID != "" {
+		cfg.SessionID = strings.TrimSpace(stored.OpenAI.SessionID)
+	}
+	if stored.OpenAI.ClientObservation != "" {
+		cfg.ClientObservation = strings.TrimSpace(stored.OpenAI.ClientObservation)
+	}
+	if stored.OpenAI.Referer != "" {
+		cfg.UpstreamReferer = strings.TrimSpace(stored.OpenAI.Referer)
+	}
 	if stored.OpenAI.UserAgent != "" {
 		cfg.UserAgent = strings.TrimSpace(stored.OpenAI.UserAgent)
 	}
@@ -186,6 +216,12 @@ func applyEnvironmentConfig(cfg *Config) error {
 	overrideString(&cfg.AccessToken, "OPENAI_ACCESS_TOKEN")
 	overrideString(&cfg.UpstreamCookie, "OPENAI_COOKIE")
 	overrideString(&cfg.ChatGPTAccountID, "CHATGPT_ACCOUNT_ID")
+	overrideString(&cfg.ClientBuildNumber, "OPENAI_CLIENT_BUILD_NUMBER")
+	overrideString(&cfg.ClientVersion, "OPENAI_CLIENT_VERSION")
+	overrideString(&cfg.DeviceID, "OPENAI_DEVICE_ID")
+	overrideString(&cfg.SessionID, "OPENAI_SESSION_ID")
+	overrideString(&cfg.ClientObservation, "OPENAI_CLIENT_OBSERVATION")
+	overrideString(&cfg.UpstreamReferer, "OPENAI_REFERER")
 	overrideString(&cfg.AppAPIKey, "APP_API_KEY")
 	overrideString(&cfg.BasicAuthUsername, "BASIC_AUTH_USER")
 	overrideString(&cfg.BasicAuthPassword, "BASIC_AUTH_PASSWORD")
@@ -700,23 +736,42 @@ func newWhamRequest(ctx context.Context, endpoint string, cfg Config) (*http.Req
 		return nil, nil, fmt.Errorf("create wham request: %w", err)
 	}
 
-	// These headers are the authentication/context headers used by the
-	// ChatGPT web/Codex client. The OAuth access token and account ID are the
-	// only account-specific values; the rest are protocol hints.
+	// These headers mirror the browser request context captured from ChatGPT.
+	// The target path is derived per endpoint so analytics requests do not send
+	// the path of the primary usage endpoint.
 	request.Host = "chatgpt.com"
 	request.Header.Set("Authorization", "Bearer "+cfg.AccessToken)
 	if cfg.UpstreamCookie != "" {
 		request.Header.Set("Cookie", cfg.UpstreamCookie)
 	}
-	request.Header.Set("chatgpt-account-id", cfg.ChatGPTAccountID)
-	request.Header.Set("OpenAI-Beta", "codex-1")
+	if cfg.ClientBuildNumber != "" {
+		request.Header.Set("oai-client-build-number", cfg.ClientBuildNumber)
+	}
+	if cfg.ClientVersion != "" {
+		request.Header.Set("oai-client-version", cfg.ClientVersion)
+	}
+	if cfg.DeviceID != "" {
+		request.Header.Set("oai-device-id", cfg.DeviceID)
+	}
+	if cfg.SessionID != "" {
+		request.Header.Set("oai-session-id", cfg.SessionID)
+	}
+	if cfg.ClientObservation != "" {
+		request.Header.Set("x-oai-is-client-observation", cfg.ClientObservation)
+	}
+	request.Header.Set("x-openai-target-path", request.URL.Path)
+	request.Header.Set("x-openai-target-route", request.URL.Path)
 	request.Header.Set("oai-language", "zh-CN")
-	request.Header.Set("Originator", "Codex Desktop")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Sec-Fetch-Site", "none")
-	request.Header.Set("Sec-Fetch-Mode", "no-cors")
+	request.Header.Set("Cache-Control", "no-cache")
+	request.Header.Set("Pragma", "no-cache")
+	request.Header.Set("Accept", "*/*")
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	request.Header.Set("Sec-Fetch-Mode", "cors")
 	request.Header.Set("Sec-Fetch-Dest", "empty")
-	request.Header.Set("Priority", "u=4, i")
+	request.Header.Set("Priority", "u=1, i")
+	if cfg.UpstreamReferer != "" {
+		request.Header.Set("Referer", cfg.UpstreamReferer)
+	}
 	request.Header.Set("User-Agent", cfg.UserAgent)
 	if cfg.FedRAMP {
 		request.Header.Set("x-openai-fedramp", "true")
@@ -950,6 +1005,12 @@ func persistConfig(cfg Config) error {
 	stored.OpenAI.AccessToken = cfg.AccessToken
 	stored.OpenAI.Cookie = cfg.UpstreamCookie
 	stored.OpenAI.ChatGPTAccountID = cfg.ChatGPTAccountID
+	stored.OpenAI.ClientBuildNumber = cfg.ClientBuildNumber
+	stored.OpenAI.ClientVersion = cfg.ClientVersion
+	stored.OpenAI.DeviceID = cfg.DeviceID
+	stored.OpenAI.SessionID = cfg.SessionID
+	stored.OpenAI.ClientObservation = cfg.ClientObservation
+	stored.OpenAI.Referer = cfg.UpstreamReferer
 	stored.OpenAI.UserAgent = cfg.UserAgent
 	stored.OpenAI.FedRAMP = cfg.FedRAMP
 	stored.Proxy.URL = cfg.UpstreamProxy

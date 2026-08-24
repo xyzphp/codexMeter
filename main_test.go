@@ -70,10 +70,16 @@ func TestWhamRequestUsesOAuthHeadersAndGET(t *testing.T) {
 	var captured *http.Request
 	service := &UsageService{
 		cfg: Config{
-			AccessToken:      "oauth-token",
-			UpstreamCookie:   "oai-did=device-id; session=test",
-			ChatGPTAccountID: "account-id",
-			UserAgent:        "test-user-agent",
+			AccessToken:       "oauth-token",
+			UpstreamCookie:    "oai-did=device-id; session=test",
+			ChatGPTAccountID:  "account-id",
+			ClientBuildNumber: "9758774",
+			ClientVersion:     "prod-test",
+			DeviceID:          "device-id",
+			SessionID:         "session-id",
+			ClientObservation: "v1.r.p.test",
+			UpstreamReferer:   "https://chatgpt.com/codex/cloud/settings/analytics",
+			UserAgent:         "test-user-agent",
 		},
 		client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 			captured = request
@@ -95,14 +101,25 @@ func TestWhamRequestUsesOAuthHeadersAndGET(t *testing.T) {
 		t.Fatalf("request = %s %s, want GET /backend-api/wham/usage", captured.Method, captured.URL.Path)
 	}
 	wantHeaders := map[string]string{
-		"Authorization":      "Bearer oauth-token",
-		"Cookie":             "oai-did=device-id; session=test",
-		"ChatGPT-Account-Id": "account-id",
-		"Openai-Beta":        "codex-1",
-		"Oai-Language":       "zh-CN",
-		"Originator":         "Codex Desktop",
-		"Accept":             "application/json",
-		"User-Agent":         "test-user-agent",
+		"Authorization":               "Bearer oauth-token",
+		"Cookie":                      "oai-did=device-id; session=test",
+		"Oai-Client-Build-Number":     "9758774",
+		"Oai-Client-Version":          "prod-test",
+		"Oai-Device-Id":               "device-id",
+		"Oai-Session-Id":              "session-id",
+		"X-Oai-Is-Client-Observation": "v1.r.p.test",
+		"X-Openai-Target-Path":        "/backend-api/wham/usage",
+		"X-Openai-Target-Route":       "/backend-api/wham/usage",
+		"Oai-Language":                "zh-CN",
+		"Cache-Control":               "no-cache",
+		"Pragma":                      "no-cache",
+		"Accept":                      "*/*",
+		"Sec-Fetch-Site":              "same-origin",
+		"Sec-Fetch-Mode":              "cors",
+		"Sec-Fetch-Dest":              "empty",
+		"Priority":                    "u=1, i",
+		"Referer":                     "https://chatgpt.com/codex/cloud/settings/analytics",
+		"User-Agent":                  "test-user-agent",
 	}
 	for name, want := range wantHeaders {
 		if got := captured.Header.Get(name); got != want {
