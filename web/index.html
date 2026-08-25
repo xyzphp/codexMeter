@@ -332,6 +332,10 @@
             <div id="tokenUsageChart" class="chart-bars" aria-label="每日额度使用柱状图"></div>
           </div>
           <div class="chart-panel">
+            <div class="chart-panel-head"><span>每日 Token 数</span><strong>单位：M</strong></div>
+            <div id="dailyTokenChart" class="chart-bars" aria-label="每日 Token 数柱状图"></div>
+          </div>
+          <div class="chart-panel">
             <div class="chart-panel-head"><span>每日对话轮次</span><strong>工作区统计</strong></div>
             <div id="workspaceUsageChart" class="chart-bars" aria-label="每日对话轮次柱状图"></div>
           </div>
@@ -813,6 +817,7 @@
         setText('analyticsTurns', isFinite(Number(summary.turns)) ? formatCompactNumber(summary.turns) : '—');
         setText('analyticsTokens', isFinite(Number(summary.text_total_tokens)) ? formatTokenMillions(summary.text_total_tokens) : '—');
         renderAnalyticsChart('tokenUsageChart', days, 'token_usage_percent', function (value) { return formatPercent(value) + '%'; }, '');
+        renderAnalyticsChart('dailyTokenChart', days, 'text_total_tokens', formatTokenMillions, '');
         renderAnalyticsChart('workspaceUsageChart', days, 'turns', formatCompactNumber, 'workspace');
         renderModelUsageChart(days);
         renderYesterdayModelPieChart(days, 'yesterdayModelPieChart');
@@ -825,6 +830,7 @@
         setText('analyticsTokens', '—');
         var message = escapeHTML(error && error.message ? error.message : '请稍后重试');
         setHTML('tokenUsageChart', '<div class="analytics-empty analytics-error">' + message + '</div>');
+        setHTML('dailyTokenChart', '<div class="analytics-empty analytics-error">请检查 OAuth 凭证或稍后重试</div>');
         setHTML('workspaceUsageChart', '<div class="analytics-empty analytics-error">请检查 OAuth 凭证或稍后重试</div>');
         setHTML('modelUsageChart', '<div class="analytics-empty analytics-error">请检查 OAuth 凭证或稍后重试</div>');
         setHTML('yesterdayModelPieChart', '<div class="analytics-empty analytics-error">请检查 OAuth 凭证或稍后重试</div>');
