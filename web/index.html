@@ -47,7 +47,7 @@
     .hero { display:flex; align-items:center; justify-content:space-between; gap:12px; flex:0 0 auto; min-height:0; padding:3px 1px 3px; }
     .quota-hero { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:start; gap:14px; }
     .quota-panel { min-width:0; padding:3px 0 2px; }
-    .quota-panel + .quota-panel { border-left:1px solid var(--border); padding-left:14px; }
+    .quota-panel + .quota-panel { padding-left:14px; }
     .quota-panel .remaining { font-size:52px; letter-spacing:-3px; }
     .quota-panel .progress-block { max-width:none; margin-top:6px; margin-bottom:0; }
     .quota-reset { margin-top:9px; padding-top:7px; border-top:1px solid var(--border); min-width:0; }
@@ -312,7 +312,6 @@
         <div class="rule"></div>
         <div class="meta-grid">
           <div class="meta reset-card"><div class="meta-label">下次重置</div><div id="resetAt" class="meta-value">—</div><div class="reset-progress-head"><span>距离重置剩余</span><strong id="resetProgress">—%</strong></div><div class="reset-progress-track"><div id="resetProgressBar" class="reset-progress-bar"></div></div></div>
-          <div class="meta status-card"><div class="meta-label">账号状态</div><div id="accountState" class="meta-value">等待连接</div></div>
         </div>
         <div class="refresh-status" aria-label="自动刷新倒计时">
           <div class="refresh-head"><span id="refreshLabel">自动刷新</span><strong id="refreshCountdown">05:00</strong></div>
