@@ -50,6 +50,9 @@
     .quota-panel + .quota-panel { border-left:1px solid var(--border); padding-left:14px; }
     .quota-panel .remaining { font-size:52px; letter-spacing:-3px; }
     .quota-panel .progress-block { max-width:none; margin-top:6px; margin-bottom:0; }
+    .quota-reset { margin-top:9px; padding-top:7px; border-top:1px solid var(--border); min-width:0; }
+    .quota-reset-label { color:var(--muted); font-size:10px; line-height:12px; }
+    .quota-reset-value { margin-top:2px; color:var(--text); font-size:13px; line-height:17px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .hero-copy { flex:1 1 0; min-width:0; padding-top:11px; }
     .eyebrow { font-size:12px; color:var(--muted); margin-bottom:3px; }
     .remaining { font-size:62px; line-height:.95; letter-spacing:-4px; font-weight:730; white-space:nowrap; }
@@ -221,6 +224,8 @@
       .quota-panel { padding-top:0; }
       .quota-panel + .quota-panel { padding-left:10px; }
       .quota-panel .remaining { font-size:48px; letter-spacing:-2px; }
+      .quota-reset { margin-top:7px; padding-top:5px; }
+      .quota-reset-value { font-size:11px; line-height:14px; }
       .progress-block { max-width:none; margin-top:1px; margin-bottom:2px; }
       .progress-head { margin-bottom:4px; }
       .yesterday-summary { width:auto; flex:1 1 0; padding:3px 0 0 0; }
@@ -289,6 +294,10 @@
             <div class="progress-block" aria-label="5小时剩余额度进度">
               <div class="progress-head"><span>5小时剩余</span><strong id="remainingProgress">—%</strong></div>
               <div class="progress-track"><div id="remainingBar" class="progress-bar"></div></div>
+            </div>
+            <div class="quota-reset" aria-label="5小时额度重置时间">
+              <div class="quota-reset-label">5小时额度重置</div>
+              <div id="fiveHourResetAt" class="quota-reset-value">—</div>
             </div>
           </div>
           <div class="quota-panel" aria-label="本周剩余额度">
@@ -611,6 +620,7 @@
         var fiveHourRemaining = renderQuotaWindow(fiveHour, 'remaining', 'remainingProgress', 'remainingBar');
         var weeklyRemaining = renderQuotaWindow(weekly, 'weeklyRemaining', 'weeklyRemainingProgress', 'weeklyRemainingBar');
         var resetWindow = weekly || fiveHour;
+        setText('fiveHourResetAt', fiveHour ? formatDate(fiveHour.reset_at) : '—');
         updateResetTimeline(resetWindow);
         announceRemainingIfNeeded(isFinite(weeklyRemaining) ? weeklyRemaining : fiveHourRemaining, repeatAlert);
         setText('accountEmail', usage.email || '—');
