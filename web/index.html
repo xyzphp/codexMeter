@@ -50,9 +50,6 @@
     .quota-panel + .quota-panel { padding-left:14px; }
     .quota-panel .remaining { font-size:52px; letter-spacing:-3px; }
     .quota-panel .progress-block { max-width:none; margin-top:6px; margin-bottom:0; }
-    .quota-reset { margin-top:9px; padding-top:7px; border-top:1px solid var(--border); min-width:0; }
-    .quota-reset-label { color:var(--muted); font-size:10px; line-height:12px; }
-    .quota-reset-value { margin-top:2px; color:var(--text); font-size:13px; line-height:17px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .hero-copy { flex:1 1 0; min-width:0; padding-top:11px; }
     .eyebrow { font-size:12px; color:var(--muted); margin-bottom:3px; }
     .remaining { font-size:62px; line-height:.95; letter-spacing:-4px; font-weight:730; white-space:nowrap; }
@@ -224,8 +221,6 @@
       .quota-panel { padding-top:0; }
       .quota-panel + .quota-panel { padding-left:10px; }
       .quota-panel .remaining { font-size:48px; letter-spacing:-2px; }
-      .quota-reset { margin-top:7px; padding-top:5px; }
-      .quota-reset-value { font-size:11px; line-height:14px; }
       .progress-block { max-width:none; margin-top:1px; margin-bottom:2px; }
       .progress-head { margin-bottom:4px; }
       .yesterday-summary { width:auto; flex:1 1 0; padding:3px 0 0 0; }
@@ -295,10 +290,6 @@
               <div class="progress-head"><span>5小时剩余</span><strong id="remainingProgress">—%</strong></div>
               <div class="progress-track"><div id="remainingBar" class="progress-bar"></div></div>
             </div>
-            <div class="quota-reset" aria-label="5小时额度重置时间">
-              <div class="quota-reset-label">5小时额度重置</div>
-              <div id="fiveHourResetAt" class="quota-reset-value">—</div>
-            </div>
           </div>
           <div class="quota-panel" aria-label="本周剩余额度">
             <div class="eyebrow">本周额度剩余</div>
@@ -311,6 +302,7 @@
         </div>
         <div class="rule"></div>
         <div class="meta-grid">
+          <div class="meta reset-card"><div class="meta-label">5小时重置</div><div id="fiveHourResetAt" class="meta-value">—</div><div class="reset-progress-head"><span>距离重置剩余</span><strong id="fiveHourResetProgress">—%</strong></div><div class="reset-progress-track"><div id="fiveHourResetProgressBar" class="reset-progress-bar"></div></div></div>
           <div class="meta reset-card"><div class="meta-label">下次重置</div><div id="resetAt" class="meta-value">—</div><div class="reset-progress-head"><span>距离重置剩余</span><strong id="resetProgress">—%</strong></div><div class="reset-progress-track"><div id="resetProgressBar" class="reset-progress-bar"></div></div></div>
         </div>
         <div class="refresh-status" aria-label="自动刷新倒计时">
@@ -398,6 +390,8 @@
       'use strict';
       var resetAtMs = 0;
       var resetDurationMs = 0;
+      var fiveHourResetAtMs = 0;
+      var fiveHourResetDurationMs = 0;
       var refreshTotalSeconds = 300;
       var refreshRemaining = refreshTotalSeconds;
       var refreshEnabled = true;
@@ -552,32 +546,38 @@
         if (value > 20) return 'warning';
         return 'critical';
       }
-      function renderResetTimeline() {
-        if (!resetAtMs || !resetDurationMs) {
-          var resetProgressBar = byId('resetProgressBar');
-          if (resetProgressBar) {
-            resetProgressBar.style.width = '0%';
-            resetProgressBar.className = 'reset-progress-bar';
+      function renderResetCard(atMs, durationMs, atId, progressId, barId) {
+        if (!atMs || !durationMs) {
+          var progressBar = byId(barId);
+          if (progressBar) {
+            progressBar.style.width = '0%';
+            progressBar.className = 'reset-progress-bar';
           }
-          setText('resetProgress', '—%');
-          setText('resetAt', '—');
+          setText(progressId, '—%');
+          setText(atId, '—');
           return;
         }
         var nowMs = Date.now();
-        var percent = clamp((resetAtMs - nowMs) / resetDurationMs * 100, 0, 100);
-        var resetProgressBar = byId('resetProgressBar');
-        if (resetProgressBar) {
-          resetProgressBar.style.width = percent + '%';
-          resetProgressBar.className = 'reset-progress-bar ' + resetRemainingLevel(percent);
+        var percent = clamp((atMs - nowMs) / durationMs * 100, 0, 100);
+        var progressBar = byId(barId);
+        if (progressBar) {
+          progressBar.style.width = percent + '%';
+          progressBar.className = 'reset-progress-bar ' + resetRemainingLevel(percent);
         }
-        setText('resetProgress', formatPercent(percent) + '%');
-        setText('resetAt', formatDate(new Date(resetAtMs)));
+        setText(progressId, formatPercent(percent) + '%');
+        setText(atId, formatDate(new Date(atMs)));
       }
-      function updateResetTimeline(window) {
-        var resetAt = new Date(window && window.reset_at);
-        var durationMs = resetTimelineDurationMs(window);
-        resetAtMs = isNaN(resetAt.getTime()) ? 0 : resetAt.getTime();
-        resetDurationMs = durationMs;
+      function renderResetTimeline() {
+        renderResetCard(fiveHourResetAtMs, fiveHourResetDurationMs, 'fiveHourResetAt', 'fiveHourResetProgress', 'fiveHourResetProgressBar');
+        renderResetCard(resetAtMs, resetDurationMs, 'resetAt', 'resetProgress', 'resetProgressBar');
+      }
+      function updateResetTimeline(weeklyWindow, fiveHourWindow) {
+        var weeklyResetAt = new Date(weeklyWindow && weeklyWindow.reset_at);
+        var fiveHourResetAt = new Date(fiveHourWindow && fiveHourWindow.reset_at);
+        resetAtMs = isNaN(weeklyResetAt.getTime()) ? 0 : weeklyResetAt.getTime();
+        resetDurationMs = resetTimelineDurationMs(weeklyWindow);
+        fiveHourResetAtMs = isNaN(fiveHourResetAt.getTime()) ? 0 : fiveHourResetAt.getTime();
+        fiveHourResetDurationMs = resetTimelineDurationMs(fiveHourWindow);
         renderResetTimeline();
       }
       function formatPlan(value) {
@@ -619,8 +619,7 @@
         var fiveHourRemaining = renderQuotaWindow(fiveHour, 'remaining', 'remainingProgress', 'remainingBar');
         var weeklyRemaining = renderQuotaWindow(weekly, 'weeklyRemaining', 'weeklyRemainingProgress', 'weeklyRemainingBar');
         var resetWindow = weekly || fiveHour;
-        setText('fiveHourResetAt', fiveHour ? formatDate(fiveHour.reset_at) : '—');
-        updateResetTimeline(resetWindow);
+        updateResetTimeline(resetWindow, fiveHour);
         announceRemainingIfNeeded(isFinite(weeklyRemaining) ? weeklyRemaining : fiveHourRemaining, repeatAlert);
         setText('accountEmail', usage.email || '—');
         setText('detailEmail', usage.email || '—');
