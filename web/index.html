@@ -45,6 +45,11 @@
     .dot { width:7px; height:7px; border-radius:50%; background:var(--accent); }
     .dot.error { background:var(--danger); }
     .hero { display:flex; align-items:center; justify-content:space-between; gap:12px; flex:0 0 auto; min-height:0; padding:3px 1px 3px; }
+    .quota-hero { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:start; gap:14px; }
+    .quota-panel { min-width:0; padding:3px 0 2px; }
+    .quota-panel + .quota-panel { border-left:1px solid var(--border); padding-left:14px; }
+    .quota-panel .remaining { font-size:52px; letter-spacing:-3px; }
+    .quota-panel .progress-block { max-width:none; margin-top:6px; margin-bottom:0; }
     .hero-copy { flex:1 1 0; min-width:0; padding-top:11px; }
     .eyebrow { font-size:12px; color:var(--muted); margin-bottom:3px; }
     .remaining { font-size:62px; line-height:.95; letter-spacing:-4px; font-weight:730; white-space:nowrap; }
@@ -212,8 +217,10 @@
       .overview-card { padding-bottom:44px; }
       .topbar { min-height:34px; margin-bottom:6px; }
       .hero { flex:0 0 auto; align-items:flex-start; gap:12px; padding:0 1px 2px; }
-      .hero-copy { padding-top:0; }
-      .remaining { font-size:54px; }
+      .quota-hero { gap:10px; }
+      .quota-panel { padding-top:0; }
+      .quota-panel + .quota-panel { padding-left:10px; }
+      .quota-panel .remaining { font-size:48px; letter-spacing:-2px; }
       .progress-block { max-width:none; margin-top:1px; margin-bottom:2px; }
       .progress-head { margin-bottom:4px; }
       .yesterday-summary { width:auto; flex:1 1 0; padding:3px 0 0 0; }
@@ -236,14 +243,14 @@
       .model-pie-svg .model-pie-outside-label { font-size:6px; }
       .rule { margin:0 0 2px; }
       .meta { padding:6px 8px 10px; }
-      .reset-card, .weekly-summary-card { padding-bottom:10px; }
+      .reset-card, .weekly-summary-card, .status-card { padding-bottom:10px; }
       .reset-progress-head { margin-top:5px; }
       .refresh-status { padding-top:4px; }
       .overview-card > .refresh-status { left:12px; right:12px; bottom:8px; }
     }
     @media (max-width:360px) {
       .app { padding-left:7px; padding-right:7px; }
-      .remaining { font-size:54px; }
+      .quota-panel .remaining { font-size:44px; }
       .yesterday-summary { width:auto; flex:1 1 0; }
       .yesterday-ring { width:70px; height:70px; flex-basis:70px; }
       .yesterday-rings { gap:6px; }
@@ -275,29 +282,28 @@
           </button>
           <div class="connection"><i id="statusDot" class="dot"></i><span id="statusText">已连接</span></div>
         </header>
-        <div class="hero">
-          <div class="hero-copy">
-            <div class="eyebrow">本周额度剩余</div>
+        <div class="hero quota-hero">
+          <div class="quota-panel" aria-label="5小时剩余额度">
+            <div class="eyebrow">5小时额度剩余</div>
             <div id="remaining" class="remaining">—<span>%</span></div>
-            <div class="progress-block" aria-label="本周剩余额度进度">
-              <div class="progress-head"><span>本周剩余</span><strong id="remainingProgress">—%</strong></div>
+            <div class="progress-block" aria-label="5小时剩余额度进度">
+              <div class="progress-head"><span>5小时剩余</span><strong id="remainingProgress">—%</strong></div>
               <div class="progress-track"><div id="remainingBar" class="progress-bar"></div></div>
             </div>
           </div>
-          <div class="yesterday-summary" aria-label="昨日使用详情">
-            <div class="yesterday-summary-label">昨日使用量</div>
-            <div class="yesterday-summary-body">
-              <div class="overview-model-box">
-                <div id="overviewModelPieChart" class="overview-model-pie" aria-label="昨日模型使用占比"></div>
-                <div id="overviewModelPieLegend" class="overview-model-pie-legend" aria-label="昨日各模型使用占比"></div>
-              </div>
+          <div class="quota-panel" aria-label="本周剩余额度">
+            <div class="eyebrow">本周额度剩余</div>
+            <div id="weeklyRemaining" class="remaining">—<span>%</span></div>
+            <div class="progress-block" aria-label="本周剩余额度进度">
+              <div class="progress-head"><span>本周剩余</span><strong id="weeklyRemainingProgress">—%</strong></div>
+              <div class="progress-track"><div id="weeklyRemainingBar" class="progress-bar"></div></div>
             </div>
           </div>
         </div>
         <div class="rule"></div>
         <div class="meta-grid">
           <div class="meta reset-card"><div class="meta-label">下次重置</div><div id="resetAt" class="meta-value">—</div><div class="reset-progress-head"><span>距离重置剩余</span><strong id="resetProgress">—%</strong></div><div class="reset-progress-track"><div id="resetProgressBar" class="reset-progress-bar"></div></div></div>
-          <div class="meta weekly-summary-card"><div class="meta-label">近七天使用量</div><div id="weekTotalTokens" class="meta-value">—</div><div class="weekly-usage-row"><div class="weekly-usage-content"><div class="meta-subline"><span>使用额度</span><strong id="weekUsagePercent">—%</strong></div><div class="weekly-progress-track"><div id="weekUsageBar" class="weekly-progress-bar"></div></div></div></div></div>
+          <div class="meta status-card"><div class="meta-label">账号状态</div><div id="accountState" class="meta-value">等待连接</div></div>
         </div>
         <div class="refresh-status" aria-label="自动刷新倒计时">
           <div class="refresh-head"><span id="refreshLabel">自动刷新</span><strong id="refreshCountdown">05:00</strong></div>
@@ -526,7 +532,6 @@
         var pad = function (n) { return String(n).padStart(2, '0'); };
         return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
       }
-      function getWindow(usage) { return usage && (usage.seven_day || usage.five_hour); }
       function resetTimelineDurationMs(window) {
         var minutes = Number(window && window.window_minutes);
         if (isFinite(minutes) && minutes > 0) return minutes * 60 * 1000;
@@ -583,25 +588,38 @@
         if (!control) return '—';
         return control.reached ? '已触发限制' : '未触发限制';
       }
-      function renderUsage(usage, repeatAlert) {
-        var window = getWindow(usage);
-        if (!window) { showError(new Error('没有收到额度响应头')); return; }
-        var used = Number(window.used_percent);
-        var remaining = clamp(100 - used, 0, 100);
-        setHTML('remaining', formatPercent(remaining) + '<span>%</span>');
-        setText('remainingProgress', formatPercent(remaining) + '%');
-        var remainingBar = byId('remainingBar');
-        if (remainingBar) {
-          remainingBar.style.width = remaining + '%';
-          remainingBar.className = 'progress-bar ' + quotaLevel(remaining);
+      function renderQuotaWindow(window, valueId, progressId, barId) {
+        var used = Number(window && window.used_percent);
+        if (!window || !isFinite(used)) {
+          setHTML(valueId, '—<span>%</span>');
+          setText(progressId, '—%');
+          setStyle(barId, 'width', '0%');
+          setClass(barId, 'progress-bar');
+          return NaN;
         }
-        announceRemainingIfNeeded(remaining, repeatAlert);
-        updateResetTimeline(window);
+        var remaining = clamp(100 - used, 0, 100);
+        setHTML(valueId, formatPercent(remaining) + '<span>%</span>');
+        setText(progressId, formatPercent(remaining) + '%');
+        setStyle(barId, 'width', remaining + '%');
+        setClass(barId, 'progress-bar ' + quotaLevel(remaining));
+        return remaining;
+      }
+      function renderUsage(usage, repeatAlert) {
+        var fiveHour = usage && usage.five_hour;
+        var weekly = usage && usage.seven_day;
+        if (!fiveHour && !weekly) { showError(new Error('没有收到额度响应头')); return; }
+        var fiveHourRemaining = renderQuotaWindow(fiveHour, 'remaining', 'remainingProgress', 'remainingBar');
+        var weeklyRemaining = renderQuotaWindow(weekly, 'weeklyRemaining', 'weeklyRemainingProgress', 'weeklyRemainingBar');
+        var resetWindow = weekly || fiveHour;
+        updateResetTimeline(resetWindow);
+        announceRemainingIfNeeded(isFinite(weeklyRemaining) ? weeklyRemaining : fiveHourRemaining, repeatAlert);
         setText('accountEmail', usage.email || '—');
         setText('detailEmail', usage.email || '—');
-        setText('detailUsed', formatPercent(used) + '%');
-        setText('detailRemaining', formatPercent(remaining) + '%');
-        setText('detailReset', formatDate(window.reset_at));
+        var detailUsed = Number(resetWindow && resetWindow.used_percent);
+        var detailRemaining = isFinite(detailUsed) ? clamp(100 - detailUsed, 0, 100) : NaN;
+        setText('detailUsed', isFinite(detailUsed) ? formatPercent(detailUsed) + '%' : '—%');
+        setText('detailRemaining', isFinite(detailRemaining) ? formatPercent(detailRemaining) + '%' : '—%');
+        setText('detailReset', formatDate(resetWindow && resetWindow.reset_at));
         setText('detailPlan', formatPlan(usage.plan_type));
         setText('detailModel', formatPlan(usage.plan_type));
         var status = usage.rate_limit_reached ? '已达上限' : (usage.rate_limit_allowed ? '正常' : '未知');
@@ -778,33 +796,6 @@
         legend += '</div>';
         container.innerHTML = svg + legend;
       }
-      function usedPercentLevel(percent) {
-        var value = Number(percent);
-        if (!isFinite(value)) return '';
-        if (value >= 80) return 'critical';
-        if (value >= 50) return 'warning';
-        return '';
-      }
-      function renderYesterdayUsage(day) {
-        var usedValue = Number(day && day.token_usage_percent);
-        var usedReady = isFinite(usedValue);
-        var percent = usedReady ? clamp(usedValue, 0, 100) : 0;
-        setText('overviewTodayUsedPercent', usedReady ? formatPercent(percent) + '%' : '—%');
-        var ring = byId('todayUsageRing');
-        if (!ring) return;
-        var circumference = 100.53;
-        ring.style.strokeDashoffset = String(circumference - circumference * percent / 100);
-        ring.setAttribute('class', 'today-ring-progress' + (usedReady ? ' ' + usedPercentLevel(percent) : ''));
-      }
-      function renderWeeklyUsage(summary) {
-        var usedValue = Number(summary && summary.token_usage_percent);
-        var usedReady = isFinite(usedValue);
-        var percent = usedReady ? clamp(usedValue, 0, 100) : 0;
-        setText('weekTotalTokens', isFinite(Number(summary && summary.text_total_tokens)) ? formatTokenMillions(summary.text_total_tokens) : '—');
-        setText('weekUsagePercent', usedReady ? formatPercent(percent) + '%' : '—%');
-        setStyle('weekUsageBar', 'width', percent + '%');
-        setClass('weekUsageBar', 'weekly-progress-bar' + (usedReady ? ' ' + usedPercentLevel(percent) : ''));
-      }
       function renderAnalytics(data) {
         var days = data && Array.isArray(data.days) ? data.days : [];
         var summary = data && data.summary ? data.summary : {};
@@ -813,13 +804,10 @@
         setText('analyticsUsagePercent', isFinite(Number(summary.token_usage_percent)) ? formatPercent(summary.token_usage_percent) + '%' : '—');
         setText('analyticsTurns', isFinite(Number(summary.turns)) ? formatCompactNumber(summary.turns) : '—');
         setText('analyticsTokens', isFinite(Number(summary.text_total_tokens)) ? formatTokenMillions(summary.text_total_tokens) : '—');
-        renderYesterdayUsage(days.length ? days[days.length - 1] : null);
-        renderWeeklyUsage(summary);
         renderAnalyticsChart('tokenUsageChart', days, 'token_usage_percent', function (value) { return formatPercent(value) + '%'; }, '');
         renderAnalyticsChart('workspaceUsageChart', days, 'turns', formatCompactNumber, 'workspace');
         renderModelUsageChart(days);
         renderYesterdayModelPieChart(days, 'yesterdayModelPieChart');
-        renderYesterdayModelPieChart(days, 'overviewModelPieChart');
       }
       function showAnalyticsError(error) {
         setClass('analyticsUpdated', 'section-meta analytics-error');
@@ -827,15 +815,11 @@
         setText('analyticsUsagePercent', '—');
         setText('analyticsTurns', '—');
         setText('analyticsTokens', '—');
-        renderYesterdayUsage(null);
-        renderWeeklyUsage(null);
         var message = escapeHTML(error && error.message ? error.message : '请稍后重试');
         setHTML('tokenUsageChart', '<div class="analytics-empty analytics-error">' + message + '</div>');
         setHTML('workspaceUsageChart', '<div class="analytics-empty analytics-error">请检查 OAuth 凭证或稍后重试</div>');
         setHTML('modelUsageChart', '<div class="analytics-empty analytics-error">请检查 OAuth 凭证或稍后重试</div>');
         setHTML('yesterdayModelPieChart', '<div class="analytics-empty analytics-error">请检查 OAuth 凭证或稍后重试</div>');
-        setHTML('overviewModelPieChart', '<span class="overview-model-empty">—</span>');
-        setHTML('overviewModelPieLegend', '');
       }
       function loadAnalytics(force) {
         if (analyticsLoading) return;
