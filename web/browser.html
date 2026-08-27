@@ -533,7 +533,20 @@
         return ticks;
       }
       function usageHistoryTooltip(point, value, label) {
-        return '中国时间 ' + date(point.at) + '\n' + label + '已使用 ' + percent(value) + '%' + (point.stale ? '\n采集状态：沿用上次成功数据' : '');
+        return '中国时间 ' + date(point.at) + '\n' + label + '已使用 ' + percent(value) + '%' + (point.repeatCount > 1 ? '\n连续 ' + point.repeatCount + ' 次采样值相同' : '') + (point.stale ? '\n采集状态：沿用上次成功数据' : '');
+      }
+      function collapseUsageHistoryPoints(points) {
+        if (points.length < 2) return points;
+        var collapsed = []; var start = 0;
+        var copyPoint = function (point, repeatCount) { return {at:point.at, time:point.time, used:point.used, stale:point.stale, position:point.position, repeatCount:repeatCount}; };
+        for (var index = 1; index <= points.length; index += 1) {
+          var same = index < points.length && points[index].used === points[start].used && points[index].stale === points[start].stale;
+          if (same) continue;
+          var repeatCount = index - start;
+          if (repeatCount === 1) collapsed.push(points[start]); else { collapsed.push(copyPoint(points[start], repeatCount)); collapsed.push(copyPoint(points[index - 1], repeatCount)); }
+          start = index;
+        }
+        return collapsed;
       }
       function bindUsageHistoryTooltips(container) {
         if (!container || !container.querySelectorAll) return;
@@ -550,12 +563,13 @@
         var container = byId(options.chartId); if (!container) return;
         var points = (Array.isArray(history) ? history : []).map(function (point) { var at = point && point.at ? timestamp(point.at) : 0; var used = number(point && point[options.metric]); return at > 0 && isFinite(used) ? {at:point.at, time:at, used:clamp(used, 0, 100), stale:Boolean(point && point.stale)} : null; }).filter(function (point) { return point !== null; });
         points.sort(function (left, right) { return left.time - right.time; });
+        points.forEach(function (point, index) { point.position = index; });
         if (!points.length) { text(options.countId, '等待采样'); text(options.currentId, '—'); text(options.maxId, '—'); text(options.minId, '—'); container.innerHTML = '<div class="empty">暂无' + escaped(options.emptyLabel || '额度') + '采样</div>'; return; }
-        var values = points.map(function (point) { return point.used; }); var current = values[values.length - 1]; var maximum = Math.max.apply(Math, values); var minimum = Math.min.apply(Math, values); var resetIndexes = [];
+        var sampleCount = points.length; points = collapseUsageHistoryPoints(points); var values = points.map(function (point) { return point.used; }); var current = values[values.length - 1]; var maximum = Math.max.apply(Math, values); var minimum = Math.min.apply(Math, values); var resetIndexes = [];
         for (var resetIndex = 1; resetIndex < values.length; resetIndex += 1) if (values[resetIndex - 1] - values[resetIndex] >= 10) resetIndexes.push(resetIndex);
-        text(options.countId, '最近 ' + points.length + ' 次采样'); text(options.currentId, percent(current) + '%'); text(options.maxId, percent(maximum) + '%'); text(options.minId, percent(minimum) + '%');
+        text(options.countId, '最近 ' + sampleCount + ' 次采样'); text(options.currentId, percent(current) + '%'); text(options.maxId, percent(maximum) + '%'); text(options.minId, percent(minimum) + '%');
         var axisPadding = maximum === minimum ? 5 : Math.max((maximum - minimum) * .2, .5); var axisMin = Math.max(0, Math.floor((minimum - axisPadding) * 10) / 10); var axisMax = Math.min(100, Math.ceil((maximum + axisPadding) * 10) / 10); if (axisMax <= axisMin) { axisMin = Math.max(0, axisMax - 1); axisMax = Math.min(100, axisMin + 1); } var axisSpan = axisMax - axisMin || 1;
-        var width = 760; var height = 190; var left = 38; var right = 12; var top = 12; var bottom = 30; var plotWidth = width - left - right; var plotHeight = height - top - bottom; var x = function (index) { return left + (points.length === 1 ? plotWidth / 2 : index / (points.length - 1) * plotWidth); }; var y = function (value) { return top + (axisMax - value) / axisSpan * plotHeight; };
+        var width = 760; var height = 190; var left = 38; var right = 12; var top = 12; var bottom = 30; var plotWidth = width - left - right; var plotHeight = height - top - bottom; var x = function (index) { var position = points[index].position; return left + (sampleCount === 1 ? plotWidth / 2 : position / (sampleCount - 1) * plotWidth); }; var y = function (value) { return top + (axisMax - value) / axisSpan * plotHeight; };
         var linePath = points.map(function (point, index) { return (index ? 'L' : 'M') + x(index).toFixed(2) + ' ' + y(point.used).toFixed(2); }).join(' '); var areaPath = linePath + ' L ' + x(points.length - 1).toFixed(2) + ' ' + (top + plotHeight).toFixed(2) + ' L ' + x(0).toFixed(2) + ' ' + (top + plotHeight).toFixed(2) + ' Z';
         var grid = [0, 1, 2, 3, 4].map(function (step) { var level = axisMin + axisSpan * step / 4; var lineY = y(level).toFixed(2); return '<line class="usage-history-gridline" x1="' + left + '" y1="' + lineY + '" x2="' + (width - right) + '" y2="' + lineY + '"></line><text class="usage-history-axis usage-history-axis-end" x="' + (left - 8) + '" y="' + (Number(lineY) + 4) + '">' + percent(level) + '%</text>'; }).join('');
         var resetLines = resetIndexes.map(function (index) { return '<line class="usage-history-reset-line" x1="' + x(index).toFixed(2) + '" y1="' + top + '" x2="' + x(index).toFixed(2) + '" y2="' + (top + plotHeight) + '"></line>'; }).join('');
