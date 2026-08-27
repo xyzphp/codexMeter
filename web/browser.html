@@ -117,6 +117,8 @@
     .model-legend { display:flex; flex-wrap:wrap; gap:8px 16px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
     .model-legend .legend-item { font-size:13px; }
     .model-legend .legend-label { max-width:none; }
+    .heatmap-tooltip { position:fixed; z-index:1000; max-width:min(360px,calc(100vw - 20px)); padding:9px 11px; border:1px solid var(--border); border-radius:8px; background:var(--text); color:var(--card); box-shadow:0 8px 24px rgba(0,0,0,.18); font-size:12px; line-height:1.5; white-space:pre-line; pointer-events:none; opacity:0; visibility:hidden; transition:opacity .12s ease; }
+    .heatmap-tooltip.visible { opacity:1; visibility:visible; }
     .legend { display:flex; flex-wrap:wrap; gap:9px 18px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border); }
     .legend-item { display:flex; align-items:center; min-width:0; color:var(--muted); font-size:13px; }
     .legend-color { width:10px; height:10px; flex:0 0 10px; margin-right:7px; border-radius:3px; }
@@ -215,6 +217,7 @@
       .heatmap-legend .heatmap-cell { width:10px; height:10px; }
       .model-legend { gap:5px 10px; margin-top:7px; padding-top:6px; }
       .model-legend .legend-item { font-size:9px; }
+      .heatmap-tooltip { max-width:260px; padding:7px 9px; font-size:10px; }
       .legend { gap:5px 10px; margin-top:7px; padding-top:6px; }
       .legend-item { font-size:9px; }
       .legend-color { width:7px; height:7px; flex-basis:7px; margin-right:4px; }
@@ -332,6 +335,7 @@
       <div class="footnote">数据来源：codex-resets.com · 公共预测仅供参考</div>
     </section>
   </main>
+  <div id="heatmapTooltip" class="heatmap-tooltip" role="tooltip"></div>
   <script>
     (function () {
       'use strict';
@@ -402,6 +406,9 @@
       function heatmapDateKey(value) { return inputDate(value); }
       function moveHeatmapDate(value, offset) { var moved = new Date(value.getTime()); moved.setDate(moved.getDate() + offset); return moved; }
       function heatmapLevel(value, max) { if (!(max > 0) || !(value > 0)) return 0; var ratio = value / max; return ratio <= .25 ? 1 : ratio <= .5 ? 2 : ratio <= .75 ? 3 : 4; }
+      function moveHeatmapTooltip(event) { var tooltip = byId('heatmapTooltip'); if (!tooltip || !event) return; var x = Number(event.clientX) || 0; var y = Number(event.clientY) || 0; var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 800; var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 600; var left = x + 14; var top = y + 14; var width = tooltip.offsetWidth || 240; var height = tooltip.offsetHeight || 48; if (left + width > viewportWidth - 8) left = x - width - 14; if (top + height > viewportHeight - 8) top = y - height - 14; tooltip.style.left = Math.max(8, left) + 'px'; tooltip.style.top = Math.max(8, top) + 'px'; }
+      function hideHeatmapTooltip() { var tooltip = byId('heatmapTooltip'); if (!tooltip) return; tooltip.textContent = ''; classes('heatmapTooltip', 'heatmap-tooltip'); }
+      function bindHeatmapTooltips(container) { if (!container || !container.querySelectorAll) return; Array.prototype.forEach.call(container.querySelectorAll('.heatmap-cell[aria-label]'), function (cell) { cell.addEventListener('mouseenter', function (event) { var tooltip = byId('heatmapTooltip'); if (!tooltip) return; tooltip.textContent = cell.getAttribute('data-tooltip') || cell.getAttribute('aria-label') || ''; classes('heatmapTooltip', 'heatmap-tooltip visible'); moveHeatmapTooltip(event); }); cell.addEventListener('mousemove', moveHeatmapTooltip); cell.addEventListener('mouseleave', hideHeatmapTooltip); }); }
       function renderHeatmap(id, days, property, formatter, label) {
         var container = byId(id); if (!container) return;
         var entries = (days || []).map(function (day) { var parsed = heatmapDate(day && day.date); var value = number(day && day[property]); return parsed ? {date:parsed, key:heatmapDateKey(parsed), value:isFinite(value) && value > 0 ? value : 0} : null; }).filter(function (entry) { return entry !== null; });
@@ -413,11 +420,11 @@
           var weekStart = moveHeatmapDate(startMonday, column * 7); var monthKey = weekStart.getFullYear() + '-' + weekStart.getMonth();
           if (monthKey !== previousMonth) { monthLabels.push('<span class="heatmap-month-label" style="grid-column:' + (column + 1) + '">' + (weekStart.getMonth() + 1) + '月</span>'); previousMonth = monthKey; }
           for (var row = 0; row < 7; row += 1) {
-            var cellDate = moveHeatmapDate(weekStart, row); var key = heatmapDateKey(cellDate); var inRange = cellDate >= start && cellDate <= end; var value = inRange && values[key] !== undefined ? values[key] : 0; var cellClass = inRange ? 'heatmap-cell level-' + heatmapLevel(value, max) : 'heatmap-cell outside'; var title = inRange ? key + ' · ' + label + ': ' + formatter(value) : ''; cells.push('<div class="' + cellClass + '" role="gridcell"' + (title ? ' title="' + escaped(title) + '" aria-label="' + escaped(title) + '"' : '') + '></div>');
+            var cellDate = moveHeatmapDate(weekStart, row); var key = heatmapDateKey(cellDate); var inRange = cellDate >= start && cellDate <= end; var value = inRange && values[key] !== undefined ? values[key] : 0; var cellClass = inRange ? 'heatmap-cell level-' + heatmapLevel(value, max) : 'heatmap-cell outside'; var title = inRange ? key + ' · ' + label + ': ' + formatter(value) : ''; cells.push('<div class="' + cellClass + '" role="gridcell"' + (title ? ' data-tooltip="' + escaped(title) + '" title="' + escaped(title) + '" aria-label="' + escaped(title) + '"' : '') + '></div>');
           }
         }
         var weekdays = ['一', '', '三', '', '五', '', '']; var weekdayHTML = weekdays.map(function (weekday) { return '<span>' + weekday + '</span>'; }).join(''); var legendHTML = '<div class="heatmap-legend"><span>少</span><i class="heatmap-cell level-1"></i><i class="heatmap-cell level-2"></i><i class="heatmap-cell level-3"></i><i class="heatmap-cell level-4"></i><span>多</span></div>';
-        container.innerHTML = '<div class="heatmap-layout"><div class="heatmap-weekdays">' + weekdayHTML + '</div><div class="heatmap-scroll"><div class="heatmap-months" style="--heat-columns:' + columns + '">' + monthLabels.join('') + '</div><div class="heatmap-grid" role="grid" aria-label="' + escaped(label) + '日历热力图" style="--heat-columns:' + columns + '">' + cells.join('') + '</div></div></div><div class="heatmap-footer"><span>' + escaped(inputDate(start) + ' 至 ' + inputDate(end)) + '</span>' + legendHTML + '</div>';
+        container.innerHTML = '<div class="heatmap-layout"><div class="heatmap-weekdays">' + weekdayHTML + '</div><div class="heatmap-scroll"><div class="heatmap-months" style="--heat-columns:' + columns + '">' + monthLabels.join('') + '</div><div class="heatmap-grid" role="grid" aria-label="' + escaped(label) + '日历热力图" style="--heat-columns:' + columns + '">' + cells.join('') + '</div></div></div><div class="heatmap-footer"><span>' + escaped(inputDate(start) + ' 至 ' + inputDate(end)) + '</span>' + legendHTML + '</div>'; bindHeatmapTooltips(container);
       }
       function renderModelHeatmap(days) {
         var container = byId('modelUsageChart'); if (!container) return;
@@ -435,11 +442,11 @@
           for (var row = 0; row < 7; row += 1) {
             var cellDate = moveHeatmapDate(weekStart, row); var key = heatmapDateKey(cellDate); var inRange = cellDate >= start && cellDate <= end; var values = inRange ? (byDate[key] || {}) : {}; var total = names.reduce(function (sum, name) { return sum + (values[name] || 0); }, 0); var titleParts = names.filter(function (name) { return (values[name] || 0) > 0; }).map(function (name) { return name + ': ' + percent(values[name]) + '%'; }); var background = '';
             if (total > 0) { var offset = 0; var segments = names.filter(function (name) { return (values[name] || 0) > 0; }).map(function (name, index) { var next = offset + values[name] / total * 100; var segment = palette[index % palette.length] + ' ' + offset + '% ' + next + '%'; offset = next; return segment; }); background = ' style="background:conic-gradient(' + segments.join(',') + ')"'; }
-            var title = inRange ? key + ' · 合计 ' + percent(total) + '% · ' + (titleParts.length ? titleParts.join('，') : '无模型使用') : ''; var cellClass = inRange ? 'heatmap-cell model-cell' : 'heatmap-cell outside'; cells.push('<div class="' + cellClass + '" role="gridcell"' + (title ? ' title="' + escaped(title) + '" aria-label="' + escaped(title) + '"' : '') + background + '></div>');
+            var title = inRange ? key + ' · 合计 ' + percent(total) + '% · ' + (titleParts.length ? titleParts.join('，') : '无模型使用') : ''; var cellClass = inRange ? 'heatmap-cell model-cell' : 'heatmap-cell outside'; cells.push('<div class="' + cellClass + '" role="gridcell"' + (title ? ' data-tooltip="' + escaped(title) + '" title="' + escaped(title) + '" aria-label="' + escaped(title) + '"' : '') + background + '></div>');
           }
         }
         var weekdays = ['一', '', '三', '', '五', '', '']; var weekdayHTML = weekdays.map(function (weekday) { return '<span>' + weekday + '</span>'; }).join(''); var legendHTML = names.map(function (name, index) { return '<div class="legend-item"><i class="legend-color" style="background:' + palette[index % palette.length] + '"></i><span class="legend-label" title="' + escaped(name) + '">' + escaped(name) + '</span></div>'; }).join('');
-        container.innerHTML = '<div class="heatmap-layout"><div class="heatmap-weekdays">' + weekdayHTML + '</div><div class="heatmap-scroll"><div class="heatmap-months" style="--heat-columns:' + columns + '">' + monthLabels.join('') + '</div><div class="heatmap-grid" role="grid" aria-label="模型每日使用日历热力图" style="--heat-columns:' + columns + '">' + cells.join('') + '</div></div></div><div class="model-legend">' + legendHTML + '</div>';
+        container.innerHTML = '<div class="heatmap-layout"><div class="heatmap-weekdays">' + weekdayHTML + '</div><div class="heatmap-scroll"><div class="heatmap-months" style="--heat-columns:' + columns + '">' + monthLabels.join('') + '</div><div class="heatmap-grid" role="grid" aria-label="模型每日使用日历热力图" style="--heat-columns:' + columns + '">' + cells.join('') + '</div></div></div><div class="model-legend">' + legendHTML + '</div>'; bindHeatmapTooltips(container);
       }
       function renderShare(days) {
         var container = byId('yesterdayModelPieChart'); if (!container) return;
