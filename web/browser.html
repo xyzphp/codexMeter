@@ -34,7 +34,7 @@
     .status { display:flex; align-items:center; gap:8px; margin-right:10px; color:var(--muted); font-size:14px; white-space:nowrap; }
     .status-dot { width:9px; height:9px; flex:0 0 9px; border-radius:50%; background:var(--accent); }
     .status-dot.error { background:var(--danger); }
-    .action { min-height:40px; padding:0 15px; border:1px solid var(--border); border-radius:11px; background:var(--card); color:var(--muted); text-decoration:none; font-size:14px; transition:background .18s ease,transform .1s ease; }
+    .action { display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:0 15px; border:1px solid var(--border); border-radius:11px; background:var(--card); color:var(--muted); text-decoration:none; font-size:14px; line-height:1; white-space:nowrap; appearance:none; transition:background .18s ease,transform .1s ease; }
     .action:hover { background:var(--soft); }
     .action:active { transform:translateY(1px); }
     .action.primary { border-color:var(--accent); background:var(--accent); color:#fff; }
@@ -60,6 +60,7 @@
     .reset-label { color:var(--muted); font-size:14px; }
     .reset-at { margin-top:7px; font-size:24px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .reset-head { display:flex; justify-content:space-between; gap:10px; margin-top:17px; color:var(--muted); font-size:13px; }
+    .reset-head + .reset-head { margin-top:7px; }
     .reset-head strong { color:var(--text); font-size:14px; }
     .reset-track { width:100%; height:8px; margin-top:7px; overflow:hidden; background:var(--track); border-radius:999px; }
     .reset-bar { width:0; height:100%; background:var(--accent); border-radius:inherit; transition:width .35s ease,background .25s ease; }
@@ -158,7 +159,8 @@
       .reset-card { padding:10px 11px 12px; border-radius:11px; }
       .reset-label { font-size:10px; }
       .reset-at { margin-top:4px; font-size:16px; }
-      .reset-head { margin-top:9px; font-size:9px; }
+       .reset-head { margin-top:9px; font-size:9px; }
+       .reset-head + .reset-head { margin-top:5px; }
       .reset-head strong { font-size:10px; }
       .reset-track, .refresh-track { height:5px; margin-top:5px; }
       .refresh-row { margin-top:12px; font-size:10px; }
@@ -239,8 +241,8 @@
         </article>
       </div>
       <div class="reset-grid">
-        <article class="reset-card"><div class="reset-label">5 小时重置</div><div id="fiveHourResetAt" class="reset-at">—</div><div class="reset-head"><span>距离重置剩余</span><strong id="fiveHourResetProgress">—%</strong></div><div class="reset-track"><div id="fiveHourResetBar" class="reset-bar"></div></div></article>
-        <article class="reset-card"><div class="reset-label">下次重置</div><div id="weeklyResetAt" class="reset-at">—</div><div class="reset-head"><span>距离重置剩余</span><strong id="weeklyResetProgress">—%</strong></div><div class="reset-track"><div id="weeklyResetBar" class="reset-bar"></div></div></article>
+        <article class="reset-card"><div class="reset-label">5 小时重置</div><div id="fiveHourResetAt" class="reset-at">—</div><div class="reset-head"><span>剩余倒计时</span><strong id="fiveHourResetCountdown">—</strong></div><div class="reset-head"><span>距离重置剩余</span><strong id="fiveHourResetProgress">—%</strong></div><div class="reset-track"><div id="fiveHourResetBar" class="reset-bar"></div></div></article>
+        <article class="reset-card"><div class="reset-label">下次重置</div><div id="weeklyResetAt" class="reset-at">—</div><div class="reset-head"><span>剩余倒计时</span><strong id="weeklyResetCountdown">—</strong></div><div class="reset-head"><span>距离重置剩余</span><strong id="weeklyResetProgress">—%</strong></div><div class="reset-track"><div id="weeklyResetBar" class="reset-bar"></div></div></article>
       </div>
       <div class="refresh-row"><span>自动刷新</span><strong id="refreshCountdown">05:00</strong></div>
       <div class="progress-track refresh-track"><div id="refreshBar" class="progress-bar"></div></div>
@@ -300,6 +302,7 @@
       function token(value) { var parsed = number(value); return isFinite(parsed) ? percent(parsed / 1000000) + 'M' : '—'; }
       function compact(value) { var parsed = number(value); if (!isFinite(parsed)) return '—'; if (Math.abs(parsed) >= 1000000) return percent(parsed / 1000000) + 'M'; if (Math.abs(parsed) >= 1000) return percent(parsed / 1000) + 'K'; return String(Math.round(parsed)); }
       function date(value) { if (!value) return '—'; var parsed = new Date(value); if (isNaN(parsed.getTime())) return '—'; var pad = function (v) { return String(v).padStart(2, '0'); }; return parsed.getFullYear() + '-' + pad(parsed.getMonth() + 1) + '-' + pad(parsed.getDate()) + ' ' + pad(parsed.getHours()) + ':' + pad(parsed.getMinutes()) + ':' + pad(parsed.getSeconds()); }
+      function formatDuration(seconds) { if (!isFinite(seconds)) return '—'; var total = Math.max(0, Math.floor(seconds)); var days = Math.floor(total / 86400); var hours = Math.floor(total % 86400 / 3600); var minutes = Math.floor(total % 3600 / 60); var rest = total % 60; var pad = function (value) { return String(value).padStart(2, '0'); }; return (days ? days + '天 ' : '') + pad(hours) + ':' + pad(minutes) + ':' + pad(rest); }
       function escaped(value) { return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, function (character) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]; }); }
       function quotaClass(value) { if (!isFinite(value) || value <= 20) return 'critical'; if (value <= 50) return 'warning'; return ''; }
       function renderWindow(window, prefix, resetPrefix) {
@@ -314,12 +317,14 @@
       function renderReset(window, prefix) {
         var at = window && new Date(window.reset_at);
         var atMs = at && !isNaN(at.getTime()) ? at.getTime() : 0;
-        var duration = number(window && window.window_minutes) * 60 * 1000;
+        var windowDuration = number(window && window.window_minutes) * 60 * 1000;
         var seconds = number(window && window.remaining_seconds);
-        var left = isFinite(seconds) ? Math.max(0, seconds * 1000) : Math.max(0, atMs - Date.now());
-        var ratio = duration > 0 ? clamp(left / duration * 100, 0, 100) : 0;
+        var hasCountdown = Boolean(atMs || isFinite(seconds));
+        var left = atMs ? Math.max(0, atMs - Date.now()) : (hasCountdown ? Math.max(0, seconds * 1000) : 0);
+        var ratio = windowDuration > 0 ? clamp(left / windowDuration * 100, 0, 100) : 0;
         text(prefix + 'At', atMs ? date(at) : '—');
-        text(prefix + 'Progress', atMs && duration > 0 ? percent(ratio) + '%' : '—%');
+        text(prefix + 'Countdown', hasCountdown ? formatDuration(left / 1000) : '—');
+        text(prefix + 'Progress', atMs && windowDuration > 0 ? percent(ratio) + '%' : '—%');
         style(prefix + 'Bar', 'width', ratio + '%');
         classes(prefix + 'Bar', 'reset-bar ' + resetClass(ratio));
       }
