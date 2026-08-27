@@ -1321,15 +1321,19 @@ func (s *UsageService) TestProxy(ctx context.Context, rawProxyURL string) (Proxy
 		return ProxyTestResult{}, fmt.Errorf("代理已连通，但上游返回 HTTP %d", response.StatusCode)
 	}
 
-	message := fmt.Sprintf("代理连接成功（上游 HTTP %d）", response.StatusCode)
-	if strings.TrimSpace(rawProxyURL) == "" {
-		message = fmt.Sprintf("直连成功（上游 HTTP %d）", response.StatusCode)
-	}
+	message := proxyTestSuccessMessage(rawProxyURL)
 	return ProxyTestResult{
 		OK:         true,
 		Message:    message,
 		StatusCode: response.StatusCode,
 	}, nil
+}
+
+func proxyTestSuccessMessage(rawProxyURL string) string {
+	if strings.TrimSpace(rawProxyURL) == "" {
+		return "直连成功，可访问 chatgpt.com"
+	}
+	return "代理连接成功，可访问 chatgpt.com"
 }
 
 func persistConfig(cfg Config) error {

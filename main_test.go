@@ -223,6 +223,15 @@ func TestProxySchemeValidation(t *testing.T) {
 	}
 }
 
+func TestProxyTestSuccessMessage(t *testing.T) {
+	if got := proxyTestSuccessMessage("http://127.0.0.1:7890"); got != "代理连接成功，可访问 chatgpt.com" {
+		t.Fatalf("proxy success message = %q", got)
+	}
+	if got := proxyTestSuccessMessage(""); got != "直连成功，可访问 chatgpt.com" {
+		t.Fatalf("direct success message = %q", got)
+	}
+}
+
 func TestConfigViewDoesNotExposeUsageProvider(t *testing.T) {
 	service := &UsageService{cfg: Config{
 		AccessToken:      "oauth-token",
