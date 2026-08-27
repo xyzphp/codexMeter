@@ -728,7 +728,7 @@ components:
         proxy_url:
           type: string
           format: uri
-          description: 使用带协议和端口的 http 或 https 代理 URL；留空表示不使用代理。
+          description: 使用带协议和端口的 http、https 或 socks5 代理 URL；也兼容 socket5；留空表示不使用代理。
         cache_ttl:
           type: string
           description: Go duration，例如 10m、30s、0。

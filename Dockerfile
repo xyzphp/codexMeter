@@ -9,6 +9,7 @@ ARG TARGETARCH
 WORKDIR /src
 
 COPY go.mod ./
+COPY go.sum ./
 COPY *.go ./
 COPY web ./web
 

@@ -127,7 +127,7 @@ chmod 600 config.json
 | `openai.referer` | 否 | 上游请求 Referer，例如 ChatGPT 使用情况页面 |
 | `openai.user_agent` | 否 | 上游请求 User-Agent；留空时使用项目默认值 |
 | `openai.fedramp` | 否 | 仅在明确需要 FedRAMP 请求头时设为 `true` |
-| `proxy.url` | 否 | 代理 URL，建议写完整的 `http://host:port` 或 `https://host:port` |
+| `proxy.url` | 否 | 代理 URL，支持 `http://`、`https://`、`socks5://`；也兼容 `socket5://` |
 | `bind_addr` | 否 | 服务监听地址，例如 `0.0.0.0:8123` |
 | `base_path` | 否 | 反向代理前缀，例如 `/codex` |
 | `cache_ttl` | 否 | 缓存时长，例如 `10m`、`30s` 或 `0` |
@@ -149,7 +149,7 @@ chmod 600 config.json
 | `OPENAI_REFERER` | `openai.referer` | 上游请求 Referer |
 | `OPENAI_USER_AGENT` | `openai.user_agent` | 上游请求 User-Agent |
 | `OPENAI_FEDRAMP` | `openai.fedramp` | 是否发送 FedRAMP 请求头 |
-| `UPSTREAM_PROXY` | `proxy.url` | HTTP/HTTPS 代理地址 |
+| `UPSTREAM_PROXY` | `proxy.url` | HTTP/HTTPS/SOCKS5 代理地址 |
 | `APP_API_KEY` | `app_api_key` | 保护本地 API 接口的管理密钥 |
 | `BASIC_AUTH_ENABLED` | `basic_auth.enabled` | 是否启用 HTTP Basic Auth |
 | `BASIC_AUTH_USER` | `basic_auth.username` | Basic Auth 用户名 |
@@ -168,7 +168,10 @@ chmod 600 config.json
 
 ```text
 http://192.168.0.21:7890
+socks5://192.168.0.21:7891
 ```
+
+HTTPS 上游可以通过 HTTP、HTTPS 或 SOCKS5 代理访问。`socket5://` 会自动按 `socks5://` 处理；如果代理软件提供的是普通 HTTP 代理，请使用 `http://`，不要因为目标网址是 HTTPS 就把代理协议写成 `https://`。
 
 环境变量可以覆盖 JSON 配置，适合容器或服务器部署：
 

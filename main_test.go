@@ -151,6 +151,60 @@ func TestWhamRequestUsesOAuthHeadersAndGET(t *testing.T) {
 	}
 }
 
+func TestProxySchemes(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		raw        string
+		wantScheme string
+	}{
+		{name: "http", raw: "http://127.0.0.1:7890", wantScheme: "http"},
+		{name: "https", raw: "https://127.0.0.1:7890", wantScheme: "https"},
+		{name: "socks5", raw: "socks5://127.0.0.1:1080", wantScheme: "socks5"},
+		{name: "socket5 alias", raw: "socket5://127.0.0.1:1080", wantScheme: "socks5"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			parsed, err := parseProxyURL(test.raw)
+			if err != nil {
+				t.Fatalf("parse proxy URL: %v", err)
+			}
+			if parsed == nil || parsed.Scheme != test.wantScheme {
+				t.Fatalf("parsed proxy = %#v, want scheme %q", parsed, test.wantScheme)
+			}
+			client, err := newUpstreamClient(test.raw)
+			if err != nil {
+				t.Fatalf("new upstream client: %v", err)
+			}
+			transport, ok := client.Transport.(*http.Transport)
+			if !ok {
+				t.Fatalf("transport type = %T, want *http.Transport", client.Transport)
+			}
+			if test.wantScheme == "socks5" {
+				if transport.Dial == nil || transport.Proxy != nil {
+					t.Fatalf("SOCKS5 transport was not configured through Dial: %#v", transport)
+				}
+				return
+			}
+			proxyFunc, err := buildProxyFunc(test.raw)
+			if err != nil {
+				t.Fatalf("build proxy function: %v", err)
+			}
+			proxyURL, err := proxyFunc(httptest.NewRequest(http.MethodGet, "https://chatgpt.com", nil))
+			if err != nil || proxyURL == nil || proxyURL.Scheme != test.wantScheme {
+				t.Fatalf("proxy function returned %#v, %v", proxyURL, err)
+			}
+		})
+	}
+}
+
+func TestProxySchemeValidation(t *testing.T) {
+	if _, err := parseProxyURL("socket://127.0.0.1:1080"); err == nil {
+		t.Fatal("unsupported proxy scheme was accepted")
+	}
+	if _, err := parseProxyURL("127.0.0.1:7890"); err == nil {
+		t.Fatal("proxy without a scheme was accepted")
+	}
+}
+
 func TestConfigViewDoesNotExposeUsageProvider(t *testing.T) {
 	service := &UsageService{cfg: Config{
 		AccessToken:      "oauth-token",

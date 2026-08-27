@@ -21,6 +21,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"golang.org/x/net/proxy"
 )
 
 const (
@@ -573,28 +575,79 @@ func NewUsageService(cfg Config) (*UsageService, error) {
 }
 
 func newUpstreamClient(proxyURL string) (*http.Client, error) {
-	proxyFunc, err := buildProxyFunc(proxyURL)
+	parsedProxy, err := parseProxyURL(proxyURL)
 	if err != nil {
 		return nil, err
 	}
 	transport := &http.Transport{
-		Proxy:                 proxyFunc,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: 10 * time.Second,
 		IdleConnTimeout:       30 * time.Second,
+	}
+	if parsedProxy == nil {
+		transport.Proxy = http.ProxyFromEnvironment
+	} else if isSOCKS5Proxy(parsedProxy) {
+		var auth *proxy.Auth
+		if parsedProxy.User != nil {
+			password, _ := parsedProxy.User.Password()
+			auth = &proxy.Auth{User: parsedProxy.User.Username(), Password: password}
+		}
+		dialer, err := proxy.SOCKS5("tcp", parsedProxy.Host, auth, proxy.Direct)
+		if err != nil {
+			return nil, fmt.Errorf("invalid SOCKS5 proxy: %w", err)
+		}
+		// http.Transport uses Dial when DialContext is nil. The transport's
+		// request timeout still bounds the overall upstream operation.
+		transport.Dial = dialer.Dial
+	} else {
+		transport.Proxy = http.ProxyURL(parsedProxy)
 	}
 	return &http.Client{Transport: transport, Timeout: upstreamRequestTimeout}, nil
 }
 
 func buildProxyFunc(raw string) (func(*http.Request) (*url.URL, error), error) {
-	if raw == "" {
+	proxyURL, err := parseProxyURL(raw)
+	if err != nil {
+		return nil, err
+	}
+	if proxyURL == nil {
 		return http.ProxyFromEnvironment, nil
 	}
-	proxyURL, err := url.Parse(raw)
-	if err != nil || proxyURL.Scheme == "" || proxyURL.Host == "" {
-		return nil, fmt.Errorf("invalid UPSTREAM_PROXY")
+	if isSOCKS5Proxy(proxyURL) {
+		// SOCKS5 is installed through Transport.Dial, not Transport.Proxy.
+		// Return a no-op proxy function here so callers can still use this
+		// helper for URL validation.
+		return func(*http.Request) (*url.URL, error) { return nil, nil }, nil
 	}
 	return http.ProxyURL(proxyURL), nil
+}
+
+func parseProxyURL(raw string) (*url.URL, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return nil, nil
+	}
+	proxyURL, err := url.Parse(value)
+	if err != nil || proxyURL.Scheme == "" || proxyURL.Host == "" {
+		return nil, fmt.Errorf("invalid UPSTREAM_PROXY: use http://, https:// or socks5://host:port")
+	}
+	proxyURL.Scheme = strings.ToLower(proxyURL.Scheme)
+	switch proxyURL.Scheme {
+	case "http", "https":
+		return proxyURL, nil
+	case "socks5", "socks5h", "socket5":
+		proxyURL.Scheme = "socks5"
+		return proxyURL, nil
+	default:
+		return nil, fmt.Errorf("invalid UPSTREAM_PROXY scheme %q: use http://, https:// or socks5://host:port", proxyURL.Scheme)
+	}
+}
+
+func isSOCKS5Proxy(proxyURL *url.URL) bool {
+	if proxyURL == nil {
+		return false
+	}
+	return strings.EqualFold(proxyURL.Scheme, "socks5") || strings.EqualFold(proxyURL.Scheme, "socks5h") || strings.EqualFold(proxyURL.Scheme, "socket5")
 }
 
 func (s *UsageService) Get(ctx context.Context, force bool) (*UsageResponse, error) {

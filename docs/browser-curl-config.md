@@ -138,10 +138,11 @@ curl.exe -u "用户名:密码" "http://127.0.0.1:8123/codex/api/usage/analytics?
 4. 确认 `chatgpt_account_id` 与 Token 属于同一账户。
 5. 同步更新 `client_build_number`、`client_version`、`device_id`、`session_id`、`client_observation`、`referer` 和 `user_agent`。
 6. 如果浏览器请求依赖 Cookie，将当前 cURL 中的完整 Cookie 更新到 `openai.cookie`。
-7. 检查项目使用的代理与浏览器网络出口是否一致。代理 URL 必须包含协议和端口，例如：
+7. 检查项目使用的代理与浏览器网络出口是否一致。代理 URL 必须包含协议和端口，支持 HTTP、HTTPS 和 SOCKS5，例如：
 
    ```text
    http://192.168.0.21:7890
+   socks5://192.168.0.21:7891
    ```
 
 8. 重启 Go 进程或 Docker 容器后，再使用 `force=true` 请求验证。
