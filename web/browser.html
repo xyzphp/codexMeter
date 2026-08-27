@@ -534,7 +534,7 @@
       }
       function translateResetType(value) {
         var key = String(value || '').trim().toLowerCase();
-        if (key === 'banked' || key === 'banked reset') return '批量重置';
+        if (key === 'banked' || key === 'banked reset') return '赠送重置卡';
         if (key === 'regular' || key === 'regular reset') return '普通重置';
         return String(value || '').trim() || '—';
       }
@@ -570,7 +570,7 @@
             var cellDate = resetCalendarMove(weekStart, row); var key = resetCalendarDateKey(cellDate); var entry = map[key]; var future = cellDate > end; var type = entry ? entry.type : (future ? 'future' : 'none'); var tooltip = resetCalendarDateLabel(cellDate) + '\n' + (entry ? translateResetType(entry.type) + '\n' + (entry.event && entry.event.text ? entry.event.text : '已记录重置') : (future ? '尚未到达' : '无重置。当前没有公开重置记录。')); cells.push('<div class="heatmap-cell reset-cell ' + type + '" role="gridcell" data-date="' + escaped(key) + '" data-tooltip="' + escaped(tooltip) + '" title="' + escaped(tooltip) + '" aria-label="' + escaped(tooltip) + '"></div>');
           }
         }
-        var weekdays = ['一', '二', '三', '四', '五', '六', '日']; var weekdayHTML = weekdays.map(function (weekday) { return '<span>' + weekday + '</span>'; }).join(''); var legend = '<div class="reset-calendar-legend"><span class="reset-calendar-legend-item"><i class="reset-calendar-legend-color regular"></i>普通重置</span><span class="reset-calendar-legend-item"><i class="reset-calendar-legend-color banked"></i>批量重置</span><span class="reset-calendar-legend-item"><i class="reset-calendar-legend-color none"></i>无重置</span></div>'; container.innerHTML = '<div class="reset-calendar-layout"><div class="reset-calendar-weekdays">' + weekdayHTML + '</div><div class="reset-calendar-scroll"><div class="reset-calendar-months" style="--reset-weeks:' + weeks + '">' + monthLabels.join('') + '</div><div class="reset-calendar-grid" role="grid" aria-label="Codex 重置历史日历" style="--reset-weeks:' + weeks + '">' + cells.join('') + '</div></div></div><div class="reset-calendar-footer"><span>' + escaped(resetCalendarDateKey(start) + ' 至 ' + resetCalendarDateKey(end)) + '</span>' + legend + '</div>';
+        var weekdays = ['一', '二', '三', '四', '五', '六', '日']; var weekdayHTML = weekdays.map(function (weekday) { return '<span>' + weekday + '</span>'; }).join(''); var legend = '<div class="reset-calendar-legend"><span class="reset-calendar-legend-item"><i class="reset-calendar-legend-color regular"></i>普通重置</span><span class="reset-calendar-legend-item"><i class="reset-calendar-legend-color banked"></i>赠送重置卡</span><span class="reset-calendar-legend-item"><i class="reset-calendar-legend-color none"></i>无重置</span></div>'; container.innerHTML = '<div class="reset-calendar-layout"><div class="reset-calendar-weekdays">' + weekdayHTML + '</div><div class="reset-calendar-scroll"><div class="reset-calendar-months" style="--reset-weeks:' + weeks + '">' + monthLabels.join('') + '</div><div class="reset-calendar-grid" role="grid" aria-label="Codex 重置历史日历" style="--reset-weeks:' + weeks + '">' + cells.join('') + '</div></div></div><div class="reset-calendar-footer"><span>' + escaped(resetCalendarDateKey(start) + ' 至 ' + resetCalendarDateKey(end)) + '</span>' + legend + '</div>';
         bindHeatmapTooltips(container);
       }
       function renderPrediction(data) {
