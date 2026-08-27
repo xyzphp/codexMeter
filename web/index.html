@@ -147,17 +147,32 @@
     .prediction-history { margin-top:7px; padding:7px 9px; background:var(--card-muted); border:1px solid var(--border); border-radius:10px; }
     .prediction-history-head { display:flex; align-items:center; justify-content:space-between; gap:8px; color:var(--muted); font-size:10px; }
     .prediction-history-head strong { color:var(--text); font-size:10px; }
-    .prediction-history-list { max-height:120px; margin-top:5px; overflow-y:auto; border-top:1px solid var(--border); -webkit-overflow-scrolling:touch; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
-    .prediction-history-list::-webkit-scrollbar { width:3px; }
-    .prediction-history-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:999px; }
-    .prediction-history-item { padding:6px 1px; border-bottom:1px solid var(--border); }
-    .prediction-history-item:last-child { border-bottom:0; }
-    .prediction-history-item-head { display:flex; align-items:center; justify-content:space-between; gap:6px; }
-    .prediction-history-type { color:var(--accent); font-size:10px; font-weight:680; }
-    .prediction-history-type.banked { color:var(--warning); }
-    .prediction-history-date, .prediction-history-source { color:var(--muted); font-size:9px; white-space:nowrap; }
-    .prediction-history-text { margin-top:3px; color:var(--text); font-size:9px; line-height:1.35; white-space:pre-wrap; overflow-wrap:anywhere; }
-    .prediction-history-source { display:inline-block; margin-top:3px; color:var(--accent); text-decoration:none; }
+    .reset-calendar { margin-top:7px; }
+    .reset-calendar-layout { display:flex; justify-content:center; gap:5px; min-width:0; }
+    .reset-calendar-weekdays { width:14px; flex:0 0 14px; display:grid; grid-template-rows:repeat(7,10px); gap:2px; padding-top:16px; color:var(--muted); font-size:7px; line-height:10px; text-align:right; }
+    .reset-calendar-scroll { min-width:0; max-width:100%; overflow-x:auto; padding:0 5px 3px 0; -webkit-overflow-scrolling:touch; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
+    .reset-calendar-scroll::-webkit-scrollbar { height:3px; }
+    .reset-calendar-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:999px; }
+    .reset-calendar-months, .reset-calendar-grid { display:grid; grid-template-columns:repeat(var(--reset-weeks),10px); column-gap:3px; width:max-content; }
+    .reset-calendar-months { height:14px; align-items:start; color:var(--muted); font-size:7px; line-height:10px; }
+    .reset-calendar-month-label { min-width:0; white-space:nowrap; }
+    .reset-calendar-grid { grid-template-rows:repeat(7,10px); row-gap:2px; grid-auto-flow:column; }
+    .reset-cell { width:10px; height:10px; box-sizing:border-box; border:1px solid transparent; border-radius:2px; cursor:pointer; }
+    .reset-cell:hover, .reset-cell.selected { outline:1px solid var(--text); outline-offset:1px; }
+    .reset-cell.regular { background:#ff5b2e; border-color:#561a0d; }
+    .reset-cell.banked { background:#ffb38a; border-color:#561a0d; }
+    .reset-cell.none { background:#f1e3bf; border-color:rgba(90,65,25,.08); }
+    .reset-cell.future { background:transparent; border-color:transparent; cursor:default; }
+    html[data-theme="dark"] .reset-cell.regular { background:#f05a38; border-color:#ffb29b; }
+    html[data-theme="dark"] .reset-cell.banked { background:#b97557; border-color:#ffc3aa; }
+    html[data-theme="dark"] .reset-cell.none { background:#51462f; border-color:rgba(255,255,255,.05); }
+    .reset-calendar-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:6px; color:var(--muted); font-size:8px; }
+    .reset-calendar-legend { display:flex; align-items:center; flex-wrap:wrap; justify-content:flex-end; gap:6px; white-space:nowrap; }
+    .reset-calendar-legend-item { display:inline-flex; align-items:center; gap:3px; }
+    .reset-calendar-legend-color { width:8px; height:8px; border:1px solid transparent; border-radius:2px; }
+    .reset-calendar-legend-color.regular { background:#ff5b2e; border-color:#561a0d; }
+    .reset-calendar-legend-color.banked { background:#ffb38a; border-color:#561a0d; }
+    .reset-calendar-legend-color.none { background:#f1e3bf; border-color:rgba(90,65,25,.08); }
     .prediction-foot { margin-top:6px; color:var(--muted); font-size:9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .metric-grid { margin:6px 3px 0; flex:0 0 auto; gap:6px; }
     .metric { flex:0 0 calc(50% - 3px); width:calc(50% - 3px); border:1px solid var(--border); border-radius:10px; padding:5px 9px; min-height:36px; }
@@ -426,11 +441,18 @@
       .prediction-history { margin-top:12px; padding:10px 12px; border-radius:14px; }
       .prediction-history-head { font-size:13px; }
       .prediction-history-head strong { font-size:13px; }
-      .prediction-history-list { max-height:220px; margin-top:7px; }
-      .prediction-history-item { padding:9px 1px; }
-      .prediction-history-type { font-size:13px; }
-      .prediction-history-date, .prediction-history-source { font-size:12px; }
-      .prediction-history-text { margin-top:5px; font-size:12px; line-height:1.5; }
+      .reset-calendar { margin-top:10px; }
+      .reset-calendar-layout { gap:10px; }
+      .reset-calendar-weekdays { width:24px; flex-basis:24px; grid-template-rows:repeat(7,16px); gap:4px; padding-top:23px; font-size:11px; line-height:16px; }
+      .reset-calendar-scroll { padding-right:8px; }
+      .reset-calendar-months, .reset-calendar-grid { grid-template-columns:repeat(var(--reset-weeks),16px); column-gap:5px; }
+      .reset-calendar-months { height:21px; font-size:11px; line-height:16px; }
+      .reset-calendar-grid { grid-template-rows:repeat(7,16px); row-gap:4px; }
+      .reset-cell { width:16px; height:16px; border-radius:4px; }
+      .reset-calendar-footer { gap:12px; margin-top:9px; font-size:10px; }
+      .reset-calendar-legend { gap:8px; }
+      .reset-calendar-legend-item { gap:4px; }
+      .reset-calendar-legend-color { width:10px; height:10px; }
       .prediction-foot { margin-top:10px; font-size:12px; }
       .nav { width:100%; max-width:900px; height:56px; flex-basis:56px; gap:12px; padding:0 16px; }
       .nav-button { max-width:none; width:auto; height:56px; font-size:18px; border-radius:16px; }
@@ -549,8 +571,8 @@
           <div class="detail-row"><span>公告内容</span><strong id="predictionLatestText" class="prediction-text">—</strong></div>
         </div>
         <div class="prediction-history">
-          <div class="prediction-history-head"><span>重置历史</span><strong id="predictionHistoryCount">—</strong></div>
-          <div id="predictionHistoryList" class="prediction-history-list"><div class="empty">读取中…</div></div>
+          <div class="prediction-history-head"><span>Codex 重置历史</span><strong>最近 26 周 · UTC</strong></div>
+          <div id="predictionHistoryCalendar" class="reset-calendar" aria-label="Codex 重置历史日历"><div class="empty">读取中…</div></div>
         </div>
         <div class="prediction-foot">数据来源：codex-resets.com · 公共预测仅供参考</div>
       </div>
@@ -1023,36 +1045,40 @@
         });
       }
       function formatResetType(value) {
-        if (value === 'banked') return '批量重置';
-        if (value === 'regular') return '普通重置';
-        return value || '—';
+        var key = String(value || '').trim().toLowerCase();
+        if (key === 'banked' || key === 'banked reset') return '批量重置';
+        if (key === 'regular' || key === 'regular reset') return '普通重置';
+        return String(value || '').trim() || '—';
       }
       function formatDays(value) {
         var number = Number(value);
         return isFinite(number) ? formatPercent(number) + ' 天' : '—';
       }
-      function formatResetHistorySource(value) {
-        var key = String(value || '').toLowerCase();
-        var labels = {webhook:'自动记录', backfill:'历史补录', observed:'公开观测', x_post:'X 帖文'};
-        return labels[key] || String(value || '') || '公开记录';
+      function resetCalendarDateKey(value) { var year = value.getUTCFullYear(); var month = String(value.getUTCMonth() + 1).padStart(2, '0'); var day = String(value.getUTCDate()).padStart(2, '0'); return year + '-' + month + '-' + day; }
+      function resetCalendarMove(value, days) { return new Date(value.getTime() + days * 86400000); }
+      function resetCalendarMonday(value) { var day = (value.getUTCDay() + 6) % 7; return resetCalendarMove(value, -day); }
+      function resetCalendarMap(events) {
+        var map = {};
+        (Array.isArray(events) ? events : []).forEach(function (event) {
+          var at = event && event.announced_at ? new Date(event.announced_at) : null;
+          if (!at || isNaN(at.getTime())) return;
+          var key = resetCalendarDateKey(at); var rawType = String(event && event.reset_type || '').trim().toLowerCase(); var type = rawType.indexOf('banked') === 0 ? 'banked' : 'regular'; var current = map[key];
+          if (!current || (type === 'banked' && current.type !== 'banked')) map[key] = {type:type === 'banked' ? 'banked' : 'regular', event:event};
+        });
+        return map;
       }
       function renderPredictionHistory(events) {
-        var list = byId('predictionHistoryList');
-        if (!list) return;
-        list.textContent = '';
-        var items = Array.isArray(events) ? events : [];
-        setText('predictionHistoryCount', items.length ? items.length + ' 条' : '暂无记录');
-        if (!items.length) { var empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = '暂无重置历史'; list.appendChild(empty); return; }
-        items.forEach(function (event) {
-          var item = document.createElement('div'); item.className = 'prediction-history-item';
-          var head = document.createElement('div'); head.className = 'prediction-history-item-head';
-          var type = document.createElement('strong'); type.className = 'prediction-history-type' + (String(event && event.reset_type || '').toLowerCase() === 'banked' ? ' banked' : ''); type.textContent = formatResetType(event && event.reset_type); head.appendChild(type);
-          var at = document.createElement('span'); at.className = 'prediction-history-date'; at.textContent = formatDate(event && event.announced_at); head.appendChild(at); item.appendChild(head);
-          var content = document.createElement('div'); content.className = 'prediction-history-text'; content.textContent = event && event.text ? event.text : '—'; item.appendChild(content);
-          var source = event && event.source ? event.source : null;
-          if (source && source.url) { var link = document.createElement('a'); link.className = 'prediction-history-source'; link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = formatResetHistorySource(source.type) + ' · 查看原文'; item.appendChild(link); }
-          list.appendChild(item);
-        });
+        var container = byId('predictionHistoryCalendar');
+        if (!container) return;
+        var map = resetCalendarMap(events); var today = new Date(); var end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())); var start = resetCalendarMove(resetCalendarMonday(end), -25 * 7); var weeks = 26; var monthLabels = []; var cells = []; var previousMonth = '';
+        for (var column = 0; column < weeks; column += 1) {
+          var weekStart = resetCalendarMove(start, column * 7); var monthKey = weekStart.getUTCFullYear() + '-' + weekStart.getUTCMonth();
+          if (monthKey !== previousMonth) { monthLabels.push('<span class="reset-calendar-month-label" style="grid-column:' + (column + 1) + '">' + (weekStart.getUTCMonth() + 1) + '月</span>'); previousMonth = monthKey; }
+          for (var row = 0; row < 7; row += 1) {
+            var cellDate = resetCalendarMove(weekStart, row); var key = resetCalendarDateKey(cellDate); var entry = map[key]; var future = cellDate > end; var type = entry ? entry.type : (future ? 'future' : 'none'); var tooltip = key + ' (UTC)\n' + (entry ? formatResetType(entry.type) + '\n' + (entry.event && entry.event.text ? entry.event.text : '已记录重置') : (future ? '尚未到达' : '无重置。当前没有公开重置记录。')); cells.push('<div class="reset-cell ' + type + '" role="gridcell" title="' + escapeHTML(tooltip) + '" aria-label="' + escapeHTML(tooltip) + '"></div>');
+          }
+        }
+        var weekdays = ['一', '二', '三', '四', '五', '六', '日']; var weekdayHTML = weekdays.map(function (weekday) { return '<span>' + weekday + '</span>'; }).join(''); var legend = '<div class="reset-calendar-legend"><span class="reset-calendar-legend-item"><i class="reset-calendar-legend-color regular"></i>普通重置</span><span class="reset-calendar-legend-item"><i class="reset-calendar-legend-color banked"></i>批量重置</span><span class="reset-calendar-legend-item"><i class="reset-calendar-legend-color none"></i>无重置</span></div>'; container.innerHTML = '<div class="reset-calendar-layout"><div class="reset-calendar-weekdays">' + weekdayHTML + '</div><div class="reset-calendar-scroll"><div class="reset-calendar-months" style="--reset-weeks:' + weeks + '">' + monthLabels.join('') + '</div><div class="reset-calendar-grid" role="grid" aria-label="Codex 重置历史日历" style="--reset-weeks:' + weeks + '">' + cells.join('') + '</div></div></div><div class="reset-calendar-footer"><span>' + escapeHTML(resetCalendarDateKey(start) + ' 至 ' + resetCalendarDateKey(end)) + '</span>' + legend + '</div>';
       }
       function renderPrediction(data) {
         var watch = data && data.active_watch;
