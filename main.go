@@ -1041,8 +1041,6 @@ func (s *UsageService) queryResetPrediction(ctx context.Context) (*ResetPredicti
 }
 
 type ConfigView struct {
-	BindAddr                    string `json:"bind_addr"`
-	BasePath                    string `json:"base_path"`
 	AppAPIKeyConfigured         bool   `json:"app_api_key_configured"`
 	AppAPIKeyHint               string `json:"app_api_key_hint,omitempty"`
 	BasicAuthEnabled            bool   `json:"basic_auth_enabled"`
@@ -1086,8 +1084,6 @@ func secretHint(raw string) string {
 }
 
 type ConfigUpdate struct {
-	BindAddr          *string `json:"bind_addr"`
-	BasePath          *string `json:"base_path"`
 	AppAPIKey         *string `json:"app_api_key"`
 	AccessToken       *string `json:"access_token"`
 	UpstreamCookie    *string `json:"cookie"`
@@ -1143,8 +1139,6 @@ func (s *UsageService) ConfigView() ConfigView {
 	cfg := s.currentConfig()
 	tokenHint := secretHint(cfg.AccessToken)
 	return ConfigView{
-		BindAddr:                    cfg.BindAddr,
-		BasePath:                    cfg.BasePath,
 		AppAPIKeyConfigured:         cfg.AppAPIKey != "",
 		AppAPIKeyHint:               secretHint(cfg.AppAPIKey),
 		BasicAuthEnabled:            cfg.BasicAuthEnabled,
@@ -1219,19 +1213,6 @@ func (s *UsageService) activateConfig(old, next Config) error {
 
 func applyConfigUpdate(old Config, update ConfigUpdate) (Config, error) {
 	next := old
-	if update.BindAddr != nil {
-		next.BindAddr = strings.TrimSpace(*update.BindAddr)
-		if next.BindAddr == "" {
-			return Config{}, errors.New("bind_addr cannot be empty")
-		}
-	}
-	if update.BasePath != nil {
-		basePath, err := normalizeBasePath(*update.BasePath)
-		if err != nil {
-			return Config{}, err
-		}
-		next.BasePath = basePath
-	}
 	if update.AppAPIKey != nil {
 		next.AppAPIKey = strings.TrimSpace(*update.AppAPIKey)
 	}

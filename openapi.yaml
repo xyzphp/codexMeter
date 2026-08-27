@@ -678,8 +678,9 @@ components:
     ConfigView:
       type: object
       required:
-        - base_path
+        - app_api_key_configured
         - basic_auth_enabled
+        - basic_auth_password_configured
         - chatgpt_account_id
         - user_agent
         - fedramp
@@ -688,10 +689,16 @@ components:
         - cache_ttl
         - config_file
       properties:
-        base_path:
+        app_api_key_configured:
+          type: boolean
+        app_api_key_hint:
           type: string
-          example: /codex
+          description: 仅返回 App API Key 的脱敏提示，不返回密钥原文。
         basic_auth_enabled:
+          type: boolean
+        basic_auth_username:
+          type: string
+        basic_auth_password_configured:
           type: boolean
         chatgpt_account_id:
           type: string
@@ -734,6 +741,10 @@ components:
       type: object
       additionalProperties: false
       properties:
+        app_api_key:
+          type: string
+          writeOnly: true
+          description: 保护本地 API 接口的管理密钥，仅在服务端保存。
         access_token:
           type: string
           writeOnly: true
@@ -767,6 +778,13 @@ components:
         cache_ttl:
           type: string
           description: Go duration，例如 10m、30s、0。
+        basic_auth_enabled:
+          type: boolean
+        basic_auth_username:
+          type: string
+        basic_auth_password:
+          type: string
+          writeOnly: true
 
     ConfigTestResult:
       type: object

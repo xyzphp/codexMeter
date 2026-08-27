@@ -473,24 +473,27 @@
                 <input id="basicAuthPassword" type="password" autocomplete="new-password" placeholder="留空保持当前密码">
               </div>
               <div class="field">
-                <label for="bindAddr">服务监听地址</label>
-                <input id="bindAddr" autocomplete="off" placeholder="0.0.0.0:8123">
-              </div>
-              <div class="field">
-                <label for="basePath">访问基础路径</label>
-                <input id="basePath" autocomplete="off" placeholder="/codex">
-              </div>
-              <div class="field">
                 <label for="appAPIKey">App API Key</label>
-                <input id="appAPIKey" type="password" autocomplete="new-password" placeholder="留空保持当前密钥">
+                <div class="input-action">
+                  <input id="appAPIKey" type="password" autocomplete="new-password" placeholder="留空保持当前密钥">
+                  <button id="generateAppAPIKey" class="small-button" type="button">随机生成</button>
+                </div>
                 <span id="appAPIKeyHint" class="hint"></span>
               </div>
               <div class="field">
                 <label for="cacheTTL">缓存时间</label>
-                <input id="cacheTTL" autocomplete="off" placeholder="例如：10m0s">
+                <select id="cacheTTL">
+                  <option value="0s">不缓存</option>
+                  <option value="1m0s">1 分钟</option>
+                  <option value="5m0s">5 分钟</option>
+                  <option value="10m0s" selected>10 分钟</option>
+                  <option value="15m0s">15 分钟</option>
+                  <option value="30m0s">30 分钟</option>
+                  <option value="1h0m0s">1 小时</option>
+                </select>
               </div>
             </div>
-            <div class="hint page-access-config-hint">监听地址和基础路径保存后需重启服务；App API Key 和缓存时间保存后立即生效。环境变量配置优先于文件配置。</div>
+            <div class="hint page-access-config-hint">App API Key 和缓存时间保存后立即生效。环境变量配置优先于文件配置。</div>
             <div class="page-access-actions">
               <button id="savePageAccess" class="primary" type="button">保存页面访问配置</button>
               <span id="pageAccessStatus" class="proxy-status" role="status" aria-live="polite">当前未启用页面访问认证。</span>
@@ -576,10 +579,10 @@
       var basicAuthEnabledInput = document.getElementById('basicAuthEnabled');
       var basicAuthUsernameInput = document.getElementById('basicAuthUsername');
       var basicAuthPasswordInput = document.getElementById('basicAuthPassword');
-      var bindAddrInput = document.getElementById('bindAddr');
-      var basePathInput = document.getElementById('basePath');
       var appAPIKeyInput = document.getElementById('appAPIKey');
       var appAPIKeyHint = document.getElementById('appAPIKeyHint');
+      var cacheTTLInput = document.getElementById('cacheTTL');
+      var generateAppAPIKeyButton = document.getElementById('generateAppAPIKey');
       var savePageAccessButton = document.getElementById('savePageAccess');
       var copyAnalyticsURLButton = document.getElementById('copyAnalyticsURL');
       var analyticsURL = 'https://chatgpt.com/codex/cloud/settings/analytics';
@@ -921,16 +924,44 @@
         });
         return body;
       }
+      function setCacheTTLValue(value) {
+        value = (value || '').trim() || '10m0s';
+        var known = false;
+        Array.prototype.forEach.call(cacheTTLInput.options, function (option) {
+          if (option.value === value) known = true;
+        });
+        if (!known) {
+          var option = document.createElement('option');
+          option.value = value;
+          option.textContent = '当前值（' + value + '）';
+          cacheTTLInput.appendChild(option);
+        }
+        cacheTTLInput.value = value;
+      }
+      function generateAppAPIKey() {
+        var cryptoSource = window.crypto || window.msCrypto;
+        if (!cryptoSource || !cryptoSource.getRandomValues) {
+          setPageAccessStatus('当前环境不支持安全随机数，请手动填写 App API Key。', 'error');
+          return;
+        }
+        var bytes = new Uint8Array(32);
+        cryptoSource.getRandomValues(bytes);
+        var generated = '';
+        for (var i = 0; i < bytes.length; i += 1) {
+          generated += ('0' + bytes[i].toString(16)).slice(-2);
+        }
+        appAPIKeyInput.value = generated;
+        appAPIKeyHint.textContent = '已生成新密钥，点击保存后生效。';
+        appAPIKeyInput.focus();
+      }
       function renderPageAccess(config) {
         var enabled = !!config.basic_auth_enabled;
         basicAuthEnabledInput.checked = enabled;
         basicAuthUsernameInput.value = config.basic_auth_username || '';
         basicAuthPasswordInput.value = '';
-        bindAddrInput.value = config.bind_addr || '';
-        basePathInput.value = config.base_path || '';
         appAPIKeyInput.value = '';
         appAPIKeyHint.textContent = config.app_api_key_configured ? '当前已配置：' + (config.app_api_key_hint || '****') : '当前未配置 App API Key。';
-        document.getElementById('cacheTTL').value = config.cache_ttl || '10m0s';
+        setCacheTTLValue(config.cache_ttl || '10m0s');
         if (!enabled) {
           setPageAccessState('未启用', '');
           setPageAccessStatus('当前未启用页面访问认证。');
@@ -946,9 +977,7 @@
         var body = {
           basic_auth_enabled: basicAuthEnabledInput.checked,
           basic_auth_username: basicAuthUsernameInput.value.trim(),
-          bind_addr: bindAddrInput.value.trim(),
-          base_path: basePathInput.value.trim(),
-          cache_ttl: document.getElementById('cacheTTL').value.trim()
+          cache_ttl: cacheTTLInput.value
         };
         var password = basicAuthPasswordInput.value;
         if (password) body.basic_auth_password = password;
@@ -1024,7 +1053,7 @@
           setProxyMode(!!savedProxyURL);
           syncProxyURL();
           confirmedProxyValue = proxyInput.value.trim();
-          document.getElementById('cacheTTL').value = config.cache_ttl || '10m';
+          setCacheTTLValue(config.cache_ttl || '10m0s');
           document.getElementById('fedramp').checked = !!config.fedramp;
           setValue('clientBuildNumber', config.client_build_number);
           setValue('clientVersion', config.client_version);
@@ -1070,6 +1099,7 @@
       tabPageAccess.addEventListener('click', function () { showTab('page-access'); });
       tabAudio.addEventListener('click', function () { showTab('audio'); });
       tabConfigFile.addEventListener('click', function () { showTab('config-file'); });
+      generateAppAPIKeyButton.addEventListener('click', generateAppAPIKey);
       savePageAccessButton.addEventListener('click', savePageAccess);
       reloadConfigFileButton.addEventListener('click', loadConfigFile);
       saveConfigFileButton.addEventListener('click', saveConfigFile);

@@ -31,7 +31,7 @@ openapi.yaml
 反向代理：   https://你的域名/codex
 ```
 
-如果 Nginx 使用 `location /codex/`，请确认 Go 配置中的 `base_path` 与外部路径一致；如果 Nginx 已经去掉 `/codex` 前缀，则使用后端实际收到的路径进行调试。
+如果 Nginx 使用 `location /codex/`，请确认 `proxy_pass` 的路径转发方式与前端访问地址一致；如果 Nginx 已经去掉 `/codex` 前缀，则使用后端实际收到的路径进行调试。`bind_addr` 和 `base_path` 不在设置页面中配置，需要时通过部署配置文件或环境变量调整。
 
 ## 3. 认证方式
 
