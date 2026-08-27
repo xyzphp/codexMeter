@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -179,6 +180,7 @@ func TestEmbeddedAudioDecodes(t *testing.T) {
 
 func TestDailyUsageAnalyticsUsesBothEndpoints(t *testing.T) {
 	var paths []string
+	var queries []url.Values
 	testDate := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 	service := &UsageService{
 		cfg: Config{
@@ -188,6 +190,7 @@ func TestDailyUsageAnalyticsUsesBothEndpoints(t *testing.T) {
 		},
 		client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 			paths = append(paths, request.URL.Path)
+			queries = append(queries, request.URL.Query())
 			body := `{"data":[]}`
 			if request.URL.Path == "/backend-api/wham/usage/daily-token-usage-breakdown" {
 				body = fmt.Sprintf(`{"data":[{"date":"%s","product_surface_usage_values":{"desktop_app":12.5},"models":[{"model":"gpt-5.6-luna","speed":"standard","credits":10},{"model":"gpt-5.6-luna","speed":"fast","credits":2.5}]}]}`, testDate)
@@ -210,8 +213,92 @@ func TestDailyUsageAnalyticsUsesBothEndpoints(t *testing.T) {
 	if len(paths) != 2 || paths[0] != "/backend-api/wham/usage/daily-token-usage-breakdown" || paths[1] != "/backend-api/wham/analytics/daily-workspace-usage-counts" {
 		t.Fatalf("upstream paths = %#v", paths)
 	}
+	if len(queries) != 2 || queries[0].Get("start_date") == "" || queries[0].Get("end_date") == "" || queries[0].Get("group_by") != "day" || queries[1].Get("workspace_user") != "true" {
+		t.Fatalf("upstream queries = %#v", queries)
+	}
 	if len(analytics.Days) != 7 || analytics.Days[6].Date != testDate || analytics.Days[6].TokenUsagePercent != 12.5 || analytics.Days[6].Turns != 3 || analytics.Days[6].TextTotalTokens != 60 || len(analytics.Days[6].Models) != 1 || analytics.Days[6].Models[0].Model != "gpt-5.6-luna" || analytics.Days[6].Models[0].UsagePercent != 12.5 {
 		t.Fatalf("unexpected analytics payload: %#v", analytics)
+	}
+}
+
+func TestDailyUsageEndpointAddsDateRange(t *testing.T) {
+	rangeValue := analyticsDateRange{StartDate: "2026-08-01", EndDate: "2026-08-30"}
+	for _, test := range []struct {
+		name          string
+		endpoint      string
+		workspaceUser bool
+	}{
+		{name: "token usage", endpoint: dailyTokenUsageEndpoint},
+		{name: "workspace usage", endpoint: dailyWorkspaceUsageEndpoint, workspaceUser: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			endpoint, err := dailyUsageEndpoint(test.endpoint, rangeValue, test.workspaceUser)
+			if err != nil {
+				t.Fatalf("dailyUsageEndpoint() error = %v", err)
+			}
+			parsed, err := url.Parse(endpoint)
+			if err != nil {
+				t.Fatalf("parse endpoint: %v", err)
+			}
+			query := parsed.Query()
+			if query.Get("start_date") != rangeValue.StartDate || query.Get("end_date") != rangeValue.EndDate || query.Get("group_by") != "day" {
+				t.Fatalf("query = %v", query)
+			}
+			if got := query.Get("workspace_user"); (got == "true") != test.workspaceUser {
+				t.Fatalf("workspace_user = %q, want enabled = %v", got, test.workspaceUser)
+			}
+		})
+	}
+}
+
+func TestParseAnalyticsDateRangeDefaultsToPreviousSevenDays(t *testing.T) {
+	now := time.Date(2026, 8, 27, 14, 30, 0, 0, time.FixedZone("CST", 8*60*60))
+	dateRange, err := parseAnalyticsDateRange(nil, now)
+	if err != nil {
+		t.Fatalf("parseAnalyticsDateRange() error = %v", err)
+	}
+	if dateRange.StartDate != "2026-08-20" || dateRange.EndDate != "2026-08-26" {
+		t.Fatalf("date range = %#v, want 2026-08-20..2026-08-26", dateRange)
+	}
+}
+
+func TestParseAnalyticsDateRangeValidatesCustomRange(t *testing.T) {
+	now := time.Date(2026, 8, 27, 14, 30, 0, 0, time.FixedZone("CST", 8*60*60))
+	dateRange, err := parseAnalyticsDateRange(url.Values{
+		"start_date": []string{"2026-08-01"},
+		"end_date":   []string{"2026-08-27"},
+	}, now)
+	if err != nil {
+		t.Fatalf("parseAnalyticsDateRange() error = %v", err)
+	}
+	if dateRange.StartDate != "2026-08-01" || dateRange.EndDate != "2026-08-27" {
+		t.Fatalf("date range = %#v", dateRange)
+	}
+	for _, test := range []struct {
+		name  string
+		query url.Values
+	}{
+		{name: "missing end", query: url.Values{"start_date": []string{"2026-08-01"}}},
+		{name: "reversed", query: url.Values{"start_date": []string{"2026-08-30"}, "end_date": []string{"2026-08-01"}}},
+		{name: "future", query: url.Values{"start_date": []string{"2026-08-27"}, "end_date": []string{"2026-08-28"}}},
+		{name: "too long", query: url.Values{"start_date": []string{"2025-01-01"}, "end_date": []string{"2026-08-27"}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := parseAnalyticsDateRange(test.query, now); err == nil {
+				t.Fatal("parseAnalyticsDateRange() unexpectedly accepted invalid range")
+			}
+		})
+	}
+}
+
+func TestMergeUsageAnalyticsUsesRequestedDateRange(t *testing.T) {
+	rangeValue := analyticsDateRange{StartDate: "2026-08-01", EndDate: "2026-08-30"}
+	analytics := mergeUsageAnalyticsAtRange(nil, nil, rangeValue, time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC))
+	if len(analytics.Days) != 30 || analytics.Days[0].Date != rangeValue.StartDate || analytics.Days[len(analytics.Days)-1].Date != rangeValue.EndDate {
+		t.Fatalf("days = %d, range = %s..%s", len(analytics.Days), analytics.Days[0].Date, analytics.Days[len(analytics.Days)-1].Date)
+	}
+	if analytics.StartDate != rangeValue.StartDate || analytics.EndDate != rangeValue.EndDate {
+		t.Fatalf("response range = %s..%s", analytics.StartDate, analytics.EndDate)
 	}
 }
 

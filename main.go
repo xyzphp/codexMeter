@@ -321,7 +321,7 @@ type HistoryPoint struct {
 	UsedPercent float64 `json:"used_percent"`
 }
 
-// UsageAnalytics is the compact, seven-day payload exposed to the frontend.
+// UsageAnalytics is the compact date-range payload exposed to the frontend.
 // The upstream responses contain a longer history and several nested
 // breakdowns; keeping only the fields needed by the dashboard makes the
 // Android WebView page faster and avoids exposing the raw upstream payload.
@@ -329,8 +329,62 @@ type UsageAnalytics struct {
 	Source    string                `json:"source"`
 	FetchedAt string                `json:"fetched_at"`
 	FromCache bool                  `json:"from_cache"`
+	StartDate string                `json:"start_date"`
+	EndDate   string                `json:"end_date"`
 	Days      []UsageAnalyticsDay   `json:"days"`
 	Summary   UsageAnalyticsSummary `json:"summary"`
+}
+
+const analyticsDateLayout = "2006-01-02"
+
+type analyticsDateRange struct {
+	StartDate string
+	EndDate   string
+}
+
+func previousAnalyticsDateRange(now time.Time, days int) analyticsDateRange {
+	if days < 1 {
+		days = 1
+	}
+	return analyticsDateRange{
+		StartDate: now.AddDate(0, 0, -days).Format(analyticsDateLayout),
+		EndDate:   now.AddDate(0, 0, -1).Format(analyticsDateLayout),
+	}
+}
+
+func parseAnalyticsDateRange(values url.Values, now time.Time) (analyticsDateRange, error) {
+	startRaw := strings.TrimSpace(values.Get("start_date"))
+	endRaw := strings.TrimSpace(values.Get("end_date"))
+	if startRaw == "" && endRaw == "" {
+		// Keep the legacy API default for the LX04 page. The browser page sends
+		// its 30-day range explicitly so both layouts can coexist.
+		return previousAnalyticsDateRange(now, 7), nil
+	}
+	if startRaw == "" || endRaw == "" {
+		return analyticsDateRange{}, errors.New("start_date and end_date must be provided together")
+	}
+	start, err := time.ParseInLocation(analyticsDateLayout, startRaw, now.Location())
+	if err != nil {
+		return analyticsDateRange{}, errors.New("start_date must use YYYY-MM-DD")
+	}
+	end, err := time.ParseInLocation(analyticsDateLayout, endRaw, now.Location())
+	if err != nil {
+		return analyticsDateRange{}, errors.New("end_date must use YYYY-MM-DD")
+	}
+	if start.After(end) {
+		return analyticsDateRange{}, errors.New("start_date must not be after end_date")
+	}
+	if end.After(now) {
+		return analyticsDateRange{}, errors.New("end_date must not be in the future")
+	}
+	if end.After(start.AddDate(0, 0, 366)) {
+		return analyticsDateRange{}, errors.New("date range cannot exceed 367 days")
+	}
+	return analyticsDateRange{StartDate: startRaw, EndDate: endRaw}, nil
+}
+
+func (r analyticsDateRange) key() string {
+	return r.StartDate + ":" + r.EndDate
 }
 
 type UsageAnalyticsDay struct {
@@ -504,6 +558,7 @@ type UsageService struct {
 	resetCachedAt      time.Time
 	analyticsCached    *UsageAnalytics
 	analyticsCachedAt  time.Time
+	analyticsCachedKey string
 }
 
 func NewUsageService(cfg Config) (*UsageService, error) {
@@ -581,8 +636,13 @@ func (s *UsageService) Get(ctx context.Context, force bool) (*UsageResponse, err
 }
 
 func (s *UsageService) GetAnalytics(ctx context.Context, force bool) (*UsageAnalytics, error) {
+	return s.GetAnalyticsRange(ctx, force, previousAnalyticsDateRange(time.Now(), 7))
+}
+
+func (s *UsageService) GetAnalyticsRange(ctx context.Context, force bool, dateRange analyticsDateRange) (*UsageAnalytics, error) {
+	cacheKey := dateRange.key()
 	if !force {
-		if cached := s.getFreshAnalyticsCache(); cached != nil {
+		if cached := s.getFreshAnalyticsCache(cacheKey); cached != nil {
 			cached.FromCache = true
 			return cached, nil
 		}
@@ -592,13 +652,13 @@ func (s *UsageService) GetAnalytics(ctx context.Context, force bool) (*UsageAnal
 	defer s.analyticsRefreshMu.Unlock()
 
 	if !force {
-		if cached := s.getFreshAnalyticsCache(); cached != nil {
+		if cached := s.getFreshAnalyticsCache(cacheKey); cached != nil {
 			cached.FromCache = true
 			return cached, nil
 		}
 	}
 
-	analytics, err := s.queryUsageAnalytics(ctx)
+	analytics, err := s.queryUsageAnalyticsRange(ctx, dateRange)
 	if err != nil {
 		return nil, err
 	}
@@ -606,30 +666,47 @@ func (s *UsageService) GetAnalytics(ctx context.Context, force bool) (*UsageAnal
 	s.cacheMu.Lock()
 	s.analyticsCached = cloneUsageAnalytics(analytics)
 	s.analyticsCachedAt = time.Now()
+	s.analyticsCachedKey = cacheKey
 	s.cacheMu.Unlock()
 	return cloneUsageAnalytics(analytics), nil
 }
 
 func (s *UsageService) queryUsageAnalytics(ctx context.Context) (*UsageAnalytics, error) {
+	return s.queryUsageAnalyticsRange(ctx, previousAnalyticsDateRange(time.Now(), 7))
+}
+
+func (s *UsageService) queryUsageAnalyticsRange(ctx context.Context, dateRange analyticsDateRange) (*UsageAnalytics, error) {
 	cfg := s.currentConfig()
+	tokenEndpoint, err := dailyUsageEndpoint(dailyTokenUsageEndpoint, dateRange, false)
+	if err != nil {
+		return nil, fmt.Errorf("build daily token usage request: %w", err)
+	}
 	var tokenUsage dailyTokenUsageEnvelope
-	if err := s.queryWhamJSON(ctx, cfg, dailyTokenUsageEndpoint, &tokenUsage); err != nil {
+	if err := s.queryWhamJSON(ctx, cfg, tokenEndpoint, &tokenUsage); err != nil {
 		return nil, fmt.Errorf("daily token usage request failed: %w", err)
 	}
 
+	workspaceEndpoint, err := dailyUsageEndpoint(dailyWorkspaceUsageEndpoint, dateRange, true)
+	if err != nil {
+		return nil, fmt.Errorf("build daily workspace usage request: %w", err)
+	}
 	var workspaceUsage dailyWorkspaceUsageEnvelope
-	if err := s.queryWhamJSON(ctx, cfg, dailyWorkspaceUsageEndpoint, &workspaceUsage); err != nil {
+	if err := s.queryWhamJSON(ctx, cfg, workspaceEndpoint, &workspaceUsage); err != nil {
 		return nil, fmt.Errorf("daily workspace usage request failed: %w", err)
 	}
 
-	return mergeUsageAnalytics(tokenUsage.Data, workspaceUsage.Data), nil
+	return mergeUsageAnalyticsAtRange(tokenUsage.Data, workspaceUsage.Data, dateRange, time.Now()), nil
 }
 
 func mergeUsageAnalytics(tokenUsage []dailyTokenUsagePoint, workspaceUsage []dailyWorkspaceUsagePoint) *UsageAnalytics {
-	return mergeUsageAnalyticsAt(tokenUsage, workspaceUsage, time.Now())
+	return mergeUsageAnalyticsAtRange(tokenUsage, workspaceUsage, previousAnalyticsDateRange(time.Now(), 7), time.Now())
 }
 
 func mergeUsageAnalyticsAt(tokenUsage []dailyTokenUsagePoint, workspaceUsage []dailyWorkspaceUsagePoint, now time.Time) *UsageAnalytics {
+	return mergeUsageAnalyticsAtRange(tokenUsage, workspaceUsage, previousAnalyticsDateRange(now, 7), now)
+}
+
+func mergeUsageAnalyticsAtRange(tokenUsage []dailyTokenUsagePoint, workspaceUsage []dailyWorkspaceUsagePoint, dateRange analyticsDateRange, now time.Time) *UsageAnalytics {
 	tokenByDate := make(map[string]dailyTokenUsagePoint, len(tokenUsage))
 	workspaceByDate := make(map[string]dailyWorkspaceUsagePoint, len(workspaceUsage))
 	for _, point := range tokenUsage {
@@ -645,17 +722,28 @@ func mergeUsageAnalyticsAt(tokenUsage []dailyTokenUsagePoint, workspaceUsage []d
 		workspaceByDate[point.Date] = point
 	}
 
-	// Return the seven completed calendar days ending yesterday. The upstream
-	// analytics endpoints publish the current day's row with a delay, so the
-	// dashboard intentionally excludes the incomplete current day.
-	dates := make([]string, 0, 7)
-	for offset := 7; offset >= 1; offset-- {
-		dates = append(dates, now.AddDate(0, 0, -offset).Format("2006-01-02"))
+	start, startErr := time.ParseInLocation(analyticsDateLayout, dateRange.StartDate, now.Location())
+	end, endErr := time.ParseInLocation(analyticsDateLayout, dateRange.EndDate, now.Location())
+	if startErr != nil || endErr != nil || start.After(end) {
+		return &UsageAnalytics{
+			Source:    "wham_daily_usage",
+			FetchedAt: time.Now().UTC().Format(time.RFC3339),
+			StartDate: dateRange.StartDate,
+			EndDate:   dateRange.EndDate,
+			Days:      []UsageAnalyticsDay{},
+		}
+	}
+
+	dates := make([]string, 0, int(end.Sub(start)/(24*time.Hour))+1)
+	for current := start; !current.After(end); current = current.AddDate(0, 0, 1) {
+		dates = append(dates, current.Format(analyticsDateLayout))
 	}
 
 	result := &UsageAnalytics{
 		Source:    "wham_daily_usage",
 		FetchedAt: time.Now().UTC().Format(time.RFC3339),
+		StartDate: dateRange.StartDate,
+		EndDate:   dateRange.EndDate,
 		Days:      make([]UsageAnalyticsDay, 0, len(dates)),
 	}
 	for _, date := range dates {
@@ -709,6 +797,22 @@ func sumTokenCredits(models []dailyTokenModel) float64 {
 		total += model.Credits
 	}
 	return total
+}
+
+func dailyUsageEndpoint(endpoint string, dateRange analyticsDateRange, workspaceUser bool) (string, error) {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return "", err
+	}
+	query := parsed.Query()
+	query.Set("start_date", dateRange.StartDate)
+	query.Set("end_date", dateRange.EndDate)
+	query.Set("group_by", "day")
+	if workspaceUser {
+		query.Set("workspace_user", "true")
+	}
+	parsed.RawQuery = query.Encode()
+	return parsed.String(), nil
 }
 
 func aggregateTokenModels(models []dailyTokenModel) []UsageAnalyticsModel {
@@ -991,6 +1095,7 @@ func (s *UsageService) UpdateConfig(update ConfigUpdate) (ConfigView, error) {
 	s.resetCachedAt = time.Time{}
 	s.analyticsCached = nil
 	s.analyticsCachedAt = time.Time{}
+	s.analyticsCachedKey = ""
 	s.cacheMu.Unlock()
 	return s.ConfigView(), nil
 }
@@ -1038,10 +1143,10 @@ func (s *UsageService) getFreshCache() *UsageResponse {
 	return cloneUsage(s.cached)
 }
 
-func (s *UsageService) getFreshAnalyticsCache() *UsageAnalytics {
+func (s *UsageService) getFreshAnalyticsCache(cacheKey string) *UsageAnalytics {
 	s.cacheMu.Lock()
 	defer s.cacheMu.Unlock()
-	if s.analyticsCached == nil || time.Since(s.analyticsCachedAt) >= s.currentConfig().CacheTTL {
+	if s.analyticsCached == nil || s.analyticsCachedKey != cacheKey || time.Since(s.analyticsCachedAt) >= s.currentConfig().CacheTTL {
 		return nil
 	}
 	return cloneUsageAnalytics(s.analyticsCached)
@@ -1454,7 +1559,13 @@ func (s *Server) handleUsageAnalytics(response http.ResponseWriter, request *htt
 		return
 	}
 
-	analytics, err := s.usage.GetAnalytics(request.Context(), force)
+	dateRange, err := parseAnalyticsDateRange(request.URL.Query(), time.Now())
+	if err != nil {
+		writeJSON(response, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	analytics, err := s.usage.GetAnalyticsRange(request.Context(), force, dateRange)
 	if err != nil {
 		slog.Error("usage analytics fetch failed", "error", err)
 		writeJSON(response, http.StatusBadGateway, map[string]string{"error": err.Error()})

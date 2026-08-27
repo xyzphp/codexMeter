@@ -72,7 +72,7 @@ Basic Auth 与管理密钥不要写进前端源码、查询参数、截图或日
 | --- | --- | --- |
 | GET | `/healthz` | 健康检查 |
 | GET | `/api/usage` | 当前额度和重置时间 |
-| GET | `/api/usage/analytics` | 近七天统计，包含模型占比 |
+| GET | `/api/usage/analytics` | 日期范围统计，包含模型占比 |
 | GET | `/api/prediction` | 公共重置预测 |
 | GET | `/api/config` | 获取脱敏后的运行配置 |
 | PUT | `/api/config` | 部分更新运行配置 |
@@ -118,14 +118,15 @@ curl -u '用户名:密码' \
 }
 ```
 
-### 获取近七天统计
+### 获取日期范围统计
 
 ```bash
 curl -u '用户名:密码' \
-  'http://127.0.0.1:8123/api/usage/analytics?force=true'
+  'http://127.0.0.1:8123/api/usage/analytics?start_date=2026-08-01&end_date=2026-08-30&force=true'
 ```
 
-`days` 返回最近七个已完成日期（不包含当天），每一天包含 token、额度、用户/线程/对话统计；`models` 包含当天各模型的 `usage_percent`，适合绘制折线图、柱状图和饼图。
+`start_date` 和 `end_date` 可自定义统计范围，格式为 `YYYY-MM-DD`，最多 367 天，结束日期不能晚于当前日期。
+两者都省略时兼容返回最近七个已完成日期（不包含当天）。每一天包含 token、额度、用户/线程/对话统计；`models` 包含当天各模型的 `usage_percent`，适合绘制折线图、柱状图和饼图。浏览器页面默认请求最近 30 个完整日期。
 
 ### 获取预测数据
 

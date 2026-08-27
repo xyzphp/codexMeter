@@ -79,20 +79,22 @@ paths:
     get:
       tags: [usage]
       operationId: getUsageAnalytics
-      summary: 获取近七天使用统计
+      summary: 获取日期范围使用统计
       description: |
-        服务端聚合最近七个已完成日期（不包含今天）的
-        daily-token-usage-breakdown 和 daily-workspace-usage-counts 数据，返回
-        每日 token、额度、工作区统计以及按模型的使用占比。上游统计不可用时返回 502。
+        服务端聚合指定日期范围的 daily-token-usage-breakdown 和
+        daily-workspace-usage-counts 数据，返回每日 token、额度、工作区统计以及按模型的使用占比。
+        未提供日期范围时兼容返回最近七个已完成日期（不包含今天）；上游统计不可用时返回 502。
       security:
         - basicAuth: []
         - appApiKey: []
         - appBearer: []
       parameters:
+        - $ref: '#/components/parameters/AnalyticsStartDate'
+        - $ref: '#/components/parameters/AnalyticsEndDate'
         - $ref: '#/components/parameters/Force'
       responses:
         '200':
-          description: 近七天统计
+          description: 指定日期范围统计
           content:
             application/json:
               schema:
@@ -243,6 +245,24 @@ components:
       description: "与 X-App-API-Key 等价的 Authorization: Bearer 方式。"
 
   parameters:
+    AnalyticsStartDate:
+      name: start_date
+      in: query
+      required: false
+      description: 统计起始日期，格式为 YYYY-MM-DD。与 end_date 同时提供时生效。
+      schema:
+        type: string
+        format: date
+      example: 2026-08-01
+    AnalyticsEndDate:
+      name: end_date
+      in: query
+      required: false
+      description: 统计结束日期，格式为 YYYY-MM-DD，不能晚于当前日期；与 start_date 同时提供时生效。
+      schema:
+        type: string
+        format: date
+      example: 2026-08-30
     Force:
       name: force
       in: query
@@ -482,7 +502,7 @@ components:
 
     UsageAnalytics:
       type: object
-      required: [source, fetched_at, from_cache, days, summary]
+      required: [source, fetched_at, from_cache, start_date, end_date, days, summary]
       properties:
         source:
           type: string
@@ -492,6 +512,12 @@ components:
           format: date-time
         from_cache:
           type: boolean
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
         days:
           type: array
           items:

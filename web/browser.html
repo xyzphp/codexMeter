@@ -43,6 +43,16 @@
     .card-head { display:flex; align-items:baseline; justify-content:space-between; gap:16px; }
     .card-title { font-size:22px; font-weight:700; letter-spacing:-.2px; }
     .card-meta { color:var(--muted); font-size:13px; white-space:nowrap; }
+    .analytics-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; margin-top:18px; }
+    .range-presets { display:flex; gap:6px; padding:4px; border:1px solid var(--border); border-radius:11px; background:var(--soft); }
+    .range-button { min-height:32px; padding:0 13px; border:0; border-radius:8px; background:transparent; color:var(--muted); font-size:13px; line-height:1; }
+    .range-button:hover { background:var(--card); color:var(--text); }
+    .range-button.active { background:var(--card); color:var(--text); box-shadow:0 1px 4px rgba(32,33,35,.1); }
+    .date-range { display:flex; align-items:center; gap:8px; }
+    .date-field { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; white-space:nowrap; }
+    .date-field input { width:132px; min-height:32px; padding:0 8px; border:1px solid var(--border); border-radius:8px; background:var(--card); color:var(--text); font:inherit; color-scheme:light; }
+    html[data-theme="dark"] .date-field input { color-scheme:dark; }
+    .range-apply { min-height:32px; padding:0 12px; border-radius:8px; font-size:12px; }
     .quota-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:28px; margin-top:28px; }
     .quota-window { min-width:0; padding:0 6px; }
     .quota-window + .quota-window { padding-left:34px; border-left:1px solid var(--border); }
@@ -168,6 +178,13 @@
       .card-title { font-size:18px; }
       .card-meta { font-size:10px; }
       .summary-grid, .prediction-grid { gap:7px; margin-top:12px; }
+      .analytics-toolbar { align-items:stretch; gap:8px; margin-top:10px; }
+      .range-presets { flex:1 1 100%; gap:3px; padding:3px; }
+      .range-button { flex:1 1 0; min-height:27px; padding:0 6px; font-size:10px; }
+      .date-range { flex:1 1 100%; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:5px; }
+      .date-field { min-width:0; gap:3px; font-size:9px; }
+      .date-field input { width:100%; min-width:0; min-height:27px; padding:0 4px; font-size:9px; }
+      .range-apply { min-height:27px; padding:0 8px; font-size:10px; }
       .summary { padding:8px 9px; border-radius:10px; }
       .summary-label, .prediction-metric-label { font-size:10px; }
       .summary-value { font-size:17px; }
@@ -250,8 +267,20 @@
 
     <section class="card section" aria-label="使用分析">
       <div class="card-head"><div class="card-title">使用分析</div><div id="analyticsUpdated" class="card-meta">读取中…</div></div>
+      <div class="analytics-toolbar">
+        <div class="range-presets" role="group" aria-label="统计日期范围">
+          <button id="range7" class="range-button" type="button">7日</button>
+          <button id="range30" class="range-button active" type="button">30日</button>
+          <button id="range90" class="range-button" type="button">90日</button>
+        </div>
+        <div class="date-range">
+          <label class="date-field">开始<input id="analyticsStart" type="date"></label>
+          <label class="date-field">结束<input id="analyticsEnd" type="date"></label>
+          <button id="applyRange" class="action range-apply" type="button">应用</button>
+        </div>
+      </div>
       <div class="summary-grid">
-        <div class="summary"><div class="summary-label">近七天额度使用</div><div id="analyticsUsagePercent" class="summary-value">—</div></div>
+        <div class="summary"><div id="analyticsRangeLabel" class="summary-label">近30天额度使用</div><div id="analyticsUsagePercent" class="summary-value">—</div></div>
         <div class="summary"><div class="summary-label">总对话轮次</div><div id="analyticsTurns" class="summary-value">—</div></div>
         <div class="summary"><div class="summary-label">总计使用量</div><div id="analyticsTokens" class="summary-value">—</div></div>
       </div>
@@ -291,6 +320,7 @@
       var refreshRemaining = refreshTotal;
       var refreshBusy = false;
       var resetWindows = {};
+      var analyticsRange = {startDate:'', endDate:''};
       var palette = ['#10a37f','#a7c957','#d99a00','#d64545','#7c83fd','#c084fc','#38bdf8','#fb7185'];
       function byId(id) { return document.getElementById(id); }
       function text(id, value) { var element = byId(id); if (element) element.textContent = value; }
@@ -304,6 +334,15 @@
       function date(value) { if (!value) return '—'; var parsed = new Date(value); if (isNaN(parsed.getTime())) return '—'; var pad = function (v) { return String(v).padStart(2, '0'); }; return parsed.getFullYear() + '-' + pad(parsed.getMonth() + 1) + '-' + pad(parsed.getDate()) + ' ' + pad(parsed.getHours()) + ':' + pad(parsed.getMinutes()) + ':' + pad(parsed.getSeconds()); }
       function timestamp(value) { if (value === undefined || value === null || value === '') return 0; var parsedNumber = Number(value); if (isFinite(parsedNumber)) { if (parsedNumber > 0 && parsedNumber < 100000000000) parsedNumber *= 1000; return parsedNumber > 0 ? parsedNumber : 0; } var parsedDate = new Date(value); return isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime(); }
       function formatDuration(seconds) { if (!isFinite(seconds)) return '—'; var total = Math.max(0, Math.floor(seconds)); var days = Math.floor(total / 86400); var hours = Math.floor(total % 86400 / 3600); var minutes = Math.floor(total % 3600 / 60); var rest = total % 60; var pad = function (value) { return String(value).padStart(2, '0'); }; return (days ? days + '天 ' : '') + pad(hours) + ':' + pad(minutes) + ':' + pad(rest); }
+      function inputDate(value) { var parsed = value instanceof Date ? value : new Date(value); if (isNaN(parsed.getTime())) return ''; var pad = function (part) { return String(part).padStart(2, '0'); }; return parsed.getFullYear() + '-' + pad(parsed.getMonth() + 1) + '-' + pad(parsed.getDate()); }
+      function daysFromToday(offset) { var parsed = new Date(); parsed.setHours(12, 0, 0, 0); parsed.setDate(parsed.getDate() - offset); return inputDate(parsed); }
+      function rangeDayCount(startDate, endDate) { var start = new Date(startDate + 'T12:00:00'); var end = new Date(endDate + 'T12:00:00'); if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return 0; return Math.round((end.getTime() - start.getTime()) / 86400000) + 1; }
+      function rangeLabel(startDate, endDate) { var days = rangeDayCount(startDate, endDate); return days ? '近' + days + '天额度使用' : '日期范围额度使用'; }
+      function setRangeActive(days) { classes('range7', 'range-button' + (days === 7 ? ' active' : '')); classes('range30', 'range-button' + (days === 30 ? ' active' : '')); classes('range90', 'range-button' + (days === 90 ? ' active' : '')); }
+      function setRangeInputs(days) { var endDate = daysFromToday(1); var startDate = daysFromToday(days); analyticsRange = {startDate:startDate, endDate:endDate}; var startInput = byId('analyticsStart'); var endInput = byId('analyticsEnd'); if (startInput) startInput.value = startDate; if (endInput) endInput.value = endDate; setRangeActive(days); }
+      function analyticsPath(force) { var path = 'api/usage/analytics?start_date=' + encodeURIComponent(analyticsRange.startDate) + '&end_date=' + encodeURIComponent(analyticsRange.endDate); return force ? path + '&force=true' : path; }
+      function selectRangeDays(days) { setRangeInputs(days); loadAll(true); }
+      function applyCustomRange() { var startInput = byId('analyticsStart'); var endInput = byId('analyticsEnd'); var startDate = startInput ? startInput.value : ''; var endDate = endInput ? endInput.value : ''; if (!startDate || !endDate || startDate > endDate) { setError(new Error('请选择有效的日期范围')); return; } if (rangeDayCount(startDate, endDate) > 367) { setError(new Error('日期范围不能超过367天')); return; } analyticsRange = {startDate:startDate, endDate:endDate}; setRangeActive(0); loadAll(true); }
       function escaped(value) { return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, function (character) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]; }); }
       function quotaClass(value) { if (!isFinite(value) || value <= 20) return 'critical'; if (value <= 50) return 'warning'; return ''; }
       function renderWindow(window, prefix, resetPrefix) {
@@ -342,7 +381,7 @@
       }
       function renderBars(id, days, property, formatter, barClass) {
         var container = byId(id); if (!container) return;
-        if (!days || !days.length) { container.innerHTML = '<div class="empty">暂无最近七天数据</div>'; return; }
+        if (!days || !days.length) { container.innerHTML = '<div class="empty">暂无所选日期范围数据</div>'; return; }
         var values = days.map(function (day) { var value = number(day && day[property]); return isFinite(value) && value > 0 ? value : 0; });
         var max = Math.max.apply(null, values.concat([0]));
         container.innerHTML = days.map(function (day, index) { var value = values[index]; var height = max > 0 && value > 0 ? Math.max(5, value / max * 100) : 0; var dayLabel = String(day && day.date || '').slice(5).replace('-', '/'); return '<div class="chart-column"><div class="chart-bar-value">' + escaped(formatter(value)) + '</div><div class="chart-bar-shell"><div class="chart-bar ' + barClass + '" style="height:' + height + '%"></div></div><div class="chart-date">' + escaped(dayLabel || '—') + '</div></div>'; }).join('');
@@ -373,7 +412,9 @@
       }
       function renderAnalytics(data) {
         var days = data && Array.isArray(data.days) ? data.days : []; var summary = data && data.summary || {};
-        text('analyticsUpdated', data && data.fetched_at ? '更新 ' + date(data.fetched_at) : '最近七天');
+        var startDate = data && data.start_date ? data.start_date : analyticsRange.startDate; var endDate = data && data.end_date ? data.end_date : analyticsRange.endDate;
+        text('analyticsRangeLabel', startDate && endDate ? rangeLabel(startDate, endDate) : '日期范围额度使用');
+        text('analyticsUpdated', data && data.fetched_at ? '更新 ' + date(data.fetched_at) : '日期范围');
         text('analyticsUsagePercent', isFinite(number(summary.token_usage_percent)) ? percent(summary.token_usage_percent) + '%' : '—');
         text('analyticsTurns', isFinite(number(summary.turns)) ? compact(summary.turns) : '—');
         text('analyticsTokens', isFinite(number(summary.text_total_tokens)) ? token(summary.text_total_tokens) : '—');
@@ -393,7 +434,7 @@
         if (refreshBusy) return; refreshBusy = true; var suffix = force ? '?force=true' : ''; var button = byId('refreshButton'); if (button) button.disabled = true;
         var requests = [
           getJSON('api/usage' + suffix).then(renderUsage),
-          getJSON('api/usage/analytics' + suffix).then(renderAnalytics),
+          getJSON(analyticsPath(force)).then(renderAnalytics),
           getJSON('api/prediction' + suffix).then(renderPrediction)
         ];
         Promise.all(requests).then(function () { refreshRemaining = refreshTotal; }).catch(setError).then(function () { refreshBusy = false; if (button) button.disabled = false; });
@@ -403,6 +444,11 @@
       var savedTheme = null; try { savedTheme = localStorage.getItem('codex-theme'); } catch (_) {} setTheme(savedTheme || (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light'));
       byId('themeButton').addEventListener('click', function () { setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); });
       byId('refreshButton').addEventListener('click', function () { loadAll(true); });
+      byId('range7').addEventListener('click', function () { selectRangeDays(7); });
+      byId('range30').addEventListener('click', function () { selectRangeDays(30); });
+      byId('range90').addEventListener('click', function () { selectRangeDays(90); });
+      byId('applyRange').addEventListener('click', applyCustomRange);
+      setRangeInputs(30);
       loadAll(false); renderRefresh();
       window.setInterval(function () { renderResets(); if (refreshRemaining > 0) refreshRemaining -= 1; else loadAll(true); renderRefresh(); }, 1000);
       window.setInterval(function () { if (!refreshBusy) loadAll(true); }, refreshTotal * 1000);
