@@ -10,7 +10,7 @@ web/browser.html     桌面/普通浏览器整页工作台
 web/settings.html    配置页面
 ```
 
-Go 服务通过 `//go:embed` 将这三个 HTML 文件嵌入可执行文件。访问 `/` 时，服务根据 User-Agent 分流：识别为 LX04、Android WebView 或 AndroidStream 的请求返回 `web/index.html`；桌面浏览器和普通 Android Chrome 返回 `web/browser.html`。`/settings` 始终返回配置页面。因此，Release 压缩包不需要额外携带 `web` 目录，解压后直接运行对应平台的可执行文件即可访问页面。
+Go 服务通过 `//go:embed` 将这三个 HTML 文件嵌入可执行文件。访问 `/` 时，服务根据 User-Agent 分流：识别为 LX04、Android WebView 或 AndroidStream 的请求返回 `web/index.html`；桌面浏览器和普通 Android Chrome 返回 `web/browser.html`。`/settings` 始终返回配置页面，设置页使用与浏览器工作台一致的品牌、卡片、按钮、主题和响应式布局。因此，Release 压缩包不需要额外携带 `web` 目录，解压后直接运行对应平台的可执行文件即可访问页面。
 
 页面修改后需要重新执行 Go 构建，修改内容才会进入新的可执行文件。运行时的 `config.json` 不会嵌入程序，OAuth Token、账号 ID、代理和 Basic Auth 等配置需要在服务器上单独创建或通过环境变量提供。
 

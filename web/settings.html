@@ -94,18 +94,121 @@
       .brand-title { font-size:15px; }
       h1 { font-size:22px; }
     }
+
+    /* 与浏览器工作台保持一致的设置页视觉规范 */
+    html[data-theme="light"] {
+      color-scheme:light;
+      --page:#f7f7f8; --card:#fff; --soft:#f1f1f2; --track:#e5e5e7;
+      --text:#202123; --muted:#6e6e80; --border:#e4e4e7;
+      --accent:#10a37f; --danger:#c2413b;
+      --shadow:0 18px 42px rgba(32,33,35,.09);
+    }
+    html[data-theme="dark"] {
+      color-scheme:dark;
+      --page:#171717; --card:#242424; --soft:#303030; --track:#44444b;
+      --text:#f4f4f5; --muted:#a1a1aa; --border:#3f3f46;
+      --accent:#34d399; --danger:#f87171;
+      --shadow:0 18px 42px rgba(0,0,0,.26);
+    }
+    body { background:var(--page); color:var(--text); }
+    .shell { width:min(1120px,calc(100% - 48px)); margin:0 auto; padding:28px 0 36px; }
+    .page-header { min-height:42px; margin-bottom:20px; gap:24px; }
+    .brand { gap:0; color:var(--text); }
+    .brand-mark { width:42px; height:42px; flex-basis:42px; color:var(--text); }
+    .brand-title { margin-left:16px; font-size:25px; font-weight:680; letter-spacing:-.3px; }
+    .header-actions { display:flex; align-items:center; gap:10px; }
+    .action { display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:0 15px; border:1px solid var(--border); border-radius:11px; background:var(--card); color:var(--muted); text-decoration:none; font-size:14px; line-height:1; white-space:nowrap; appearance:none; transition:background .18s ease,transform .1s ease; }
+    .action:hover { background:var(--soft); }
+    .action:active { transform:translateY(1px); }
+    .action.primary { border-color:var(--accent); background:var(--accent); color:#fff; }
+    .surface { overflow:hidden; background:var(--card); border:1px solid var(--border); border-radius:24px; box-shadow:var(--shadow); }
+    .hero { padding:26px 30px 24px; border-bottom:1px solid var(--border); }
+    .eyebrow { font-size:13px; line-height:18px; }
+    h1 { margin:2px 0 6px; font-size:30px; line-height:36px; letter-spacing:-.8px; }
+    .intro { max-width:760px; font-size:13px; line-height:20px; }
+    code { padding:2px 5px; border-radius:5px; background:var(--soft); color:var(--text); font-size:.92em; }
+    .form { padding:0 30px 30px; }
+    .form-section { padding:24px 0 25px; border-bottom:1px solid var(--border); }
+    .section-head { margin-bottom:14px; }
+    .section-title { font-size:17px; }
+    .section-hint { font-size:12px; }
+    .field-grid { gap:16px; }
+    label { font-size:13px; line-height:18px; }
+    .field { gap:7px; }
+    input { height:44px; padding:0 13px; border-radius:10px; background:var(--card); color:var(--text); font-size:14px; color-scheme:light; }
+    html[data-theme="dark"] input { color-scheme:dark; }
+    input[readonly] { background:var(--soft); }
+    input::placeholder { color:#a1a1aa; }
+    html[data-theme="dark"] input::placeholder { color:#71717a; }
+    html[data-theme="light"] input::placeholder { color:#a1a1aa; }
+    .hint { font-size:12px; line-height:18px; }
+    .input-action { gap:8px; }
+    .small-button, .audio-button, .primary, .secondary { min-height:38px; border-radius:10px; padding:0 14px; }
+    .small-button { border:1px solid var(--border); background:var(--soft); color:var(--muted); font-size:12px; }
+    .token-state { gap:8px; min-height:18px; }
+    .state-dot { width:8px; height:8px; flex-basis:8px; }
+    .check-row { gap:10px; min-height:44px; padding:11px 12px; border-radius:10px; }
+    .check-row input { width:17px; height:17px; flex-basis:17px; }
+    .check-copy .hint { margin-top:3px; }
+    .audio-card, .security-card { padding:16px; border-radius:14px; background:var(--soft); }
+    .audio-card strong, .security-card strong { margin-bottom:5px; font-size:13px; }
+    .audio-buttons { gap:9px; margin-top:12px; }
+    .audio-button { min-height:36px; background:var(--card); border:1px solid var(--border); color:var(--text); font-size:12px; }
+    .actions { gap:10px; padding-top:22px; }
+    .primary, .secondary { min-height:40px; font-size:14px; }
+    .status { font-size:12px; line-height:18px; }
+
+    @media (max-width:900px), (max-height:700px) {
+      .shell { width:calc(100% - 28px); padding:16px 0 24px; }
+      .page-header { gap:12px; margin-bottom:12px; }
+      .brand-mark { width:32px; height:32px; flex-basis:32px; }
+      .brand-title { margin-left:11px; font-size:19px; }
+      .header-actions { gap:6px; }
+      .action { min-height:34px; padding:0 10px; font-size:12px; }
+      .surface { border-radius:16px; }
+      .hero { padding:18px 16px 16px; }
+      h1 { margin-top:1px; font-size:24px; line-height:30px; }
+      .intro { font-size:11px; line-height:17px; }
+      .form { padding:0 16px 18px; }
+      .form-section { padding:16px 0 17px; }
+      .section-title { font-size:15px; }
+      .section-hint { font-size:10px; }
+      .field-grid { gap:11px; }
+      label { font-size:11px; }
+      input { height:40px; padding:0 11px; font-size:12px; }
+      .hint { font-size:10px; line-height:15px; }
+      .audio-card, .security-card { padding:12px; border-radius:11px; }
+      .audio-card strong, .security-card strong { font-size:11px; }
+      .audio-buttons { gap:7px; margin-top:9px; }
+      .audio-button { min-height:32px; padding:0 11px; font-size:10px; }
+      .actions { gap:8px; padding-top:16px; }
+      .primary, .secondary { min-height:36px; font-size:12px; }
+      .status { font-size:10px; }
+    }
+    @media (max-width:600px) {
+      .field-grid { grid-template-columns:1fr; }
+      .field.full { grid-column:auto; }
+      .header-actions .action:last-child { display:none; }
+      .brand-title { font-size:16px; }
+      .section-hint { display:none; }
+      .actions { flex-wrap:wrap; }
+      .status { flex-basis:100%; order:3; }
+    }
   </style>
 </head>
 <body>
   <main class="shell">
     <header class="page-header">
-      <a class="brand" href="./" aria-label="返回额度页面">
+      <a class="brand" href="./" aria-label="额度页面">
         <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
           <path fill="currentColor" d="M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 0 0-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 0 1 .476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 0 1 4.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 0 1-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 0 0 5.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0 0 10.205 0a5.947 5.947 0 0 0-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 0 0 4.162 1.713z" />
         </svg>
-        <span class="brand-title">ChatGPT &amp; Codex</span>
+        <span class="brand-title">ChatGPT &amp; Codex 使用面板</span>
       </a>
-      <a class="back" href="./">← 额度页面</a>
+      <div class="header-actions">
+        <a class="action" href="./">返回面板</a>
+        <button id="themeButton" class="action" type="button">切换主题</button>
+      </div>
     </header>
 
     <section class="surface">
@@ -212,6 +315,17 @@
       var storedKey = '';
       try { storedKey = sessionStorage.getItem('codex-admin-key') || ''; } catch (_) {}
       keyInput.value = storedKey;
+
+      function setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        try { localStorage.setItem('codex-theme', theme); } catch (_) {}
+      }
+      var savedTheme = null;
+      try { savedTheme = localStorage.getItem('codex-theme'); } catch (_) {}
+      setTheme(savedTheme || (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light'));
+      document.getElementById('themeButton').addEventListener('click', function () {
+        setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+      });
 
       function headers() {
         var key = keyInput.value.trim();
