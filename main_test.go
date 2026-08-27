@@ -519,6 +519,47 @@ func TestBasicAuth(t *testing.T) {
 	}
 }
 
+func TestApplyConfigUpdateBasicAuth(t *testing.T) {
+	enabled := true
+	username := "admin"
+	password := "new-password"
+	next, err := applyConfigUpdate(Config{
+		AccessToken:      "access-token",
+		ChatGPTAccountID: "account-id",
+	}, ConfigUpdate{
+		BasicAuthEnabled:  &enabled,
+		BasicAuthUsername: &username,
+		BasicAuthPassword: &password,
+	})
+	if err != nil {
+		t.Fatalf("apply Basic Auth config: %v", err)
+	}
+	if !next.BasicAuthEnabled || next.BasicAuthUsername != username || next.BasicAuthPassword != password {
+		t.Fatalf("Basic Auth config = %#v, want enabled user and password", next)
+	}
+}
+
+func TestApplyConfigUpdateBasicAuthPreservesPassword(t *testing.T) {
+	enabled := true
+	username := "new-admin"
+	next, err := applyConfigUpdate(Config{
+		AccessToken:       "access-token",
+		ChatGPTAccountID:  "account-id",
+		BasicAuthEnabled:  true,
+		BasicAuthUsername: "old-admin",
+		BasicAuthPassword: "existing-password",
+	}, ConfigUpdate{
+		BasicAuthEnabled:  &enabled,
+		BasicAuthUsername: &username,
+	})
+	if err != nil {
+		t.Fatalf("apply Basic Auth config without password: %v", err)
+	}
+	if next.BasicAuthPassword != "existing-password" {
+		t.Fatalf("password = %q, want existing password to be preserved", next.BasicAuthPassword)
+	}
+}
+
 func TestBasicAuthSatisfiesAppAPIKey(t *testing.T) {
 	cfg := Config{
 		BasicAuthEnabled:  true,

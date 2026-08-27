@@ -1038,24 +1038,26 @@ func (s *UsageService) queryResetPrediction(ctx context.Context) (*ResetPredicti
 }
 
 type ConfigView struct {
-	BasePath          string `json:"base_path"`
-	BasicAuthEnabled  bool   `json:"basic_auth_enabled"`
-	ChatGPTAccountID  string `json:"chatgpt_account_id"`
-	UserAgent         string `json:"user_agent"`
-	FedRAMP           bool   `json:"fedramp"`
-	TokenConfigured   bool   `json:"token_configured"`
-	TokenHint         string `json:"token_hint,omitempty"`
-	CookieConfigured  bool   `json:"cookie_configured"`
-	CookieHint        string `json:"cookie_hint,omitempty"`
-	ClientBuildNumber string `json:"client_build_number,omitempty"`
-	ClientVersion     string `json:"client_version,omitempty"`
-	DeviceID          string `json:"device_id,omitempty"`
-	SessionID         string `json:"session_id,omitempty"`
-	ClientObservation string `json:"client_observation,omitempty"`
-	Referer           string `json:"referer,omitempty"`
-	ProxyURL          string `json:"proxy_url,omitempty"`
-	CacheTTL          string `json:"cache_ttl"`
-	ConfigFile        string `json:"config_file"`
+	BasePath                    string `json:"base_path"`
+	BasicAuthEnabled            bool   `json:"basic_auth_enabled"`
+	BasicAuthUsername           string `json:"basic_auth_username,omitempty"`
+	BasicAuthPasswordConfigured bool   `json:"basic_auth_password_configured"`
+	ChatGPTAccountID            string `json:"chatgpt_account_id"`
+	UserAgent                   string `json:"user_agent"`
+	FedRAMP                     bool   `json:"fedramp"`
+	TokenConfigured             bool   `json:"token_configured"`
+	TokenHint                   string `json:"token_hint,omitempty"`
+	CookieConfigured            bool   `json:"cookie_configured"`
+	CookieHint                  string `json:"cookie_hint,omitempty"`
+	ClientBuildNumber           string `json:"client_build_number,omitempty"`
+	ClientVersion               string `json:"client_version,omitempty"`
+	DeviceID                    string `json:"device_id,omitempty"`
+	SessionID                   string `json:"session_id,omitempty"`
+	ClientObservation           string `json:"client_observation,omitempty"`
+	Referer                     string `json:"referer,omitempty"`
+	ProxyURL                    string `json:"proxy_url,omitempty"`
+	CacheTTL                    string `json:"cache_ttl"`
+	ConfigFile                  string `json:"config_file"`
 }
 
 type ConfigUpdate struct {
@@ -1072,6 +1074,9 @@ type ConfigUpdate struct {
 	FedRAMP           *bool   `json:"fedramp"`
 	ProxyURL          *string `json:"proxy_url"`
 	CacheTTL          *string `json:"cache_ttl"`
+	BasicAuthEnabled  *bool   `json:"basic_auth_enabled"`
+	BasicAuthUsername *string `json:"basic_auth_username"`
+	BasicAuthPassword *string `json:"basic_auth_password"`
 }
 
 type ConfigTestResult struct {
@@ -1113,24 +1118,26 @@ func (s *UsageService) ConfigView() ConfigView {
 		tokenHint = "****" + cfg.AccessToken[len(cfg.AccessToken)-4:]
 	}
 	return ConfigView{
-		BasePath:          cfg.BasePath,
-		BasicAuthEnabled:  cfg.BasicAuthEnabled,
-		ChatGPTAccountID:  cfg.ChatGPTAccountID,
-		UserAgent:         cfg.UserAgent,
-		FedRAMP:           cfg.FedRAMP,
-		TokenConfigured:   cfg.AccessToken != "",
-		TokenHint:         tokenHint,
-		CookieConfigured:  cfg.UpstreamCookie != "",
-		CookieHint:        cookieHint(cfg.UpstreamCookie),
-		ClientBuildNumber: cfg.ClientBuildNumber,
-		ClientVersion:     cfg.ClientVersion,
-		DeviceID:          cfg.DeviceID,
-		SessionID:         cfg.SessionID,
-		ClientObservation: cfg.ClientObservation,
-		Referer:           cfg.UpstreamReferer,
-		ProxyURL:          cfg.UpstreamProxy,
-		CacheTTL:          cfg.CacheTTL.String(),
-		ConfigFile:        cfg.ConfigPath,
+		BasePath:                    cfg.BasePath,
+		BasicAuthEnabled:            cfg.BasicAuthEnabled,
+		BasicAuthUsername:           cfg.BasicAuthUsername,
+		BasicAuthPasswordConfigured: cfg.BasicAuthPassword != "",
+		ChatGPTAccountID:            cfg.ChatGPTAccountID,
+		UserAgent:                   cfg.UserAgent,
+		FedRAMP:                     cfg.FedRAMP,
+		TokenConfigured:             cfg.AccessToken != "",
+		TokenHint:                   tokenHint,
+		CookieConfigured:            cfg.UpstreamCookie != "",
+		CookieHint:                  cookieHint(cfg.UpstreamCookie),
+		ClientBuildNumber:           cfg.ClientBuildNumber,
+		ClientVersion:               cfg.ClientVersion,
+		DeviceID:                    cfg.DeviceID,
+		SessionID:                   cfg.SessionID,
+		ClientObservation:           cfg.ClientObservation,
+		Referer:                     cfg.UpstreamReferer,
+		ProxyURL:                    cfg.UpstreamProxy,
+		CacheTTL:                    cfg.CacheTTL.String(),
+		ConfigFile:                  cfg.ConfigPath,
 	}
 }
 
@@ -1224,11 +1231,23 @@ func applyConfigUpdate(old Config, update ConfigUpdate) (Config, error) {
 		}
 		next.CacheTTL = ttl
 	}
+	if update.BasicAuthEnabled != nil {
+		next.BasicAuthEnabled = *update.BasicAuthEnabled
+	}
+	if update.BasicAuthUsername != nil {
+		next.BasicAuthUsername = strings.TrimSpace(*update.BasicAuthUsername)
+	}
+	if update.BasicAuthPassword != nil {
+		next.BasicAuthPassword = *update.BasicAuthPassword
+	}
 	if next.AccessToken == "" {
 		return Config{}, errors.New("access_token cannot be empty")
 	}
 	if next.ChatGPTAccountID == "" {
 		return Config{}, errors.New("chatgpt_account_id cannot be empty")
+	}
+	if next.BasicAuthEnabled && (next.BasicAuthUsername == "" || next.BasicAuthPassword == "") {
+		return Config{}, errors.New("basic_auth_username and basic_auth_password are required when Basic Auth is enabled")
 	}
 	return next, nil
 }
