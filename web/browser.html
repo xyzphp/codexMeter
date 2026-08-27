@@ -304,7 +304,7 @@
         <div class="summary"><div class="summary-label">总计使用量</div><div id="analyticsTokens" class="summary-value">—</div></div>
       </div>
       <div class="charts-grid">
-        <div class="chart-panel wide"><div class="chart-head"><span>每日 Token 数</span><strong>点击日期查看详情</strong></div><div id="dailyTokenChart" class="heatmap"></div></div>
+        <div class="chart-panel wide"><div class="chart-head"><span>每日 Token 数</span></div><div id="dailyTokenChart" class="heatmap"></div></div>
         <div class="chart-panel wide"><div class="chart-head"><span>模型使用占比</span><strong>按额度</strong></div><div id="yesterdayModelPieChart" class="model-share"></div></div>
       </div>
     </section>
@@ -359,7 +359,10 @@
       function rangeLabel(startDate, endDate) { var days = rangeDayCount(startDate, endDate); return days ? '近' + days + '天额度使用' : '日期范围额度使用'; }
       function setRangeInputs(days) { var endDate = daysFromToday(1); var startDate = daysFromToday(days); analyticsRange = {startDate:startDate, endDate:endDate}; var startInput = byId('analyticsStart'); var endInput = byId('analyticsEnd'); if (startInput) startInput.value = startDate; if (endInput) endInput.value = endDate; }
       function analyticsPath(force) { var path = 'api/usage/analytics?start_date=' + encodeURIComponent(analyticsRange.startDate) + '&end_date=' + encodeURIComponent(analyticsRange.endDate); return force ? path + '&force=true' : path; }
-      function applyCustomRange() { var startInput = byId('analyticsStart'); var endInput = byId('analyticsEnd'); var startDate = startInput ? startInput.value : ''; var endDate = endInput ? endInput.value : ''; if (!startDate || !endDate || startDate > endDate) { setError(new Error('请选择有效的日期范围')); return; } if (rangeDayCount(startDate, endDate) > 367) { setError(new Error('日期范围不能超过367天')); return; } analyticsRange = {startDate:startDate, endDate:endDate}; loadAll(true); }
+      function readAnalyticsRange() { var startInput = byId('analyticsStart'); var endInput = byId('analyticsEnd'); return {startDate:startInput ? startInput.value : '', endDate:endInput ? endInput.value : ''}; }
+      function isValidAnalyticsRange(range) { return Boolean(range.startDate && range.endDate && range.startDate <= range.endDate && rangeDayCount(range.startDate, range.endDate) <= 367); }
+      function applyCustomRange() { var range = readAnalyticsRange(); if (!isValidAnalyticsRange(range)) { setError(new Error('请选择有效的日期范围')); return; } analyticsRange = range; loadAll(true); }
+      function applyAnalyticsRangeWhenValid() { var range = readAnalyticsRange(); if (!isValidAnalyticsRange(range)) return; analyticsRange = range; loadAll(true); }
       function escaped(value) { return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, function (character) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]; }); }
       function quotaClass(value) { if (!isFinite(value) || value <= 20) return 'critical'; if (value <= 50) return 'warning'; return ''; }
       function renderWindow(window, prefix, resetPrefix) {
@@ -406,12 +409,13 @@
       function modelValues(day) { var values = {}; (day && day.models || []).forEach(function (model) { var name = model && model.model ? String(model.model) : 'unknown'; var value = number(model && model.usage_percent); if (isFinite(value) && value > 0) values[name] = (values[name] || 0) + value; }); return values; }
       function modelShareParts(day) { var values = modelValues(day); var models = Object.keys(values).map(function (name) { return {name:name,value:values[name]}; }).sort(function (left, right) { return right.value - left.value; }); var total = models.reduce(function (sum, model) { return sum + model.value; }, 0); return {models:models, total:total}; }
       function dayTooltip(day, key, label, value, formatter) { var parts = modelShareParts(day); var modelText = parts.models.length ? parts.models.map(function (model) { return model.name + ' ' + percent(model.value / parts.total * 100) + '%'; }).join('，') : '无模型使用'; return key + ' · ' + label + ': ' + formatter(value) + '\nToken 数: ' + token(day && day.text_total_tokens) + '\n模型占比: ' + modelText + '\n对话轮次: ' + compact(day && day.turns); }
-      function renderHeatmap(id, days, property, formatter, label) {
+      function renderHeatmap(id, days, property, formatter, label, rangeStart, rangeEnd) {
         var container = byId(id); if (!container) return;
         var entries = (days || []).map(function (day) { var parsed = heatmapDate(day && day.date); var value = number(day && day[property]); return parsed ? {date:parsed, key:heatmapDateKey(parsed), day:day, value:isFinite(value) && value > 0 ? value : 0} : null; }).filter(function (entry) { return entry !== null; });
-        if (!entries.length) { container.innerHTML = '<div class="empty">暂无所选日期范围数据</div>'; return; }
-        var values = {}, dayByKey = {}, start = entries[0].date, end = entries[0].date, max = 0;
-        entries.forEach(function (entry) { values[entry.key] = entry.value; dayByKey[entry.key] = entry.day; if (entry.date < start) start = entry.date; if (entry.date > end) end = entry.date; if (entry.value > max) max = entry.value; });
+        var requestedStart = heatmapDate(rangeStart); var requestedEnd = heatmapDate(rangeEnd);
+        if (!entries.length && (!requestedStart || !requestedEnd)) { container.innerHTML = '<div class="empty">暂无所选日期范围数据</div>'; return; }
+        var values = {}, dayByKey = {}, start = requestedStart || entries[0].date, end = requestedEnd || entries[0].date, max = 0;
+        entries.forEach(function (entry) { values[entry.key] = entry.value; dayByKey[entry.key] = entry.day; if (!requestedStart && entry.date < start) start = entry.date; if (!requestedEnd && entry.date > end) end = entry.date; if (entry.value > max) max = entry.value; });
         var startMonday = moveHeatmapDate(start, -((start.getDay() + 6) % 7)); var endSunday = moveHeatmapDate(end, 6 - ((end.getDay() + 6) % 7)); var totalDays = Math.round((endSunday.getTime() - startMonday.getTime()) / 86400000) + 1; var columns = Math.ceil(totalDays / 7); var monthLabels = []; var cells = []; var previousMonth = '';
         for (var column = 0; column < columns; column += 1) {
           var weekStart = moveHeatmapDate(startMonday, column * 7); var monthKey = weekStart.getFullYear() + '-' + weekStart.getMonth();
@@ -446,7 +450,7 @@
         text('analyticsTurns', isFinite(number(summary.turns)) ? compact(summary.turns) : '—');
         text('analyticsTokens', isFinite(number(summary.text_total_tokens)) ? token(summary.text_total_tokens) : '—');
         selectedAnalyticsDate = days.length ? heatmapDateKey(heatmapDate(days[days.length - 1].date)) : '';
-        renderHeatmap('dailyTokenChart', days, 'text_total_tokens', token, 'Token'); renderShare(days, selectedAnalyticsDate);
+        renderHeatmap('dailyTokenChart', days, 'text_total_tokens', token, 'Token', startDate, endDate); renderShare(days, selectedAnalyticsDate);
       }
       function renderPrediction(data) {
         var watch = data && data.active_watch; var latest = data && data.latest_reset; var chance = watch ? clamp(number(watch.reset_chance_percent), 0, 100) : NaN;
@@ -473,6 +477,8 @@
       byId('themeButton').addEventListener('click', function () { setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); });
       byId('refreshButton').addEventListener('click', function () { loadAll(true); });
       byId('applyRange').addEventListener('click', applyCustomRange);
+      byId('analyticsStart').addEventListener('change', applyAnalyticsRangeWhenValid);
+      byId('analyticsEnd').addEventListener('change', applyAnalyticsRangeWhenValid);
       setRangeInputs(365);
       loadAll(false); renderRefresh();
       window.setInterval(function () { renderResets(); if (refreshRemaining > 0) refreshRemaining -= 1; else loadAll(true); renderRefresh(); }, 1000);
