@@ -340,6 +340,7 @@ type HistoryPoint struct {
 	At                  string   `json:"at"`
 	UsedPercent         float64  `json:"used_percent"`
 	FiveHourUsedPercent *float64 `json:"five_hour_used_percent,omitempty"`
+	Stale               bool     `json:"stale,omitempty"`
 }
 
 // UsageAnalytics is the compact date-range payload exposed to the frontend.
@@ -750,6 +751,13 @@ func (s *UsageService) collectUsageHistory(ctx context.Context) {
 	usage, err := s.Get(ctx, true)
 	if err != nil {
 		slog.Warn("scheduled usage collection failed", "error", err)
+		point, ok := s.lastSuccessfulHistoryPoint()
+		if !ok {
+			return
+		}
+		point.At = time.Now().UTC().Format(time.RFC3339)
+		point.Stale = true
+		s.persistUsageHistoryPoint(point)
 		return
 	}
 	point, ok := usageHistoryPoint(usage)
@@ -757,6 +765,10 @@ func (s *UsageService) collectUsageHistory(ctx context.Context) {
 		return
 	}
 
+	s.persistUsageHistoryPoint(point)
+}
+
+func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
 	s.cacheMu.Lock()
 	if len(s.history) > 0 {
 		lastAt, parseErr := time.Parse(time.RFC3339, s.history[len(s.history)-1].At)
@@ -780,6 +792,23 @@ func (s *UsageService) collectUsageHistory(ctx context.Context) {
 			slog.Warn("persist usage history failed", "error", err)
 		}
 	}
+}
+
+func (s *UsageService) lastSuccessfulHistoryPoint() (HistoryPoint, bool) {
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	for index := len(s.history) - 1; index >= 0; index-- {
+		point := s.history[index]
+		if point.Stale {
+			continue
+		}
+		if point.FiveHourUsedPercent != nil {
+			fiveHourUsedPercent := *point.FiveHourUsedPercent
+			point.FiveHourUsedPercent = &fiveHourUsedPercent
+		}
+		return point, true
+	}
+	return HistoryPoint{}, false
 }
 
 func usageHistoryPoint(usage *UsageResponse) (HistoryPoint, bool) {

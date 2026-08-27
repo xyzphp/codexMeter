@@ -98,6 +98,7 @@
     .usage-history-point { fill:var(--card); stroke:var(--accent); stroke-width:2; pointer-events:none; }
     .usage-history-point.latest { fill:var(--accent); }
     .usage-history-point.reset { stroke:var(--warning); stroke-width:3; }
+    .usage-history-point.stale { stroke-dasharray:2 2; opacity:.65; }
     .usage-history-reset-line { stroke:var(--warning); stroke-width:1.5; stroke-dasharray:4 4; opacity:.8; }
     .usage-history-legend { display:flex; align-items:center; gap:12px; margin-top:2px; color:var(--muted); font-size:11px; }
     .usage-history-legend-item { display:inline-flex; align-items:center; gap:5px; }
@@ -532,7 +533,7 @@
         return ticks;
       }
       function usageHistoryTooltip(point, value, label) {
-        return '中国时间 ' + date(point.at) + '\n' + label + '已使用 ' + percent(value) + '%';
+        return '中国时间 ' + date(point.at) + '\n' + label + '已使用 ' + percent(value) + '%' + (point.stale ? '\n采集状态：沿用上次成功数据' : '');
       }
       function bindUsageHistoryTooltips(container) {
         if (!container || !container.querySelectorAll) return;
@@ -547,7 +548,7 @@
       function renderUsageHistory(history, options) {
         options = options || {};
         var container = byId(options.chartId); if (!container) return;
-        var points = (Array.isArray(history) ? history : []).map(function (point) { var at = point && point.at ? timestamp(point.at) : 0; var used = number(point && point[options.metric]); return at > 0 && isFinite(used) ? {at:point.at, time:at, used:clamp(used, 0, 100)} : null; }).filter(function (point) { return point !== null; });
+        var points = (Array.isArray(history) ? history : []).map(function (point) { var at = point && point.at ? timestamp(point.at) : 0; var used = number(point && point[options.metric]); return at > 0 && isFinite(used) ? {at:point.at, time:at, used:clamp(used, 0, 100), stale:Boolean(point && point.stale)} : null; }).filter(function (point) { return point !== null; });
         points.sort(function (left, right) { return left.time - right.time; });
         if (!points.length) { text(options.countId, '等待采样'); text(options.currentId, '—'); text(options.maxId, '—'); text(options.minId, '—'); container.innerHTML = '<div class="empty">暂无' + escaped(options.emptyLabel || '额度') + '采样</div>'; return; }
         var values = points.map(function (point) { return point.used; }); var current = values[values.length - 1]; var maximum = Math.max.apply(Math, values); var minimum = Math.min.apply(Math, values); var resetIndexes = [];
@@ -558,7 +559,7 @@
         var linePath = points.map(function (point, index) { return (index ? 'L' : 'M') + x(index).toFixed(2) + ' ' + y(point.used).toFixed(2); }).join(' '); var areaPath = linePath + ' L ' + x(points.length - 1).toFixed(2) + ' ' + (top + plotHeight).toFixed(2) + ' L ' + x(0).toFixed(2) + ' ' + (top + plotHeight).toFixed(2) + ' Z';
         var grid = [0, 1, 2, 3, 4].map(function (step) { var level = axisMin + axisSpan * step / 4; var lineY = y(level).toFixed(2); return '<line class="usage-history-gridline" x1="' + left + '" y1="' + lineY + '" x2="' + (width - right) + '" y2="' + lineY + '"></line><text class="usage-history-axis usage-history-axis-end" x="' + (left - 8) + '" y="' + (Number(lineY) + 4) + '">' + percent(level) + '%</text>'; }).join('');
         var resetLines = resetIndexes.map(function (index) { return '<line class="usage-history-reset-line" x1="' + x(index).toFixed(2) + '" y1="' + top + '" x2="' + x(index).toFixed(2) + '" y2="' + (top + plotHeight) + '"></line>'; }).join('');
-        var circles = points.map(function (point, index) { var resetClass = resetIndexes.indexOf(index) >= 0 ? ' reset' : ''; var latestClass = index === points.length - 1 ? ' latest' : ''; var label = usageHistoryTooltip(point, point.used, options.label); var cx = x(index).toFixed(2); var cy = y(point.used).toFixed(2); var radius = index === points.length - 1 ? '4' : '3'; return '<circle class="usage-history-point-hit" cx="' + cx + '" cy="' + cy + '" r="9" tabindex="0" data-tooltip="' + escaped(label) + '" aria-label="' + escaped(label) + '"></circle><circle class="usage-history-point' + resetClass + latestClass + '" cx="' + cx + '" cy="' + cy + '" r="' + radius + '" aria-hidden="true"></circle>'; }).join('');
+        var circles = points.map(function (point, index) { var resetClass = resetIndexes.indexOf(index) >= 0 ? ' reset' : ''; var latestClass = index === points.length - 1 ? ' latest' : ''; var staleClass = point.stale ? ' stale' : ''; var label = usageHistoryTooltip(point, point.used, options.label); var cx = x(index).toFixed(2); var cy = y(point.used).toFixed(2); var radius = index === points.length - 1 ? '4' : '3'; return '<circle class="usage-history-point-hit" cx="' + cx + '" cy="' + cy + '" r="9" tabindex="0" data-tooltip="' + escaped(label) + '" aria-label="' + escaped(label) + '"></circle><circle class="usage-history-point' + resetClass + latestClass + staleClass + '" cx="' + cx + '" cy="' + cy + '" r="' + radius + '" aria-hidden="true"></circle>'; }).join('');
         var axisLabels = usageHistoryAxisTicks(points).map(function (tick, index, ticks) { var anchor = index === 0 ? 'start' : index === ticks.length - 1 ? 'end' : 'middle'; return '<text class="usage-history-axis" text-anchor="' + anchor + '" x="' + x(tick.index).toFixed(2) + '" y="' + (height - 8) + '">' + escaped(tick.label) + '</text>'; }).join(''); var legend = resetIndexes.length ? '<div class="usage-history-legend"><span class="usage-history-legend-item"><i class="usage-history-legend-color"></i>' + escaped(options.label) + '使用百分比</span><span class="usage-history-legend-item"><i class="usage-history-legend-color reset"></i>检测到额度重置</span></div>' : '<div class="usage-history-legend"><span class="usage-history-legend-item"><i class="usage-history-legend-color"></i>' + escaped(options.label) + '使用百分比</span></div>';
         container.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' + escaped(options.label) + '额度使用变化图">' + grid + resetLines + '<path class="usage-history-area" d="' + areaPath + '"></path><path class="usage-history-line" d="' + linePath + '"></path>' + circles + axisLabels + '</svg>' + legend;
         bindUsageHistoryTooltips(container);

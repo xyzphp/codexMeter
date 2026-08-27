@@ -243,6 +243,31 @@ func TestUsageRefreshDoesNotPersistHistory(t *testing.T) {
 	}
 }
 
+func TestScheduledUsageCollectionFallsBackToLastSuccessfulPoint(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
+	fiveHour := 17.0
+	lastPoint := HistoryPoint{
+		At:                  time.Now().UTC().Add(-usageHistorySampleInterval - time.Minute).Format(time.RFC3339),
+		UsedPercent:         42,
+		FiveHourUsedPercent: &fiveHour,
+	}
+	service := &UsageService{
+		cfg:         Config{AccessToken: "oauth-token", UserAgent: "test-user-agent"},
+		client:      &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) { return nil, fmt.Errorf("upstream unavailable") })},
+		history:     []HistoryPoint{lastPoint},
+		historyFile: path,
+	}
+
+	service.collectUsageHistory(context.Background())
+	loaded, err := loadUsageHistory(path)
+	if err != nil {
+		t.Fatalf("load fallback history: %v", err)
+	}
+	if len(loaded) != 1 || !loaded[0].Stale || loaded[0].UsedPercent != lastPoint.UsedPercent || loaded[0].FiveHourUsedPercent == nil || *loaded[0].FiveHourUsedPercent != fiveHour {
+		t.Fatalf("fallback history = %#v, want stale copy of %#v", loaded, lastPoint)
+	}
+}
+
 func TestWhamRequestUsesOAuthHeadersAndGET(t *testing.T) {
 	var captured *http.Request
 	service := &UsageService{
