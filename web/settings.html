@@ -170,15 +170,27 @@
     .wizard-status { min-height:18px; margin-top:10px; font-size:12px; line-height:18px; color:var(--muted); }
     .wizard-status.ok { color:var(--accent); }
     .wizard-status.error { color:var(--danger); }
-    .setup-progress { display:flex; align-items:center; gap:10px; margin:0 0 2px; padding:14px 30px 0; }
-    .setup-step { display:flex; align-items:center; gap:7px; min-width:0; color:var(--muted); font-size:12px; white-space:nowrap; }
-    .step-number { display:inline-flex; align-items:center; justify-content:center; width:23px; height:23px; flex:0 0 23px; border:1px solid var(--border); border-radius:50%; background:var(--soft); color:var(--muted); font-size:11px; font-weight:700; }
-    .setup-step.active { color:var(--text); font-weight:680; }
-    .setup-step.active .step-number { border-color:var(--accent); background:var(--accent); color:#fff; }
-    .setup-step.done { color:var(--accent); }
-    .setup-step.done .step-number { border-color:var(--accent); color:var(--accent); }
-    .step-line { height:1px; flex:1 1 24px; min-width:12px; background:var(--border); }
-    .setup-section { scroll-margin-top:18px; }
+    .step-tabs { display:flex; align-items:stretch; gap:10px; margin:0; padding:16px 30px 0; }
+    .step-tab { display:flex; align-items:center; gap:9px; min-width:0; flex:1 1 0; padding:11px 13px; border:1px solid var(--border); border-radius:12px; background:var(--soft); color:var(--muted); text-align:left; cursor:pointer; transition:border-color .18s ease,background .18s ease,color .18s ease,transform .1s ease; }
+    .step-tab:hover:not(:disabled) { border-color:var(--accent); }
+    .step-tab:active:not(:disabled) { transform:translateY(1px); }
+    .step-tab.active { border-color:var(--accent); background:rgba(16,163,127,.09); color:var(--text); }
+    .step-tab.done { border-color:rgba(16,163,127,.35); color:var(--accent); }
+    .step-tab:disabled { cursor:not-allowed; opacity:.58; }
+    .step-tab .step-number { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; flex:0 0 24px; border:1px solid var(--border); border-radius:50%; background:var(--card); color:var(--muted); font-size:11px; font-weight:700; }
+    .step-tab.active .step-number { border-color:var(--accent); background:var(--accent); color:#fff; }
+    .step-tab.done .step-number { border-color:var(--accent); color:var(--accent); }
+    .step-tab-copy { display:flex; flex-direction:column; min-width:0; gap:2px; }
+    .step-tab-title { overflow:hidden; font-size:13px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
+    .step-tab-hint { overflow:hidden; color:var(--muted); font-size:10px; line-height:14px; text-overflow:ellipsis; white-space:nowrap; }
+    .tab-panel { scroll-margin-top:18px; }
+    .tab-panel[hidden] { display:none; }
+    .section-step-label { display:none; }
+    .credential-summary { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; color:var(--muted); font-size:12px; line-height:18px; }
+    .credential-summary span { padding:4px 8px; border:1px solid var(--border); border-radius:7px; background:var(--card); }
+    .credential-summary .ready { border-color:rgba(16,163,127,.35); color:var(--accent); }
+    .proxy-actions .primary { min-width:190px; }
+    .config-hidden { display:none!important; }
     .step-card { padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
     .step-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
     .step-card-title { font-size:14px; font-weight:700; }
@@ -231,9 +243,11 @@
       .wizard-actions { gap:7px; margin-top:9px; }
       .wizard-actions button { min-height:34px; }
       .wizard-status { font-size:10px; }
-      .setup-progress { padding:12px 16px 0; gap:7px; }
-      .setup-step { gap:5px; font-size:10px; }
-      .step-number { width:21px; height:21px; flex-basis:21px; font-size:10px; }
+      .step-tabs { padding:12px 16px 0; gap:7px; }
+      .step-tab { gap:6px; padding:9px 10px; }
+      .step-tab .step-number { width:21px; height:21px; flex-basis:21px; font-size:10px; }
+      .step-tab-title { font-size:11px; }
+      .step-tab-hint { font-size:9px; }
       .step-card { padding:12px; border-radius:11px; }
       .step-card-title { font-size:12px; }
       .step-card-copy, .proxy-status, .lock-notice { font-size:10px; line-height:15px; }
@@ -254,10 +268,7 @@
       .header-actions .action:last-child { display:none; }
       .brand-title { font-size:16px; }
       .section-hint { display:none; }
-      .setup-progress { padding-left:13px; padding-right:13px; }
-      .setup-step { flex:1 1 0; }
-      .setup-step span:last-child { overflow:hidden; text-overflow:ellipsis; }
-      .step-line { min-width:6px; }
+      .step-tabs { padding-left:13px; padding-right:13px; }
       .step-card-header { gap:7px; }
       .state-badge { padding:0 7px; }
       .actions { flex-wrap:wrap; }
@@ -289,20 +300,21 @@
         </div>
       </div>
 
-      <div class="setup-progress" aria-label="配置步骤">
-        <div id="progressProxy" class="setup-step active"><span class="step-number">1</span><span>网络代理</span></div>
-        <span class="step-line" aria-hidden="true"></span>
-        <div id="progressCredentials" class="setup-step"><span class="step-number">2</span><span>账号凭证</span></div>
-        <span class="step-line" aria-hidden="true"></span>
-        <div id="progressOptions" class="setup-step"><span class="step-number">3</span><span>运行选项</span></div>
+      <div class="step-tabs" role="tablist" aria-label="配置步骤">
+        <button id="tabProxy" class="step-tab active" type="button" role="tab" aria-selected="true" aria-controls="proxySection">
+          <span class="step-number">1</span><span class="step-tab-copy"><span class="step-tab-title">网络代理</span><span class="step-tab-hint">先测试并保存</span></span>
+        </button>
+        <button id="tabCredentials" class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="credentialsSection" disabled>
+          <span class="step-number">2</span><span class="step-tab-copy"><span class="step-tab-title">账号凭证</span><span class="step-tab-hint">代理成功后解锁</span></span>
+        </button>
       </div>
 
       <form id="configForm" class="form">
-        <section id="proxySection" class="form-section setup-section">
-          <div class="section-head"><div class="section-title"><span class="section-step-label"><span class="step-number">1</span>网络代理</span></div><div class="section-hint">先测试并保存</div></div>
+        <section id="proxySection" class="form-section tab-panel" role="tabpanel" aria-labelledby="tabProxy">
+          <div class="section-head"><div class="section-title">配置上游连接</div><div class="section-hint">步骤 1</div></div>
           <div class="step-card">
             <div class="step-card-header">
-              <div><div class="step-card-title">配置上游连接</div><div class="step-card-copy">先确认服务端能访问 ChatGPT。没有代理时可以选择直连。</div></div>
+              <div><div class="step-card-title">先确认服务端网络</div><div class="step-card-copy">没有代理时可以选择直连。代理测试成功后，账号凭证页会自动解锁。</div></div>
               <span id="proxyStateBadge" class="state-badge">待确认</span>
             </div>
             <div class="field">
@@ -323,124 +335,35 @@
           </div>
         </section>
 
-        <section id="credentialsSection" class="form-section setup-section is-locked" aria-disabled="true">
-          <div class="section-head"><div class="section-title"><span class="section-step-label"><span class="step-number">2</span>账号与凭证</span></div><div id="credentialStepHint" class="section-hint">完成步骤 1 后解锁</div></div>
-          <div id="credentialLock" class="lock-notice"><span>请先完成网络代理测试并保存，或确认使用直连。</span><button id="goProxy" class="small-button" type="button">去配置网络</button></div>
-          <div id="credentialContent">
-            <div class="wizard-card">
-              <label for="captureInput">粘贴浏览器 Fetch / cURL 请求</label>
-              <textarea id="captureInput" spellcheck="false" placeholder="在 ChatGPT 使用情况页面打开开发者工具 → Network，右键 usage 请求 → Copy as cURL 或 Copy fetch，然后粘贴到这里"></textarea>
-              <span class="hint">页面只在本地浏览器解析抓包内容；解析后请点击“测试账号连接”。</span>
-              <div class="wizard-actions">
-                <button id="parseCapture" class="secondary" type="button">自动解析并填充</button>
-                <button id="testConnection" class="primary" type="button">测试账号连接</button>
-              </div>
-              <div id="wizardStatus" class="wizard-status" role="status" aria-live="polite"></div>
+        <section id="credentialsSection" class="form-section tab-panel" role="tabpanel" aria-labelledby="tabCredentials" hidden>
+          <div class="section-head"><div class="section-title">账号凭证</div><div class="section-hint">步骤 2</div></div>
+          <div class="wizard-card">
+            <label for="captureInput">粘贴浏览器 Fetch / cURL 请求</label>
+            <textarea id="captureInput" spellcheck="false" placeholder="在 ChatGPT 使用情况页面打开开发者工具 → Network，右键 usage 请求 → Copy as cURL 或 Copy fetch，然后粘贴到这里"></textarea>
+            <span class="hint">只需填写这一项。系统会自动识别 Authorization、Cookie、Account ID、请求上下文和 User-Agent，并覆盖当前账号配置。</span>
+            <div class="wizard-actions">
+              <button id="parseCapture" class="secondary" type="button">解析请求</button>
+              <button id="testConnection" class="primary" type="button">识别并覆盖保存</button>
             </div>
-            <div class="field-grid" style="margin-top:16px">
-              <div class="field full">
-                <label for="accountId">ChatGPT Account ID</label>
-                <input id="accountId" autocomplete="off" placeholder="例如：org-...">
-              </div>
-              <div class="field full">
-                <label for="accessToken">OpenAI OAuth Access Token</label>
-                <div class="input-action"><input id="accessToken" type="password" autocomplete="new-password" placeholder="留空表示保持当前 Token"><button id="toggleToken" class="small-button" type="button">显示</button></div>
-                <div class="token-state"><i id="tokenDot" class="state-dot"></i><span id="tokenHint" class="hint">当前状态：检查中</span></div>
-              </div>
-            </div>
-            <details class="advanced-card">
-              <summary>浏览器请求上下文（可选）</summary>
-              <div class="advanced-fields">
-                <div class="field-grid">
-                  <div class="field full">
-                    <label for="upstreamCookie">Cookie</label>
-                    <div class="input-action"><input id="upstreamCookie" type="password" autocomplete="new-password" placeholder="留空表示保持当前 Cookie"><button id="toggleCookie" class="small-button" type="button">显示</button></div>
-                    <span id="cookieHint" class="hint">Cookie 未配置也可能可以请求；遇到 401 时建议从同一条请求中提取。</span>
-                  </div>
-                  <div class="field">
-                    <label for="clientBuildNumber">客户端构建号</label>
-                    <input id="clientBuildNumber" autocomplete="off" placeholder="例如：9758774">
-                  </div>
-                  <div class="field">
-                    <label for="clientVersion">客户端版本</label>
-                    <input id="clientVersion" autocomplete="off" placeholder="prod-...">
-                  </div>
-                  <div class="field">
-                    <label for="deviceId">设备 ID</label>
-                    <input id="deviceId" autocomplete="off" placeholder="UUID">
-                  </div>
-                  <div class="field">
-                    <label for="sessionId">会话 ID</label>
-                    <input id="sessionId" autocomplete="off" placeholder="UUID">
-                  </div>
-                  <div class="field full">
-                    <label for="clientObservation">客户端观察标识</label>
-                    <input id="clientObservation" autocomplete="off" placeholder="x-oai-is-client-observation 的值">
-                  </div>
-                  <div class="field full">
-                    <label for="referer">Referer</label>
-                    <input id="referer" autocomplete="off" placeholder="例如：https://chatgpt.com/codex/cloud/settings/analytics">
-                  </div>
-                </div>
-              </div>
-            </details>
+            <div id="wizardStatus" class="wizard-status" role="status" aria-live="polite"></div>
+            <div id="credentialSummary" class="credential-summary" aria-live="polite"></div>
           </div>
+          <input id="appKey" class="config-hidden" type="hidden">
+          <input id="accessToken" class="config-hidden" type="hidden">
+          <input id="upstreamCookie" class="config-hidden" type="hidden">
+          <input id="accountId" class="config-hidden" type="hidden">
+          <input id="clientBuildNumber" class="config-hidden" type="hidden">
+          <input id="clientVersion" class="config-hidden" type="hidden">
+          <input id="deviceId" class="config-hidden" type="hidden">
+          <input id="sessionId" class="config-hidden" type="hidden">
+          <input id="clientObservation" class="config-hidden" type="hidden">
+          <input id="referer" class="config-hidden" type="hidden">
+          <input id="userAgent" class="config-hidden" type="hidden">
+          <input id="cacheTTL" class="config-hidden" type="hidden">
+          <input id="fedramp" class="config-hidden" type="hidden">
         </section>
 
-        <section id="optionsSection" class="form-section setup-section">
-          <div class="section-head"><div class="section-title"><span class="section-step-label"><span class="step-number">3</span>运行选项</span></div><div class="section-hint">修改后立即生效</div></div>
-          <div class="field-grid">
-            <div class="field full">
-              <label for="userAgent">上游 User-Agent</label>
-              <input id="userAgent" autocomplete="off" placeholder="Codex client User-Agent">
-            </div>
-            <div class="field">
-              <label for="cacheTTL">缓存时长</label>
-              <input id="cacheTTL" placeholder="例如：10m">
-              <span class="hint">例如 0 代表不缓存。</span>
-            </div>
-            <div class="field">
-              <label>运行状态</label>
-              <input value="服务端配置" readonly>
-            </div>
-          </div>
-        </section>
-
-        <section class="form-section">
-          <div class="section-head"><div class="section-title">安全与高级选项</div><div class="section-hint">凭证不会写入 HTML</div></div>
-          <div class="field-grid">
-            <div class="field full">
-              <label for="appKey">管理接口密钥</label>
-              <input id="appKey" type="password" autocomplete="off" placeholder="如果服务端配置了 APP_API_KEY">
-              <span class="hint">仅保存在当前浏览器会话，用于访问配置 API；Basic Auth 由 Web 服务器或 Go 服务处理。</span>
-            </div>
-            <div class="field full">
-              <div class="check-row">
-                <input id="fedramp" type="checkbox">
-                <div class="check-copy"><label for="fedramp">发送 FedRAMP 请求头</label><span class="hint">只有目标账号或环境明确要求时才启用。</span></div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="form-section">
-          <div class="section-head"><div class="section-title">提示音试听</div><div class="section-hint">额度页点击后播放</div></div>
-          <div class="audio-card">
-            <strong>本周剩余额度提示音</strong>
-            <span class="hint">点击按钮会在当前设置页直接播放对应提示音。</span>
-            <div class="audio-buttons">
-              <button class="audio-button" type="button" data-preview-audio="normal">试听 50%–80%</button>
-              <button class="audio-button" type="button" data-preview-audio="warning">试听 20%–50%</button>
-              <button class="audio-button" type="button" data-preview-audio="critical">试听 0%–20%</button>
-            </div>
-            <audio id="audioNormal" preload="auto" src="audio?kind=normal"></audio>
-            <audio id="audioWarning" preload="auto" src="audio?kind=warning"></audio>
-            <audio id="audioCritical" preload="auto" src="audio?kind=critical"></audio>
-          </div>
-        </section>
-
-        <div class="security-card"><strong>安全提示</strong><span class="hint">不要把 OAuth Token 放入 HTML、安卓 APK 或前端代码。远程部署时建议使用 HTTPS、Basic Auth 或管理接口密钥。</span></div>
-        <div class="actions"><button class="primary" type="submit">保存配置</button><button id="reload" class="secondary" type="button">重新读取</button><span id="status" class="status" role="status" aria-live="polite"></span></div>
+        <div class="actions"><button id="reload" class="secondary" type="button">重新读取</button><span id="status" class="status" role="status" aria-live="polite"></span></div>
       </form>
     </section>
   </main>
@@ -452,32 +375,24 @@
       var status = document.getElementById('status');
       var keyInput = document.getElementById('appKey');
       var tokenInput = document.getElementById('accessToken');
-      var tokenDot = document.getElementById('tokenDot');
-      var toggleToken = document.getElementById('toggleToken');
       var cookieInput = document.getElementById('upstreamCookie');
-      var toggleCookie = document.getElementById('toggleCookie');
       var captureInput = document.getElementById('captureInput');
       var wizardStatus = document.getElementById('wizardStatus');
+      var credentialSummary = document.getElementById('credentialSummary');
       var proxyInput = document.getElementById('proxyUrl');
       var proxySection = document.getElementById('proxySection');
       var credentialsSection = document.getElementById('credentialsSection');
-      var credentialLock = document.getElementById('credentialLock');
-      var credentialStepHint = document.getElementById('credentialStepHint');
       var proxyStateBadge = document.getElementById('proxyStateBadge');
       var proxyStatus = document.getElementById('proxyStatus');
       var testProxyButton = document.getElementById('testProxy');
       var confirmProxyButton = document.getElementById('confirmProxy');
-      var progressProxy = document.getElementById('progressProxy');
-      var progressCredentials = document.getElementById('progressCredentials');
-      var audioPlayers = {
-        normal: document.getElementById('audioNormal'),
-        warning: document.getElementById('audioWarning'),
-        critical: document.getElementById('audioCritical')
-      };
+      var tabProxy = document.getElementById('tabProxy');
+      var tabCredentials = document.getElementById('tabCredentials');
       var storedKey = '';
       var proxyReady = false;
       var proxyBusy = false;
       var confirmedProxyValue = null;
+      var activeTab = 'proxy';
       try { storedKey = sessionStorage.getItem('codex-admin-key') || ''; } catch (_) {}
       keyInput.value = storedKey;
 
@@ -503,16 +418,26 @@
       function setStatus(text, kind) { status.textContent = text; status.className = 'status ' + (kind || ''); }
       function setWizardStatus(text, kind) { wizardStatus.textContent = text; wizardStatus.className = 'wizard-status ' + (kind || ''); }
       function setProxyStatus(text, kind) { proxyStatus.textContent = text; proxyStatus.className = 'proxy-status ' + (kind || ''); }
+      function showTab(name) {
+        if (name === 'credentials' && !proxyReady) {
+          setStatus('请先完成步骤 1：测试并保存代理，或确认使用直连。', 'error');
+          return;
+        }
+        activeTab = name === 'credentials' ? 'credentials' : 'proxy';
+        var credentialsActive = activeTab === 'credentials';
+        proxySection.hidden = credentialsActive;
+        credentialsSection.hidden = !credentialsActive;
+        tabProxy.classList.toggle('active', !credentialsActive);
+        tabCredentials.classList.toggle('active', credentialsActive);
+        tabProxy.setAttribute('aria-selected', credentialsActive ? 'false' : 'true');
+        tabCredentials.setAttribute('aria-selected', credentialsActive ? 'true' : 'false');
+      }
       function setCredentialAccess(ready) {
         proxyReady = !!ready;
-        credentialsSection.classList.toggle('is-locked', !proxyReady);
-        credentialsSection.setAttribute('aria-disabled', proxyReady ? 'false' : 'true');
-        credentialLock.hidden = proxyReady;
-        credentialStepHint.textContent = proxyReady ? '已解锁，可测试账号' : '完成步骤 1 后解锁';
-        progressCredentials.classList.toggle('active', proxyReady);
-        progressCredentials.classList.toggle('done', false);
-        progressProxy.classList.toggle('done', proxyReady);
-        progressProxy.classList.toggle('active', !proxyReady);
+        tabCredentials.disabled = !proxyReady;
+        tabCredentials.setAttribute('aria-disabled', proxyReady ? 'false' : 'true');
+        tabCredentials.classList.toggle('done', proxyReady);
+        if (!proxyReady) showTab('proxy');
       }
       function setProxyState(label, kind) {
         proxyStateBadge.textContent = label;
@@ -551,6 +476,7 @@
                 setCredentialAccess(true);
                 setProxyStatus(result.message + '，代理配置已保存。', 'ok');
                 setStatus('代理已保存，请继续配置账号凭证', 'ok');
+                showTab('credentials');
                 credentialsSection.scrollIntoView({ behavior:'smooth', block:'start' });
               });
           })
@@ -564,13 +490,32 @@
             setProxyButtonsDisabled(false);
           });
       }
-      function setTokenState(config) {
-        var configured = !!config.token_configured;
-        tokenDot.className = 'state-dot ' + (configured ? 'ok' : 'error');
-        document.getElementById('tokenHint').textContent = configured ? '当前状态：已配置 ' + (config.token_hint || '') : '当前状态：未配置';
+      function renderCredentialSummary(config) {
+        credentialSummary.textContent = '';
+        var items = [
+          { text: config.token_configured ? 'Authorization 已配置 ' + (config.token_hint || '') : 'Authorization 未配置', ready: !!config.token_configured },
+          { text: config.cookie_configured ? 'Cookie 已配置' : 'Cookie 未配置', ready: !!config.cookie_configured },
+          { text: config.chatgpt_account_id ? 'Account ID 已识别' : 'Account ID 未识别', ready: !!config.chatgpt_account_id }
+        ];
+        items.forEach(function (item) {
+          var element = document.createElement('span');
+          element.textContent = item.text;
+          if (item.ready) element.className = 'ready';
+          credentialSummary.appendChild(element);
+        });
       }
-      function setCookieState(config) {
-        document.getElementById('cookieHint').textContent = config.cookie_configured ? '当前状态：' + (config.cookie_hint || '已配置') + '；留空保持不变。' : 'Cookie 未配置也可能可以请求；遇到 401 时建议从同一条请求中提取。';
+      function renderParsedSummary(values) {
+        var found = [];
+        if (values.access_token) found.push('Authorization');
+        if (values.cookie) found.push('Cookie');
+        if (values.chatgpt_account_id) found.push('Account ID');
+        if (values.user_agent) found.push('User-Agent');
+        if (values.client_build_number || values.client_version || values.device_id || values.session_id || values.client_observation || values.referer) found.push('请求上下文');
+        credentialSummary.textContent = '';
+        var element = document.createElement('span');
+        element.className = found.length ? 'ready' : '';
+        element.textContent = found.length ? '本次识别：' + found.join('、') : '尚未识别到可用字段';
+        credentialSummary.appendChild(element);
       }
       function setValue(id, value) {
         var field = document.getElementById(id);
@@ -601,6 +546,12 @@
         var cookieArg = source.match(/(?:-b|--cookie)\s+["']?([^"'\r\n]+)["']?/i);
         return cookieArg ? cookieArg[1].trim().replace(/["']+$/, '') : '';
       }
+      function readCapturedUserAgent(source) {
+        var headerUserAgent = readCapturedHeader(source, 'user-agent');
+        if (headerUserAgent) return headerUserAgent;
+        var curlUserAgent = source.match(/(?:-A|--user-agent)\s+["']?([^"'\r\n]+)["']?/i);
+        return curlUserAgent ? curlUserAgent[1].trim().replace(/["']+$/, '') : '';
+      }
       function parseCapture() {
         var source = captureInput.value.trim();
         if (!source) {
@@ -622,7 +573,7 @@
           session_id: readCapturedHeader(source, 'oai-session-id'),
           client_observation: readCapturedHeader(source, 'x-oai-is-client-observation'),
           referer: readCapturedHeader(source, 'referer'),
-          user_agent: readCapturedHeader(source, 'user-agent')
+          user_agent: readCapturedUserAgent(source)
         };
         var fields = {
           access_token: 'accessToken', cookie: 'upstreamCookie', chatgpt_account_id: 'accountId',
@@ -636,22 +587,23 @@
             found.push(key);
           }
         });
-        if (values.cookie) document.getElementById('cookieHint').textContent = '已从抓包中解析 Cookie，保存或测试后生效。';
         if (!values.access_token && !values.cookie) {
           setWizardStatus('没有识别到 Authorization 或 Cookie，请确认粘贴的是 usage 请求。', 'error');
+          renderParsedSummary(values);
           return null;
         }
-        setWizardStatus('已解析 ' + found.length + ' 项，请点击“测试连接”验证；确认无误后再保存。', 'ok');
+        renderParsedSummary(values);
+        setWizardStatus('已识别 ' + found.length + ' 项，点击“识别并覆盖保存”即可更新账号配置。', 'ok');
         return values;
       }
       function collectConfigBody() {
         var body = {
           user_agent: document.getElementById('userAgent').value.trim(),
-          fedramp: document.getElementById('fedramp').checked,
           chatgpt_account_id: document.getElementById('accountId').value.trim(),
-          proxy_url: document.getElementById('proxyUrl').value.trim(),
-          cache_ttl: document.getElementById('cacheTTL').value.trim()
+          proxy_url: document.getElementById('proxyUrl').value.trim()
         };
+        if (!body.user_agent) delete body.user_agent;
+        if (!body.chatgpt_account_id) delete body.chatgpt_account_id;
         var token = tokenInput.value.trim();
         if (token) body.access_token = token;
         var cookie = cookieInput.value.trim();
@@ -685,8 +637,7 @@
           setValue('clientObservation', config.client_observation);
           setValue('referer', config.referer);
           cookieInput.value = '';
-          setCookieState(config);
-          setTokenState(config);
+          renderCredentialSummary(config);
           if (confirmedProxyValue) {
             setProxyState('已保存', 'ready');
             setCredentialAccess(true);
@@ -699,16 +650,6 @@
           setStatus('配置已读取', 'ok');
         }).catch(function (error) { setStatus(error.message, 'error'); });
       }
-      toggleToken.addEventListener('click', function () {
-        var visible = tokenInput.type === 'text';
-        tokenInput.type = visible ? 'password' : 'text';
-        toggleToken.textContent = visible ? '显示' : '隐藏';
-      });
-      toggleCookie.addEventListener('click', function () {
-        var visible = cookieInput.type === 'text';
-        cookieInput.type = visible ? 'password' : 'text';
-        toggleCookie.textContent = visible ? '显示' : '隐藏';
-      });
       proxyInput.addEventListener('input', function () {
         if (confirmedProxyValue !== null && proxyInput.value.trim() !== confirmedProxyValue) {
           setProxyState('待验证', '');
@@ -730,65 +671,38 @@
       });
       testProxyButton.addEventListener('click', function () { testProxy(false); });
       confirmProxyButton.addEventListener('click', function () { testProxy(true); });
-      document.getElementById('goProxy').addEventListener('click', function () {
-        proxySection.scrollIntoView({ behavior:'smooth', block:'start' });
-        proxyInput.focus();
-      });
+      tabProxy.addEventListener('click', function () { showTab('proxy'); });
+      tabCredentials.addEventListener('click', function () { showTab('credentials'); });
       document.getElementById('parseCapture').addEventListener('click', parseCapture);
       document.getElementById('testConnection').addEventListener('click', function () {
+        var parsed = parseCapture();
+        if (!parsed) return;
         var body = collectConfigBody();
-        if (!body.access_token && !body.cookie) {
-          setWizardStatus('请先粘贴抓包并自动解析，或填写已有凭证。', 'error');
-          return;
-        }
-        setWizardStatus('正在连接 OpenAI 并读取额度…');
+        var button = document.getElementById('testConnection');
+        button.disabled = true;
+        setWizardStatus('正在测试账号连接，成功后自动覆盖保存…');
         fetch('api/config/test', { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(body) })
-          .then(function (response) { return response.json().then(function (data) { if (!response.ok || !data.ok) throw new Error(data.error || '连接测试失败'); return data; }); })
-          .then(function (data) {
-            var detail = data.plan_type ? '（套餐：' + data.plan_type + '）' : '';
-            setWizardStatus(data.message + detail + '；配置尚未保存。', 'ok');
-          }).catch(function (error) { setWizardStatus(error.message, 'error'); });
+          .then(function (response) { return parseResponse(response, '账号连接测试失败'); })
+          .then(function (result) {
+            return fetch('api/config', { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(body) })
+              .then(function (response) { return parseResponse(response, '账号凭证保存失败'); })
+              .then(function (config) {
+                tokenInput.value = '';
+                cookieInput.value = '';
+                renderCredentialSummary(config);
+                var detail = result.plan_type ? '（套餐：' + result.plan_type + '）' : '';
+                setWizardStatus('已识别并覆盖保存账号配置' + detail + '。', 'ok');
+                setStatus('账号凭证已更新并立即生效', 'ok');
+              });
+          })
+          .catch(function (error) { setWizardStatus(error.message, 'error'); })
+          .then(function () { button.disabled = false; });
       });
       form.addEventListener('submit', function (event) {
         event.preventDefault();
-        if (!proxyReady) {
-          setStatus('请先完成步骤 1：测试并保存代理，或确认使用直连。', 'error');
-          proxySection.scrollIntoView({ behavior:'smooth', block:'start' });
-          return;
-        }
-        var body = collectConfigBody();
-        setStatus('正在保存…');
-        fetch('api/config', { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(body) })
-          .then(function (response) { return response.json().then(function (data) { if (!response.ok) throw new Error(data.error || '保存失败'); return data; }); })
-          .then(function (config) {
-            tokenInput.value = '';
-            cookieInput.value = '';
-            setTokenState(config);
-            setCookieState(config);
-            confirmedProxyValue = proxyInput.value.trim();
-            setProxyState('已保存', 'ready');
-            setStatus('已保存并立即生效', 'ok');
-          }).catch(function (error) { setStatus(error.message, 'error'); });
+        if (activeTab === 'credentials') document.getElementById('testConnection').click();
       });
       document.getElementById('reload').addEventListener('click', loadConfig);
-      Array.prototype.forEach.call(document.querySelectorAll('[data-preview-audio]'), function (button) {
-        button.addEventListener('click', function () {
-          var kind = button.getAttribute('data-preview-audio');
-          var audio = audioPlayers[kind];
-          if (!audio) return;
-          Object.keys(audioPlayers).forEach(function (name) {
-            if (name !== kind && audioPlayers[name]) {
-              audioPlayers[name].pause();
-              audioPlayers[name].currentTime = 0;
-            }
-          });
-          audio.currentTime = 0;
-          var playback = audio.play();
-          if (playback && typeof playback.catch === 'function') {
-            playback.catch(function () { setStatus('设备阻止了播放，请先点击页面后重试', 'error'); });
-          }
-        });
-      });
       loadConfig();
     }());
   </script>
