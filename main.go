@@ -110,7 +110,10 @@ func loadConfig() (Config, error) {
 	if configPath == "" {
 		configPath = "config.json"
 	}
+	return loadConfigFile(configPath, configPathFromEnv != "")
+}
 
+func loadConfigFile(configPath string, configPathRequired bool) (Config, error) {
 	cfg := Config{
 		BindAddr:   defaultBindAddr,
 		UserAgent:  defaultUserAgent,
@@ -124,7 +127,7 @@ func loadConfig() (Config, error) {
 			return Config{}, fmt.Errorf("parse %s: %w", configPath, err)
 		}
 		applyFileConfig(&cfg, stored)
-	} else if !os.IsNotExist(err) || configPathFromEnv != "" {
+	} else if !os.IsNotExist(err) || configPathRequired {
 		return Config{}, fmt.Errorf("read %s: %w", configPath, err)
 	}
 
@@ -1060,6 +1063,17 @@ type ConfigView struct {
 	ConfigFile                  string `json:"config_file"`
 }
 
+const maxConfigFileSize = 256 << 10
+
+type ConfigFileView struct {
+	ConfigFile string `json:"config_file"`
+	Content    string `json:"content"`
+}
+
+type ConfigFileUpdate struct {
+	Content string `json:"content"`
+}
+
 type ConfigUpdate struct {
 	AccessToken       *string `json:"access_token"`
 	UpstreamCookie    *string `json:"cookie"`
@@ -1153,11 +1167,17 @@ func (s *UsageService) UpdateConfig(update ConfigUpdate) (ConfigView, error) {
 	if err := persistConfig(next); err != nil {
 		return ConfigView{}, err
 	}
+	if err := s.activateConfig(old, next); err != nil {
+		return ConfigView{}, err
+	}
+	return s.ConfigView(), nil
+}
 
+func (s *UsageService) activateConfig(old, next Config) error {
 	if next.UpstreamProxy != old.UpstreamProxy {
 		client, err := newUpstreamClient(next.UpstreamProxy)
 		if err != nil {
-			return ConfigView{}, err
+			return err
 		}
 		s.clientMu.Lock()
 		s.client = client
@@ -1180,7 +1200,7 @@ func (s *UsageService) UpdateConfig(update ConfigUpdate) (ConfigView, error) {
 	s.analyticsCachedAt = time.Time{}
 	s.analyticsCachedKey = ""
 	s.cacheMu.Unlock()
-	return s.ConfigView(), nil
+	return nil
 }
 
 func applyConfigUpdate(old Config, update ConfigUpdate) (Config, error) {
@@ -1336,7 +1356,7 @@ func proxyTestSuccessMessage(rawProxyURL string) string {
 	return "代理连接成功，可访问 chatgpt.com"
 }
 
-func persistConfig(cfg Config) error {
+func fileConfigFromConfig(cfg Config) fileConfig {
 	stored := fileConfig{
 		BindAddr:   cfg.BindAddr,
 		BasePath:   cfg.BasePath,
@@ -1359,15 +1379,88 @@ func persistConfig(cfg Config) error {
 	stored.OpenAI.UserAgent = cfg.UserAgent
 	stored.OpenAI.FedRAMP = cfg.FedRAMP
 	stored.Proxy.URL = cfg.UpstreamProxy
+	return stored
+}
 
+func marshalConfig(cfg Config) ([]byte, error) {
+	stored := fileConfigFromConfig(cfg)
 	raw, err := json.MarshalIndent(stored, "", "  ")
 	if err != nil {
-		return fmt.Errorf("encode config: %w", err)
+		return nil, fmt.Errorf("encode config: %w", err)
 	}
-	if err := os.WriteFile(cfg.ConfigPath, append(raw, '\n'), 0o600); err != nil {
+	return append(raw, '\n'), nil
+}
+
+func persistConfig(cfg Config) error {
+	raw, err := marshalConfig(cfg)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(cfg.ConfigPath, raw, 0o600); err != nil {
 		return fmt.Errorf("write config: %w", err)
 	}
 	return nil
+}
+
+func (s *UsageService) ReadConfigFile() (ConfigFileView, error) {
+	cfg := s.currentConfig()
+	raw, err := os.ReadFile(cfg.ConfigPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return ConfigFileView{}, fmt.Errorf("read config: %w", err)
+		}
+		raw, err = marshalConfig(cfg)
+		if err != nil {
+			return ConfigFileView{}, err
+		}
+	}
+	return ConfigFileView{ConfigFile: cfg.ConfigPath, Content: string(raw)}, nil
+}
+
+func (s *UsageService) UpdateConfigFile(content string) (ConfigFileView, error) {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return ConfigFileView{}, errors.New("config content cannot be empty")
+	}
+	if len([]byte(content)) > maxConfigFileSize {
+		return ConfigFileView{}, fmt.Errorf("config content exceeds %d bytes", maxConfigFileSize)
+	}
+
+	var stored fileConfig
+	if err := json.Unmarshal([]byte(content), &stored); err != nil {
+		return ConfigFileView{}, fmt.Errorf("invalid config JSON: %w", err)
+	}
+
+	current := s.currentConfig()
+	temp, err := os.CreateTemp("", "codex-usage-config-*.json")
+	if err != nil {
+		return ConfigFileView{}, fmt.Errorf("create config validation file: %w", err)
+	}
+	tempPath := temp.Name()
+	defer os.Remove(tempPath)
+	if _, err := temp.WriteString(content + "\n"); err != nil {
+		_ = temp.Close()
+		return ConfigFileView{}, fmt.Errorf("write config validation file: %w", err)
+	}
+	if err := temp.Close(); err != nil {
+		return ConfigFileView{}, fmt.Errorf("close config validation file: %w", err)
+	}
+
+	next, err := loadConfigFile(tempPath, true)
+	if err != nil {
+		return ConfigFileView{}, err
+	}
+	next.ConfigPath = current.ConfigPath
+	if _, err := buildProxyFunc(next.UpstreamProxy); err != nil {
+		return ConfigFileView{}, err
+	}
+	if err := os.WriteFile(current.ConfigPath, []byte(content+"\n"), 0o600); err != nil {
+		return ConfigFileView{}, fmt.Errorf("write config: %w", err)
+	}
+	if err := s.activateConfig(current, next); err != nil {
+		return ConfigFileView{}, err
+	}
+	return s.ReadConfigFile()
 }
 
 func (s *UsageService) getFreshCache() *UsageResponse {
@@ -1618,13 +1711,16 @@ func (s *Server) registerRoutes(mux *http.ServeMux, prefix string) {
 	mux.HandleFunc("GET "+route("/api/usage/analytics"), s.handleUsageAnalytics)
 	mux.HandleFunc("GET "+route("/api/prediction"), s.handlePrediction)
 	mux.HandleFunc("GET "+route("/api/config"), s.handleConfigGet)
+	mux.HandleFunc("GET "+route("/api/config/file"), s.handleConfigFileGet)
 	mux.HandleFunc("POST "+route("/api/config/test"), s.handleConfigTest)
 	mux.HandleFunc("POST "+route("/api/config/test-proxy"), s.handleProxyTest)
 	mux.HandleFunc("PUT "+route("/api/config"), s.handleConfigPut)
+	mux.HandleFunc("PUT "+route("/api/config/file"), s.handleConfigFilePut)
 	mux.HandleFunc("OPTIONS "+route("/api/usage"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/usage/analytics"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/prediction"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/config"), s.handleOptions)
+	mux.HandleFunc("OPTIONS "+route("/api/config/file"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/config/test"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/config/test-proxy"), s.handleOptions)
 }
@@ -1646,6 +1742,10 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 			response.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		if s.isConfigFilePath(request.URL.Path) && !middlewareConfig.BasicAuthEnabled && middlewareConfig.AppAPIKey == "" {
+			writeJSON(response, http.StatusForbidden, map[string]string{"error": "config file access requires Basic Auth or App API Key"})
+			return
+		}
 		// Basic Auth is the page/API authentication mechanism. If it is enabled
 		// and already passed, do not require a second app API key as well. The
 		// app key remains available for deployments that do not use Basic Auth.
@@ -1664,6 +1764,13 @@ func (s *Server) isAPIPath(requestPath string) bool {
 		return true
 	}
 	return s.basePath != "" && strings.HasPrefix(requestPath, s.basePath+"/api/")
+}
+
+func (s *Server) isConfigFilePath(requestPath string) bool {
+	if requestPath == "/api/config/file" {
+		return true
+	}
+	return s.basePath != "" && requestPath == s.basePath+"/api/config/file"
 }
 
 func authorized(request *http.Request, expected string) bool {
@@ -1845,6 +1952,30 @@ func (s *Server) handlePrediction(response http.ResponseWriter, request *http.Re
 
 func (s *Server) handleConfigGet(response http.ResponseWriter, _ *http.Request) {
 	writeJSON(response, http.StatusOK, s.usage.ConfigView())
+}
+
+func (s *Server) handleConfigFileGet(response http.ResponseWriter, _ *http.Request) {
+	view, err := s.usage.ReadConfigFile()
+	if err != nil {
+		writeJSON(response, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(response, http.StatusOK, view)
+}
+
+func (s *Server) handleConfigFilePut(response http.ResponseWriter, request *http.Request) {
+	request.Body = http.MaxBytesReader(response, request.Body, maxConfigFileSize+4096)
+	var input ConfigFileUpdate
+	if err := json.NewDecoder(io.LimitReader(request.Body, maxConfigFileSize+4096)).Decode(&input); err != nil {
+		writeJSON(response, http.StatusBadRequest, map[string]string{"error": "invalid config file request"})
+		return
+	}
+	view, err := s.usage.UpdateConfigFile(input.Content)
+	if err != nil {
+		writeJSON(response, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(response, http.StatusOK, view)
 }
 
 func (s *Server) handleConfigTest(response http.ResponseWriter, request *http.Request) {

@@ -246,6 +246,11 @@
     .advanced-card summary { padding:12px 14px; cursor:pointer; color:var(--text); font-size:13px; font-weight:680; }
     .advanced-card[open] summary { border-bottom:1px solid var(--border); }
     .advanced-fields { padding:14px; }
+    .config-file-card { padding:16px; }
+    .config-file-path { max-width:52%; overflow:hidden; color:var(--muted); font:12px/18px ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace; text-overflow:ellipsis; white-space:nowrap; }
+    .config-file-editor { display:block; min-height:420px; }
+    .config-file-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px; }
+    .config-file-actions .proxy-status { flex:1 1 280px; margin-top:0; }
 
     @media (max-width:900px), (max-height:700px) {
       .shell { width:calc(100% - 28px); padding:16px 0 24px; }
@@ -293,6 +298,8 @@
       .lock-notice { padding:9px 10px; }
       .advanced-card summary { padding:10px 12px; font-size:11px; }
       .advanced-fields { padding:12px; }
+      .config-file-path { max-width:42%; font-size:10px; }
+      .config-file-editor { min-height:300px; }
       .actions { gap:8px; padding-top:16px; }
       .primary, .secondary { min-height:36px; font-size:13px; font-weight:600; }
       .status { font-size:11px; }
@@ -309,6 +316,8 @@
       .step-tabs { padding-left:13px; padding-right:13px; }
       .step-card-header { gap:7px; }
       .state-badge { padding:0 7px; }
+      .config-file-path { display:none; }
+      .config-file-editor { min-height:260px; }
       .actions { flex-wrap:wrap; }
       .status { flex-basis:100%; order:3; }
     }
@@ -348,6 +357,9 @@
         </button>
         <button id="tabAudio" class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="audioSection">
           <span class="step-number">4</span><span class="step-tab-copy"><span class="step-tab-title">提示音</span></span>
+        </button>
+        <button id="tabConfigFile" class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="configFileSection">
+          <span class="step-number">5</span><span class="step-tab-copy"><span class="step-tab-title">配置文件</span></span>
         </button>
       </div>
 
@@ -484,6 +496,22 @@
           </div>
         </section>
 
+        <section id="configFileSection" class="form-section tab-panel" role="tabpanel" aria-labelledby="tabConfigFile" hidden>
+          <div class="section-head"><div class="section-title">配置文件</div><div class="section-hint">直接查看和编辑</div></div>
+          <div class="step-card config-file-card">
+            <div class="step-card-header">
+              <div><div class="step-card-title">编辑服务端 config.json</div><div class="step-card-copy">保存前会校验 JSON 和必需配置，保存后立即应用到当前服务。文件包含 OAuth Token、Cookie 和访问密码，请勿分享给他人。</div></div>
+              <span id="configFilePath" class="config-file-path" title=""></span>
+            </div>
+            <textarea id="configFileInput" class="config-file-editor" spellcheck="false" aria-label="config.json 内容" placeholder="正在读取配置文件…"></textarea>
+            <div class="config-file-actions">
+              <button id="reloadConfigFile" class="secondary" type="button">重新读取</button>
+              <button id="saveConfigFile" class="primary" type="button">保存配置文件</button>
+              <span id="configFileStatus" class="proxy-status" role="status" aria-live="polite"></span>
+            </div>
+          </div>
+        </section>
+
         <div class="actions"><button id="reload" class="secondary" type="button">重新读取</button><span id="status" class="status" role="status" aria-live="polite"></span></div>
       </form>
     </section>
@@ -510,16 +538,23 @@
       var credentialsSection = document.getElementById('credentialsSection');
       var pageAccessSection = document.getElementById('pageAccessSection');
       var audioSection = document.getElementById('audioSection');
+      var configFileSection = document.getElementById('configFileSection');
       var proxyStateBadge = document.getElementById('proxyStateBadge');
       var pageAccessStateBadge = document.getElementById('pageAccessStateBadge');
       var proxyStatus = document.getElementById('proxyStatus');
       var pageAccessStatus = document.getElementById('pageAccessStatus');
+      var configFileInput = document.getElementById('configFileInput');
+      var configFilePath = document.getElementById('configFilePath');
+      var configFileStatus = document.getElementById('configFileStatus');
+      var reloadConfigFileButton = document.getElementById('reloadConfigFile');
+      var saveConfigFileButton = document.getElementById('saveConfigFile');
       var testProxyButton = document.getElementById('testProxy');
       var confirmProxyButton = document.getElementById('confirmProxy');
       var tabProxy = document.getElementById('tabProxy');
       var tabCredentials = document.getElementById('tabCredentials');
       var tabPageAccess = document.getElementById('tabPageAccess');
       var tabAudio = document.getElementById('tabAudio');
+      var tabConfigFile = document.getElementById('tabConfigFile');
       var basicAuthEnabledInput = document.getElementById('basicAuthEnabled');
       var basicAuthUsernameInput = document.getElementById('basicAuthUsername');
       var basicAuthPasswordInput = document.getElementById('basicAuthPassword');
@@ -562,6 +597,7 @@
       function setWizardStatus(text, kind) { wizardStatus.textContent = text; wizardStatus.className = 'wizard-status ' + (kind || ''); }
       function setProxyStatus(text, kind) { proxyStatus.textContent = text; proxyStatus.className = 'proxy-status ' + (kind || ''); }
       function setPageAccessStatus(text, kind) { pageAccessStatus.textContent = text; pageAccessStatus.className = 'proxy-status ' + (kind || ''); }
+      function setConfigFileStatus(text, kind) { configFileStatus.textContent = text; configFileStatus.className = 'proxy-status ' + (kind || ''); }
       function copyText(value) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           return navigator.clipboard.writeText(value);
@@ -583,23 +619,28 @@
           setStatus('请先完成步骤 1：测试并保存代理，或使用直连并保存。', 'error');
           return;
         }
-        activeTab = name === 'credentials' ? 'credentials' : (name === 'page-access' ? 'page-access' : (name === 'audio' ? 'audio' : 'proxy'));
+        activeTab = name === 'credentials' ? 'credentials' : (name === 'page-access' ? 'page-access' : (name === 'audio' ? 'audio' : (name === 'config-file' ? 'config-file' : 'proxy')));
         var proxyActive = activeTab === 'proxy';
         var credentialsActive = activeTab === 'credentials';
         var pageAccessActive = activeTab === 'page-access';
         var audioActive = activeTab === 'audio';
+        var configFileActive = activeTab === 'config-file';
         proxySection.hidden = !proxyActive;
         credentialsSection.hidden = !credentialsActive;
         pageAccessSection.hidden = !pageAccessActive;
         audioSection.hidden = !audioActive;
+        configFileSection.hidden = !configFileActive;
         tabCredentials.classList.toggle('active', credentialsActive);
         tabPageAccess.classList.toggle('active', pageAccessActive);
         tabAudio.classList.toggle('active', audioActive);
-        tabProxy.classList.toggle('active', !credentialsActive && !pageAccessActive && !audioActive);
-        tabProxy.setAttribute('aria-selected', !credentialsActive && !pageAccessActive && !audioActive ? 'true' : 'false');
+        tabConfigFile.classList.toggle('active', configFileActive);
+        tabProxy.classList.toggle('active', !credentialsActive && !pageAccessActive && !audioActive && !configFileActive);
+        tabProxy.setAttribute('aria-selected', !credentialsActive && !pageAccessActive && !audioActive && !configFileActive ? 'true' : 'false');
         tabCredentials.setAttribute('aria-selected', credentialsActive ? 'true' : 'false');
         tabPageAccess.setAttribute('aria-selected', pageAccessActive ? 'true' : 'false');
         tabAudio.setAttribute('aria-selected', audioActive ? 'true' : 'false');
+        tabConfigFile.setAttribute('aria-selected', configFileActive ? 'true' : 'false');
+        if (configFileActive) loadConfigFile();
       }
       function setCredentialAccess(ready) {
         proxyReady = !!ready;
@@ -903,6 +944,41 @@
           .catch(function (error) { setPageAccessStatus(error.message, 'error'); })
           .then(function () { savePageAccessButton.disabled = false; });
       }
+      function renderConfigFile(view) {
+        configFileInput.value = view.content || '';
+        configFilePath.textContent = view.config_file || '';
+        configFilePath.title = view.config_file || '';
+      }
+      function loadConfigFile() {
+        reloadConfigFileButton.disabled = true;
+        setConfigFileStatus('正在读取配置文件…');
+        fetch('api/config/file', { headers: headers(), credentials:'same-origin', cache:'no-store' })
+          .then(function (response) { return parseResponse(response, '配置文件读取失败'); })
+          .then(function (view) {
+            renderConfigFile(view);
+            setConfigFileStatus('配置文件已读取。', 'ok');
+          })
+          .catch(function (error) { setConfigFileStatus(error.message, 'error'); })
+          .then(function () { reloadConfigFileButton.disabled = false; });
+      }
+      function saveConfigFile() {
+        if (saveConfigFileButton.disabled) return;
+        saveConfigFileButton.disabled = true;
+        reloadConfigFileButton.disabled = true;
+        setConfigFileStatus('正在校验并保存配置文件…');
+        fetch('api/config/file', { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify({content:configFileInput.value}) })
+          .then(function (response) { return parseResponse(response, '配置文件保存失败'); })
+          .then(function (view) {
+            renderConfigFile(view);
+            setConfigFileStatus('配置文件已保存，当前服务已应用新配置。', 'ok');
+            setStatus('配置文件已更新', 'ok');
+          })
+          .catch(function (error) { setConfigFileStatus(error.message, 'error'); })
+          .then(function () {
+            saveConfigFileButton.disabled = false;
+            reloadConfigFileButton.disabled = false;
+          });
+      }
       function loadConfig() {
         setStatus('正在读取配置…');
         return fetch('api/config', { headers: headers(), credentials:'same-origin', cache:'no-store' }).then(function (response) {
@@ -961,7 +1037,10 @@
       tabCredentials.addEventListener('click', function () { showTab('credentials'); });
       tabPageAccess.addEventListener('click', function () { showTab('page-access'); });
       tabAudio.addEventListener('click', function () { showTab('audio'); });
+      tabConfigFile.addEventListener('click', function () { showTab('config-file'); });
       savePageAccessButton.addEventListener('click', savePageAccess);
+      reloadConfigFileButton.addEventListener('click', loadConfigFile);
+      saveConfigFileButton.addEventListener('click', saveConfigFile);
       copyAnalyticsURLButton.addEventListener('click', function () {
         copyText(analyticsURL).then(function () {
           var original = copyAnalyticsURLButton.textContent;
@@ -1016,6 +1095,7 @@
         event.preventDefault();
         if (activeTab === 'credentials') document.getElementById('testConnection').click();
         if (activeTab === 'page-access') savePageAccess();
+        if (activeTab === 'config-file') saveConfigFile();
       });
       document.getElementById('reload').addEventListener('click', loadConfig);
       loadConfig();

@@ -254,6 +254,30 @@ func TestConfigViewDoesNotExposeUsageProvider(t *testing.T) {
 	}
 }
 
+func TestConfigFileRoundTrip(t *testing.T) {
+	service := &UsageService{cfg: Config{
+		ConfigPath:       t.TempDir() + "/config.json",
+		AccessToken:      "old-token",
+		ChatGPTAccountID: "old-account",
+		CacheTTL:         time.Minute,
+	}}
+	content := `{"openai":{"access_token":"new-token","chatgpt_account_id":"new-account"}}`
+
+	view, err := service.UpdateConfigFile(content)
+	if err != nil {
+		t.Fatalf("update config file: %v", err)
+	}
+	if view.ConfigFile != service.cfg.ConfigPath {
+		t.Fatalf("config file path = %q, want %q", view.ConfigFile, service.cfg.ConfigPath)
+	}
+	if view.Content != content+"\n" {
+		t.Fatalf("config file content = %q, want %q", view.Content, content+"\n")
+	}
+	if got := service.currentConfig().AccessToken; got != "new-token" {
+		t.Fatalf("active access token = %q, want new-token", got)
+	}
+}
+
 func TestApplyConfigUpdateSupportsCapturedOpenAIContext(t *testing.T) {
 	old := Config{
 		AccessToken:      "old-token",
