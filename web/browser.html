@@ -259,7 +259,7 @@
         <div class="chart-panel"><div class="chart-head"><span>每日 Token 数</span><strong>单位：M</strong></div><div id="dailyTokenChart" class="chart-bars"></div></div>
         <div class="chart-panel"><div class="chart-head"><span>每日对话轮次</span><strong>工作区统计</strong></div><div id="workspaceUsageChart" class="chart-bars"></div></div>
         <div class="chart-panel wide"><div class="chart-head"><span>模型每日使用</span><strong>单位：%</strong></div><div id="modelUsageChart" class="model-chart"></div></div>
-        <div class="chart-panel wide"><div class="chart-head"><span>昨日模型使用占比</span><strong>按额度</strong></div><div id="yesterdayModelPieChart" class="model-share"></div></div>
+        <div class="chart-panel wide"><div class="chart-head"><span>模型使用占比</span><strong>按额度</strong></div><div id="yesterdayModelPieChart" class="model-share"></div></div>
       </div>
     </section>
 
@@ -364,10 +364,10 @@
         var day = days && days.length ? days[days.length - 1] : null; var values = {};
         (day && day.models || []).forEach(function (model) { var name = model && model.model ? String(model.model) : 'unknown'; var value = number(model && model.usage_percent); if (isFinite(value) && value > 0) values[name] = (values[name] || 0) + value; });
         var models = Object.keys(values).map(function (name) { return {name:name,value:values[name]}; }).sort(function (left, right) { return right.value - left.value; });
-        if (!models.length) { container.innerHTML = '<div class="empty">暂无昨日模型使用数据</div>'; return; }
-        var total = models.reduce(function (sum, model) { return sum + model.value; }, 0); var circumference = 2 * Math.PI * 40; var offset = 0; var svg = '<svg viewBox="0 0 100 100" role="img" aria-label="昨日模型使用占比"><circle class="track" cx="50" cy="50" r="40"></circle>';
+        if (!models.length) { container.innerHTML = '<div class="empty">暂无模型使用数据</div>'; return; }
+        var total = models.reduce(function (sum, model) { return sum + model.value; }, 0); var circumference = 2 * Math.PI * 40; var offset = 0; var svg = '<svg viewBox="0 0 100 100" role="img" aria-label="模型使用占比"><circle class="track" cx="50" cy="50" r="40"></circle>';
         models.forEach(function (model, index) { var length = circumference * model.value / total; svg += '<circle cx="50" cy="50" r="40" stroke="' + palette[index % palette.length] + '" stroke-dasharray="' + length + ' ' + (circumference - length) + '" stroke-dashoffset="' + (-offset) + '" transform="rotate(-90 50 50)"></circle>'; offset += length; });
-        svg += '<text x="50" y="48">昨日</text><text class="total" x="50" y="61">' + escaped(token(day && day.text_total_tokens)) + '</text></svg><div class="share-legend">';
+        svg += '<text class="total" x="50" y="55">' + escaped(token(day && day.text_total_tokens)) + '</text></svg><div class="share-legend">';
         models.forEach(function (model, index) { svg += '<div class="share-item"><i class="legend-color" style="background:' + palette[index % palette.length] + '"></i><span class="share-name" title="' + escaped(model.name) + '">' + escaped(model.name) + '</span><strong>' + escaped(percent(model.value / total * 100)) + '%</strong></div>'; });
         container.innerHTML = svg + '</div>';
       }
