@@ -18,6 +18,28 @@ func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) 
 	return f(request)
 }
 
+func TestDeviceWebViewDetection(t *testing.T) {
+	tests := []struct {
+		name string
+		ua   string
+		want bool
+	}{
+		{name: "LX04", ua: "Mozilla/5.0 (Linux; Android 8.1.0; LX04 Build/OPM1) AppleWebKit/537.36 Chrome/70.0 Mobile Safari/537.36", want: true},
+		{name: "Android WebView", ua: "Mozilla/5.0 (Linux; Android 8.1.0; wv) AppleWebKit/537.36 Version/4.0 Chrome/70.0 Mobile Safari/537.36", want: true},
+		{name: "Android Chrome", ua: "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/151.0 Mobile Safari/537.36", want: false},
+		{name: "Desktop Chrome", ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0 Safari/537.36", want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/", nil)
+			request.Header.Set("User-Agent", test.ua)
+			if got := isDeviceWebViewRequest(request); got != test.want {
+				t.Fatalf("isDeviceWebViewRequest() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
 func TestWhamResponseDecodesAndNormalizesWindows(t *testing.T) {
 	raw := []byte(`{
         "plan_type":"plus",

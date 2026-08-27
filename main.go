@@ -33,11 +33,15 @@ const (
 	dailyWorkspaceUsageEndpoint = "https://chatgpt.com/backend-api/wham/analytics/daily-workspace-usage-counts"
 )
 
-// indexHTML is embedded so the same Go binary serves both the API and the
-// LX04 WebView page. There is no CDN or separate frontend build step.
+// The two embedded pages intentionally have different layouts: indexHTML is
+// the compact LX04 WebView page, while browserHTML is the browser workbench.
+// There is no CDN or separate frontend build step.
 //
 //go:embed web/index.html
 var indexHTML []byte
+
+//go:embed web/browser.html
+var browserHTML []byte
 
 //go:embed web/settings.html
 var settingsHTML []byte
@@ -1342,11 +1346,29 @@ func (s *Server) handleHealth(response http.ResponseWriter, _ *http.Request) {
 	writeJSON(response, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (s *Server) handleIndex(response http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleIndex(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Content-Type", "text/html; charset=utf-8")
 	response.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 	response.WriteHeader(http.StatusOK)
-	_, _ = response.Write(indexHTML)
+	page := indexHTML
+	if !isDeviceWebViewRequest(request) {
+		page = browserHTML
+	}
+	_, _ = response.Write(page)
+}
+
+func isDeviceWebViewRequest(request *http.Request) bool {
+	if request == nil {
+		return false
+	}
+	userAgent := strings.ToLower(request.Header.Get("User-Agent"))
+	if strings.Contains(userAgent, "lx04") {
+		return true
+	}
+	if !strings.Contains(userAgent, "android") {
+		return false
+	}
+	return strings.Contains(userAgent, "; wv") || strings.Contains(userAgent, "version/4.0") || strings.Contains(userAgent, "androidstream")
 }
 
 func (s *Server) handleSettings(response http.ResponseWriter, _ *http.Request) {

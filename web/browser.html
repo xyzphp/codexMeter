@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f7f8">
+  <title>ChatGPT &amp; Codex 使用面板</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --page:#f7f7f8; --card:#fff; --soft:#f1f1f2; --track:#e5e5e7;
+      --text:#202123; --muted:#6e6e80; --border:#e4e4e7;
+      --accent:#10a37f; --lime:#a7c957; --warning:#d99a00; --danger:#c2413b;
+      --shadow:0 18px 42px rgba(32,33,35,.09);
+    }
+    html[data-theme="dark"] {
+      color-scheme:dark;
+      --page:#171717; --card:#242424; --soft:#303030; --track:#44444b;
+      --text:#f4f4f5; --muted:#a1a1aa; --border:#3f3f46;
+      --accent:#34d399; --lime:#bef264; --warning:#facc15; --danger:#f87171;
+      --shadow:0 18px 42px rgba(0,0,0,.26);
+    }
+    * { box-sizing:border-box; }
+    html, body { min-height:100%; margin:0; }
+    body { overflow-y:auto; background:var(--page); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+    button, a { font:inherit; color:inherit; }
+    button { cursor:pointer; }
+    .page { width:min(1400px,calc(100% - 48px)); margin:0 auto; padding:28px 0 36px; }
+    .page-header { display:flex; align-items:center; justify-content:space-between; gap:24px; margin-bottom:20px; }
+    .brand { display:inline-flex; align-items:center; min-width:0; color:var(--text); text-decoration:none; }
+    .brand-mark { width:42px; height:42px; flex:0 0 42px; display:block; fill:currentColor; }
+    .brand-title { margin-left:16px; font-size:25px; font-weight:680; letter-spacing:-.3px; }
+    .header-actions { display:flex; align-items:center; gap:10px; }
+    .status { display:flex; align-items:center; gap:8px; margin-right:10px; color:var(--muted); font-size:14px; white-space:nowrap; }
+    .status-dot { width:9px; height:9px; flex:0 0 9px; border-radius:50%; background:var(--accent); }
+    .status-dot.error { background:var(--danger); }
+    .action { min-height:40px; padding:0 15px; border:1px solid var(--border); border-radius:11px; background:var(--card); color:var(--muted); text-decoration:none; font-size:14px; transition:background .18s ease,transform .1s ease; }
+    .action:hover { background:var(--soft); }
+    .action:active { transform:translateY(1px); }
+    .action.primary { border-color:var(--accent); background:var(--accent); color:#fff; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:24px; box-shadow:var(--shadow); }
+    .quota-card { padding:30px 32px 26px; }
+    .card-head { display:flex; align-items:baseline; justify-content:space-between; gap:16px; }
+    .card-title { font-size:22px; font-weight:700; letter-spacing:-.2px; }
+    .card-meta { color:var(--muted); font-size:13px; white-space:nowrap; }
+    .quota-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:28px; margin-top:28px; }
+    .quota-window { min-width:0; padding:0 6px; }
+    .quota-window + .quota-window { padding-left:34px; border-left:1px solid var(--border); }
+    .eyebrow { color:var(--muted); font-size:16px; }
+    .quota-value { margin-top:6px; font-size:92px; line-height:.94; font-weight:730; letter-spacing:-5px; white-space:nowrap; }
+    .quota-value span { margin-left:6px; font-size:36px; letter-spacing:-1px; font-weight:650; }
+    .quota-subline { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:16px; color:var(--muted); font-size:14px; }
+    .quota-subline strong { color:var(--text); font-size:16px; }
+    .progress-track { width:100%; height:12px; margin-top:8px; overflow:hidden; background:var(--track); border-radius:999px; }
+    .progress-bar { width:0; height:100%; background:var(--accent); border-radius:inherit; transition:width .35s ease,background .25s ease; }
+    .progress-bar.warning { background:var(--warning); }
+    .progress-bar.critical { background:var(--danger); }
+    .reset-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:30px; padding-top:24px; border-top:1px solid var(--border); }
+    .reset-card { min-width:0; padding:18px 20px 20px; border:1px solid var(--border); border-radius:16px; background:var(--soft); }
+    .reset-label { color:var(--muted); font-size:14px; }
+    .reset-at { margin-top:7px; font-size:24px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .reset-head { display:flex; justify-content:space-between; gap:10px; margin-top:17px; color:var(--muted); font-size:13px; }
+    .reset-head strong { color:var(--text); font-size:14px; }
+    .reset-track { width:100%; height:8px; margin-top:7px; overflow:hidden; background:var(--track); border-radius:999px; }
+    .reset-bar { width:0; height:100%; background:var(--accent); border-radius:inherit; transition:width .35s ease,background .25s ease; }
+    .reset-bar.lime { background:var(--lime); }
+    .reset-bar.warning { background:var(--warning); }
+    .reset-bar.critical { background:var(--danger); }
+    .refresh-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:22px; color:var(--muted); font-size:14px; }
+    .refresh-row strong { color:var(--text); font-size:15px; }
+    .refresh-track { height:8px; margin-top:8px; }
+
+    .section { margin-top:20px; padding:26px 30px 30px; }
+    .summary-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-top:20px; }
+    .summary { min-width:0; padding:14px 16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
+    .summary-label { color:var(--muted); font-size:13px; }
+    .summary-value { margin-top:5px; font-size:25px; font-weight:710; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .charts-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:16px; }
+    .chart-panel { min-width:0; padding:16px 18px 14px; border:1px solid var(--border); border-radius:16px; background:var(--soft); }
+    .chart-panel.wide { grid-column:1/-1; }
+    .chart-head { display:flex; justify-content:space-between; gap:12px; color:var(--muted); font-size:14px; }
+    .chart-head strong { color:var(--text); font-size:14px; }
+    .chart-bars { height:190px; display:flex; align-items:stretch; gap:8px; padding-top:12px; }
+    .chart-column { min-width:0; flex:1 1 0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; }
+    .chart-bar-value { height:22px; color:var(--text); font-size:12px; line-height:22px; white-space:nowrap; }
+    .chart-bar-shell { width:100%; height:128px; display:flex; align-items:flex-end; overflow:hidden; background:var(--track); border-radius:7px 7px 4px 4px; }
+    .chart-bar { width:100%; min-height:2px; background:var(--accent); border-radius:7px 7px 3px 3px; }
+    .chart-bar.workspace { background:var(--lime); }
+    .chart-date { margin-top:6px; color:var(--muted); font-size:12px; white-space:nowrap; }
+    .model-chart { margin-top:4px; }
+    .model-plot { height:190px; display:flex; align-items:stretch; gap:8px; padding-top:12px; }
+    .model-column { min-width:0; flex:1 1 0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; }
+    .model-total { height:22px; color:var(--text); font-size:12px; line-height:22px; white-space:nowrap; }
+    .model-stack { width:100%; height:128px; display:flex; flex-direction:column-reverse; overflow:hidden; background:var(--track); border-radius:7px 7px 4px 4px; }
+    .model-segment { width:100%; min-height:0; }
+    .model-date { margin-top:6px; color:var(--muted); font-size:12px; white-space:nowrap; }
+    .legend { display:flex; flex-wrap:wrap; gap:9px 18px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border); }
+    .legend-item { display:flex; align-items:center; min-width:0; color:var(--muted); font-size:13px; }
+    .legend-color { width:10px; height:10px; flex:0 0 10px; margin-right:7px; border-radius:3px; }
+    .legend-label { max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .model-share { min-height:214px; display:flex; align-items:center; gap:26px; margin-top:4px; }
+    .model-share svg { width:190px; height:190px; flex:0 0 190px; color:var(--text); }
+    .model-share circle { fill:none; stroke-width:14; }
+    .model-share .track { stroke:var(--track); }
+    .model-share text { fill:currentColor; text-anchor:middle; font-size:10px; }
+    .model-share .total { font-size:18px; font-weight:720; }
+    .share-legend { min-width:0; flex:1 1 auto; }
+    .share-item { display:flex; align-items:center; min-width:0; color:var(--muted); font-size:15px; line-height:20px; }
+    .share-item + .share-item { margin-top:11px; }
+    .share-item .legend-color { width:11px; height:11px; flex-basis:11px; margin-right:9px; border-radius:50%; }
+    .share-item .share-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .share-item strong { margin-left:auto; padding-left:14px; color:var(--text); white-space:nowrap; }
+    .empty { min-height:120px; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:14px; }
+    .error { color:var(--danger); }
+
+    .prediction-hero { margin-top:20px; padding:20px 22px; border:1px solid var(--border); border-radius:16px; background:var(--soft); }
+    .prediction-state { font-size:22px; font-weight:700; }
+    .prediction-state.danger { color:var(--danger); }
+    .prediction-hint { margin-top:6px; color:var(--muted); font-size:14px; }
+    .prediction-probability { margin-top:18px; }
+    .prediction-probability-head { display:flex; justify-content:space-between; gap:12px; margin-bottom:8px; color:var(--muted); font-size:14px; }
+    .prediction-probability-head strong { color:var(--text); font-size:15px; }
+    .prediction-track { height:8px; margin-top:0; }
+    .prediction-bar { width:0; height:100%; background:var(--accent); border-radius:inherit; }
+    .prediction-bar.high { background:var(--warning); }
+    .prediction-bar.error { background:var(--danger); }
+    .prediction-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-top:16px; }
+    .prediction-metric { min-width:0; padding:14px 16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
+    .prediction-metric-label { color:var(--muted); font-size:13px; }
+    .prediction-metric-value { margin-top:5px; font-size:21px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .prediction-list { margin-top:16px; overflow:hidden; border:1px solid var(--border); border-radius:14px; }
+    .prediction-row { display:flex; justify-content:space-between; gap:18px; min-height:42px; padding:10px 16px; border-bottom:1px solid var(--border); font-size:14px; }
+    .prediction-row:last-child { border-bottom:0; }
+    .prediction-row span { color:var(--muted); }
+    .prediction-row strong { min-width:0; overflow:hidden; text-align:right; text-overflow:ellipsis; white-space:nowrap; }
+    .footnote { margin-top:14px; color:var(--muted); font-size:12px; }
+
+    @media (max-width:900px), (max-height:700px) {
+      .page { width:calc(100% - 28px); padding:16px 0 24px; }
+      .page-header { gap:12px; margin-bottom:12px; }
+      .brand-mark { width:32px; height:32px; flex-basis:32px; }
+      .brand-title { margin-left:11px; font-size:19px; }
+      .header-actions { gap:6px; }
+      .status { display:none; }
+      .action { min-height:34px; padding:0 10px; font-size:12px; }
+      .card, .section { border-radius:16px; }
+      .quota-card, .section { padding:16px 14px 18px; }
+      .quota-grid, .reset-grid { gap:10px; margin-top:16px; }
+      .quota-window { padding:0 2px; }
+      .quota-window + .quota-window { padding-left:12px; }
+      .eyebrow { font-size:12px; }
+      .quota-value { margin-top:4px; font-size:54px; letter-spacing:-3px; }
+      .quota-value span { margin-left:3px; font-size:24px; }
+      .quota-subline { margin-top:9px; font-size:10px; }
+      .quota-subline strong { font-size:11px; }
+      .progress-track { height:8px; margin-top:5px; }
+      .reset-grid { margin-top:16px; padding-top:14px; }
+      .reset-card { padding:10px 11px 12px; border-radius:11px; }
+      .reset-label { font-size:10px; }
+      .reset-at { margin-top:4px; font-size:16px; }
+      .reset-head { margin-top:9px; font-size:9px; }
+      .reset-head strong { font-size:10px; }
+      .reset-track, .refresh-track { height:5px; margin-top:5px; }
+      .refresh-row { margin-top:12px; font-size:10px; }
+      .refresh-row strong { font-size:11px; }
+      .card-title { font-size:18px; }
+      .card-meta { font-size:10px; }
+      .summary-grid, .prediction-grid { gap:7px; margin-top:12px; }
+      .summary { padding:8px 9px; border-radius:10px; }
+      .summary-label, .prediction-metric-label { font-size:10px; }
+      .summary-value { font-size:17px; }
+      .charts-grid { gap:9px; margin-top:9px; }
+      .chart-panel { padding:10px 9px 8px; border-radius:10px; }
+      .chart-head { font-size:10px; }
+      .chart-head strong { font-size:10px; }
+      .chart-bars, .model-plot { height:116px; gap:5px; padding-top:6px; }
+      .chart-bar-value, .model-total { height:15px; font-size:8px; line-height:15px; }
+      .chart-bar-shell, .model-stack { height:74px; border-radius:5px 5px 3px 3px; }
+      .chart-date, .model-date { margin-top:3px; font-size:8px; }
+      .legend { gap:5px 10px; margin-top:7px; padding-top:6px; }
+      .legend-item { font-size:9px; }
+      .legend-color { width:7px; height:7px; flex-basis:7px; margin-right:4px; }
+      .model-share { min-height:126px; gap:12px; }
+      .model-share svg { width:112px; height:112px; flex-basis:112px; }
+      .model-share .total { font-size:11px; }
+      .share-item { font-size:10px; line-height:13px; }
+      .share-item + .share-item { margin-top:6px; }
+      .share-item .legend-color { width:8px; height:8px; flex-basis:8px; margin-right:5px; }
+      .prediction-hero { margin-top:12px; padding:12px; border-radius:11px; }
+      .prediction-state { font-size:16px; }
+      .prediction-hint { margin-top:4px; font-size:10px; }
+      .prediction-probability { margin-top:10px; }
+      .prediction-probability-head { margin-bottom:5px; font-size:10px; }
+      .prediction-probability-head strong { font-size:11px; }
+      .prediction-track { height:6px; }
+      .prediction-metric { padding:8px 9px; border-radius:10px; }
+      .prediction-metric-value { margin-top:3px; font-size:15px; }
+      .prediction-list { margin-top:9px; border-radius:10px; }
+      .prediction-row { min-height:27px; padding:6px 9px; gap:8px; font-size:10px; }
+      .footnote { margin-top:8px; font-size:9px; }
+    }
+    @media (max-width:600px) {
+      .quota-grid, .reset-grid, .charts-grid { grid-template-columns:1fr; }
+      .quota-window + .quota-window { padding:12px 2px 0; border-top:1px solid var(--border); border-left:0; }
+      .chart-panel.wide { grid-column:auto; }
+      .prediction-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <a class="brand" href="./" aria-label="额度页面">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 0 0-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 0 1 .476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 0 1 4.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 0 1-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 0 0 5.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0 0 10.205 0a5.947 5.947 0 0 0-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 0 0 4.162 1.713z" /></svg>
+        <span class="brand-title">ChatGPT &amp; Codex 使用面板</span>
+      </a>
+      <div class="header-actions">
+        <div class="status"><i id="statusDot" class="status-dot"></i><span id="statusText">读取中</span></div>
+        <button id="refreshButton" class="action primary" type="button">刷新数据</button>
+        <a class="action" href="settings">设置</a>
+        <button id="themeButton" class="action" type="button">切换主题</button>
+      </div>
+    </header>
+
+    <section class="card quota-card" aria-label="额度概览">
+      <div class="card-head"><div class="card-title">额度概览</div><div id="usageUpdated" class="card-meta">读取中…</div></div>
+      <div class="quota-grid">
+        <article class="quota-window">
+          <div class="eyebrow">5 小时剩余额度</div>
+          <div id="fiveHourRemaining" class="quota-value">—<span>%</span></div>
+          <div class="quota-subline"><span>剩余进度</span><strong id="fiveHourProgress">—%</strong></div>
+          <div class="progress-track"><div id="fiveHourBar" class="progress-bar"></div></div>
+        </article>
+        <article class="quota-window">
+          <div class="eyebrow">本周剩余额度</div>
+          <div id="weeklyRemaining" class="quota-value">—<span>%</span></div>
+          <div class="quota-subline"><span>剩余进度</span><strong id="weeklyProgress">—%</strong></div>
+          <div class="progress-track"><div id="weeklyBar" class="progress-bar"></div></div>
+        </article>
+      </div>
+      <div class="reset-grid">
+        <article class="reset-card"><div class="reset-label">5 小时重置</div><div id="fiveHourResetAt" class="reset-at">—</div><div class="reset-head"><span>距离重置剩余</span><strong id="fiveHourResetProgress">—%</strong></div><div class="reset-track"><div id="fiveHourResetBar" class="reset-bar"></div></div></article>
+        <article class="reset-card"><div class="reset-label">下次重置</div><div id="weeklyResetAt" class="reset-at">—</div><div class="reset-head"><span>距离重置剩余</span><strong id="weeklyResetProgress">—%</strong></div><div class="reset-track"><div id="weeklyResetBar" class="reset-bar"></div></div></article>
+      </div>
+      <div class="refresh-row"><span>自动刷新</span><strong id="refreshCountdown">05:00</strong></div>
+      <div class="progress-track refresh-track"><div id="refreshBar" class="progress-bar"></div></div>
+    </section>
+
+    <section class="card section" aria-label="使用分析">
+      <div class="card-head"><div class="card-title">使用分析</div><div id="analyticsUpdated" class="card-meta">读取中…</div></div>
+      <div class="summary-grid">
+        <div class="summary"><div class="summary-label">近七天额度使用</div><div id="analyticsUsagePercent" class="summary-value">—</div></div>
+        <div class="summary"><div class="summary-label">总对话轮次</div><div id="analyticsTurns" class="summary-value">—</div></div>
+        <div class="summary"><div class="summary-label">总计使用量</div><div id="analyticsTokens" class="summary-value">—</div></div>
+      </div>
+      <div class="charts-grid">
+        <div class="chart-panel"><div class="chart-head"><span>每日 Token 数</span><strong>单位：M</strong></div><div id="dailyTokenChart" class="chart-bars"></div></div>
+        <div class="chart-panel"><div class="chart-head"><span>每日对话轮次</span><strong>工作区统计</strong></div><div id="workspaceUsageChart" class="chart-bars"></div></div>
+        <div class="chart-panel wide"><div class="chart-head"><span>模型每日使用</span><strong>单位：%</strong></div><div id="modelUsageChart" class="model-chart"></div></div>
+        <div class="chart-panel wide"><div class="chart-head"><span>昨日模型使用占比</span><strong>按额度</strong></div><div id="yesterdayModelPieChart" class="model-share"></div></div>
+      </div>
+    </section>
+
+    <section class="card section" aria-label="重置预测">
+      <div class="card-head"><div class="card-title">重置预测</div><div id="predictionUpdated" class="card-meta">公共信号</div></div>
+      <div class="prediction-hero">
+        <div id="predictionState" class="prediction-state">读取中…</div>
+        <div id="predictionHint" class="prediction-hint">正在获取公共重置信号</div>
+        <div class="prediction-probability"><div class="prediction-probability-head"><span>重置概率</span><strong id="predictionChance">—</strong></div><div class="progress-track prediction-track"><div id="predictionChanceBar" class="prediction-bar"></div></div></div>
+      </div>
+      <div class="prediction-grid">
+        <div class="prediction-metric"><div class="prediction-metric-label">信号级别</div><div id="predictionLevel" class="prediction-metric-value">—</div></div>
+        <div class="prediction-metric"><div class="prediction-metric-label">观察窗口</div><div id="predictionWindow" class="prediction-metric-value">—</div></div>
+        <div class="prediction-metric"><div class="prediction-metric-label">历史公告</div><div id="predictionTotal" class="prediction-metric-value">—</div></div>
+        <div class="prediction-metric"><div class="prediction-metric-label">平均间隔</div><div id="predictionAverage" class="prediction-metric-value">—</div></div>
+      </div>
+      <div class="prediction-list">
+        <div class="prediction-row"><span>最新公共重置</span><strong id="predictionLatestType">—</strong></div>
+        <div class="prediction-row"><span>公告时间</span><strong id="predictionLatestAt">—</strong></div>
+        <div class="prediction-row"><span>公告内容</span><strong id="predictionLatestText">—</strong></div>
+      </div>
+      <div class="footnote">数据来源：codex-resets.com · 公共预测仅供参考</div>
+    </section>
+  </main>
+  <script>
+    (function () {
+      'use strict';
+      var refreshTotal = 300;
+      var refreshRemaining = refreshTotal;
+      var refreshBusy = false;
+      var resetWindows = {};
+      var palette = ['#10a37f','#a7c957','#d99a00','#d64545','#7c83fd','#c084fc','#38bdf8','#fb7185'];
+      function byId(id) { return document.getElementById(id); }
+      function text(id, value) { var element = byId(id); if (element) element.textContent = value; }
+      function style(id, property, value) { var element = byId(id); if (element) element.style[property] = value; }
+      function classes(id, value) { var element = byId(id); if (element) element.className = value; }
+      function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
+      function number(value) { var parsed = Number(value); return isFinite(parsed) ? parsed : NaN; }
+      function percent(value) { var parsed = number(value); return isFinite(parsed) ? String(Math.round(parsed * 10) / 10).replace('.0', '') : '—'; }
+      function token(value) { var parsed = number(value); return isFinite(parsed) ? percent(parsed / 1000000) + 'M' : '—'; }
+      function compact(value) { var parsed = number(value); if (!isFinite(parsed)) return '—'; if (Math.abs(parsed) >= 1000000) return percent(parsed / 1000000) + 'M'; if (Math.abs(parsed) >= 1000) return percent(parsed / 1000) + 'K'; return String(Math.round(parsed)); }
+      function date(value) { if (!value) return '—'; var parsed = new Date(value); if (isNaN(parsed.getTime())) return '—'; var pad = function (v) { return String(v).padStart(2, '0'); }; return parsed.getFullYear() + '-' + pad(parsed.getMonth() + 1) + '-' + pad(parsed.getDate()) + ' ' + pad(parsed.getHours()) + ':' + pad(parsed.getMinutes()) + ':' + pad(parsed.getSeconds()); }
+      function escaped(value) { return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, function (character) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]; }); }
+      function quotaClass(value) { if (!isFinite(value) || value <= 20) return 'critical'; if (value <= 50) return 'warning'; return ''; }
+      function renderWindow(window, prefix, resetPrefix) {
+        var used = number(window && window.used_percent);
+        var remaining = isFinite(used) ? clamp(100 - used, 0, 100) : NaN;
+        if (!isFinite(remaining)) { text(prefix + 'Remaining', '—%'); text(prefix + 'Progress', '—%'); classes(prefix + 'Bar', 'progress-bar'); style(prefix + 'Bar', 'width', '0%'); }
+        else { text(prefix + 'Remaining', percent(remaining) + '%'); text(prefix + 'Progress', percent(remaining) + '%'); classes(prefix + 'Bar', 'progress-bar ' + quotaClass(remaining)); style(prefix + 'Bar', 'width', remaining + '%'); }
+        resetWindows[resetPrefix] = window || null;
+        renderReset(window, resetPrefix);
+      }
+      function resetClass(value) { if (!isFinite(value) || value <= 20) return 'critical'; if (value <= 50) return 'warning'; if (value < 80) return 'lime'; return ''; }
+      function renderReset(window, prefix) {
+        var at = window && new Date(window.reset_at);
+        var atMs = at && !isNaN(at.getTime()) ? at.getTime() : 0;
+        var duration = number(window && window.window_minutes) * 60 * 1000;
+        var seconds = number(window && window.remaining_seconds);
+        var left = isFinite(seconds) ? Math.max(0, seconds * 1000) : Math.max(0, atMs - Date.now());
+        var ratio = duration > 0 ? clamp(left / duration * 100, 0, 100) : 0;
+        text(prefix + 'At', atMs ? date(at) : '—');
+        text(prefix + 'Progress', atMs && duration > 0 ? percent(ratio) + '%' : '—%');
+        style(prefix + 'Bar', 'width', ratio + '%');
+        classes(prefix + 'Bar', 'reset-bar ' + resetClass(ratio));
+      }
+      function renderResets() { renderReset(resetWindows.fiveHour, 'fiveHourReset'); renderReset(resetWindows.weekly, 'weeklyReset'); }
+      function renderUsage(usage) {
+        var fiveHour = usage && usage.five_hour;
+        var weekly = usage && usage.seven_day;
+        renderWindow(fiveHour, 'fiveHour', 'fiveHourReset');
+        renderWindow(weekly, 'weekly', 'weeklyReset');
+        text('usageUpdated', usage && usage.fetched_at ? '更新 ' + date(usage.fetched_at) : '已连接');
+        classes('statusDot', 'status-dot'); text('statusText', '已连接');
+      }
+      function renderBars(id, days, property, formatter, barClass) {
+        var container = byId(id); if (!container) return;
+        if (!days || !days.length) { container.innerHTML = '<div class="empty">暂无最近七天数据</div>'; return; }
+        var values = days.map(function (day) { var value = number(day && day[property]); return isFinite(value) && value > 0 ? value : 0; });
+        var max = Math.max.apply(null, values.concat([0]));
+        container.innerHTML = days.map(function (day, index) { var value = values[index]; var height = max > 0 && value > 0 ? Math.max(5, value / max * 100) : 0; var dayLabel = String(day && day.date || '').slice(5).replace('-', '/'); return '<div class="chart-column"><div class="chart-bar-value">' + escaped(formatter(value)) + '</div><div class="chart-bar-shell"><div class="chart-bar ' + barClass + '" style="height:' + height + '%"></div></div><div class="chart-date">' + escaped(dayLabel || '—') + '</div></div>'; }).join('');
+      }
+      function renderModelBars(days) {
+        var container = byId('modelUsageChart'); if (!container) return;
+        var totals = {}, byDate = {};
+        (days || []).forEach(function (day) { var dayDate = day && day.date; if (!dayDate) return; byDate[dayDate] = {}; (day.models || []).forEach(function (model) { var name = model && model.model ? String(model.model) : 'unknown'; var value = number(model && model.usage_percent); if (!isFinite(value) || value < 0) value = 0; byDate[dayDate][name] = value; totals[name] = (totals[name] || 0) + value; }); });
+        var names = Object.keys(totals).sort(function (left, right) { return totals[right] - totals[left]; });
+        if (!names.length) { container.innerHTML = '<div class="empty">暂无模型使用数据</div>'; return; }
+        var max = 0; (days || []).forEach(function (day) { var values = byDate[day.date] || {}; var total = names.reduce(function (sum, name) { return sum + (values[name] || 0); }, 0); if (total > max) max = total; });
+        var html = '<div class="model-plot">';
+        (days || []).forEach(function (day) { var values = byDate[day.date] || {}; var total = names.reduce(function (sum, name) { return sum + (values[name] || 0); }, 0); var segments = names.map(function (name, index) { var height = max > 0 ? (values[name] || 0) / max * 100 : 0; return '<div class="model-segment" style="height:' + height + '%;background:' + palette[index % palette.length] + '"></div>'; }).join(''); html += '<div class="model-column"><div class="model-total">' + escaped(percent(total)) + '%</div><div class="model-stack">' + segments + '</div><div class="model-date">' + escaped(String(day.date || '').slice(5).replace('-', '/') || '—') + '</div></div>'; });
+        html += '</div><div class="legend">' + names.map(function (name, index) { return '<div class="legend-item"><i class="legend-color" style="background:' + palette[index % palette.length] + '"></i><span class="legend-label" title="' + escaped(name) + '">' + escaped(name) + '</span></div>'; }).join('') + '</div>';
+        container.innerHTML = html;
+      }
+      function renderShare(days) {
+        var container = byId('yesterdayModelPieChart'); if (!container) return;
+        var day = days && days.length ? days[days.length - 1] : null; var values = {};
+        (day && day.models || []).forEach(function (model) { var name = model && model.model ? String(model.model) : 'unknown'; var value = number(model && model.usage_percent); if (isFinite(value) && value > 0) values[name] = (values[name] || 0) + value; });
+        var models = Object.keys(values).map(function (name) { return {name:name,value:values[name]}; }).sort(function (left, right) { return right.value - left.value; });
+        if (!models.length) { container.innerHTML = '<div class="empty">暂无昨日模型使用数据</div>'; return; }
+        var total = models.reduce(function (sum, model) { return sum + model.value; }, 0); var circumference = 2 * Math.PI * 40; var offset = 0; var svg = '<svg viewBox="0 0 100 100" role="img" aria-label="昨日模型使用占比"><circle class="track" cx="50" cy="50" r="40"></circle>';
+        models.forEach(function (model, index) { var length = circumference * model.value / total; svg += '<circle cx="50" cy="50" r="40" stroke="' + palette[index % palette.length] + '" stroke-dasharray="' + length + ' ' + (circumference - length) + '" stroke-dashoffset="' + (-offset) + '" transform="rotate(-90 50 50)"></circle>'; offset += length; });
+        svg += '<text x="50" y="48">昨日</text><text class="total" x="50" y="61">' + escaped(token(day && day.text_total_tokens)) + '</text></svg><div class="share-legend">';
+        models.forEach(function (model, index) { svg += '<div class="share-item"><i class="legend-color" style="background:' + palette[index % palette.length] + '"></i><span class="share-name" title="' + escaped(model.name) + '">' + escaped(model.name) + '</span><strong>' + escaped(percent(model.value / total * 100)) + '%</strong></div>'; });
+        container.innerHTML = svg + '</div>';
+      }
+      function renderAnalytics(data) {
+        var days = data && Array.isArray(data.days) ? data.days : []; var summary = data && data.summary || {};
+        text('analyticsUpdated', data && data.fetched_at ? '更新 ' + date(data.fetched_at) : '最近七天');
+        text('analyticsUsagePercent', isFinite(number(summary.token_usage_percent)) ? percent(summary.token_usage_percent) + '%' : '—');
+        text('analyticsTurns', isFinite(number(summary.turns)) ? compact(summary.turns) : '—');
+        text('analyticsTokens', isFinite(number(summary.text_total_tokens)) ? token(summary.text_total_tokens) : '—');
+        renderBars('dailyTokenChart', days, 'text_total_tokens', token, ''); renderBars('workspaceUsageChart', days, 'turns', compact, 'workspace'); renderModelBars(days); renderShare(days);
+      }
+      function renderPrediction(data) {
+        var watch = data && data.active_watch; var latest = data && data.latest_reset; var chance = watch ? clamp(number(watch.reset_chance_percent), 0, 100) : NaN;
+        if (watch) { text('predictionState', '检测到重置信号'); classes('predictionState', 'prediction-state'); text('predictionHint', watch.forecast_window || '公开监测窗口内'); text('predictionChance', percent(chance) + '%'); style('predictionChanceBar', 'width', chance + '%'); classes('predictionChanceBar', 'prediction-bar ' + (chance >= 70 ? 'high' : '')); text('predictionLevel', watch.level || '观察中'); text('predictionWindow', watch.forecast_window || '—'); }
+        else { text('predictionState', '当前无重置信号'); classes('predictionState', 'prediction-state'); text('predictionHint', '公共监测处于空闲状态'); text('predictionChance', '—'); style('predictionChanceBar', 'width', '0%'); classes('predictionChanceBar', 'prediction-bar'); text('predictionLevel', '无预警'); text('predictionWindow', '—'); }
+        text('predictionTotal', data && data.stats ? String(data.stats.total || 0) + ' 条' : '—'); text('predictionAverage', data && data.stats && isFinite(number(data.stats.avg_interval_days)) ? percent(data.stats.avg_interval_days) + ' 天' : '—'); text('predictionUpdated', data && data.fetched_at ? '更新 ' + date(data.fetched_at) : '公共信号'); text('predictionLatestType', latest ? (latest.reset_type === 'banked' ? 'Banked Reset' : latest.reset_type === 'regular' ? 'Regular Reset' : latest.reset_type) : '—'); text('predictionLatestAt', latest ? date(latest.announced_at) : '—'); text('predictionLatestText', latest ? latest.text : '—');
+      }
+      function headers() { var result = {'Accept':'application/json'}; try { var key = sessionStorage.getItem('codex-admin-key') || ''; if (key) result['X-App-API-Key'] = key; } catch (_) {} return result; }
+      function apiURL(path) { var result = new URL(path, window.location.href); result.username = ''; result.password = ''; return result.toString(); }
+      function getJSON(path) { return fetch(apiURL(path), {headers:headers(), credentials:'same-origin', cache:'no-store'}).then(function (response) { if (!response.ok) throw new Error(response.status === 401 ? '认证失败，请检查 Basic Auth' : 'API ' + response.status); return response.json(); }); }
+      function setError(error) { classes('statusDot', 'status-dot error'); text('statusText', '连接失败'); text('usageUpdated', error && error.message ? error.message : '请求失败'); }
+      function loadAll(force) {
+        if (refreshBusy) return; refreshBusy = true; var suffix = force ? '?force=true' : ''; var button = byId('refreshButton'); if (button) button.disabled = true;
+        Promise.all([getJSON('api/usage' + suffix), getJSON('api/usage/analytics' + suffix), getJSON('api/prediction' + suffix)]).then(function (results) { renderUsage(results[0]); renderAnalytics(results[1]); renderPrediction(results[2]); refreshRemaining = refreshTotal; }).catch(setError).then(function () { refreshBusy = false; if (button) button.disabled = false; });
+      }
+      function renderRefresh() { text('refreshCountdown', Math.floor(refreshRemaining / 60).toString().padStart(2, '0') + ':' + (refreshRemaining % 60).toString().padStart(2, '0')); style('refreshBar', 'width', refreshRemaining / refreshTotal * 100 + '%'); }
+      function setTheme(theme) { document.documentElement.setAttribute('data-theme', theme); try { localStorage.setItem('codex-theme', theme); } catch (_) {} }
+      var savedTheme = null; try { savedTheme = localStorage.getItem('codex-theme'); } catch (_) {} setTheme(savedTheme || (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light'));
+      byId('themeButton').addEventListener('click', function () { setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); });
+      byId('refreshButton').addEventListener('click', function () { loadAll(true); });
+      loadAll(false); renderRefresh();
+      window.setInterval(function () { renderResets(); if (refreshRemaining > 0) refreshRemaining -= 1; else loadAll(true); renderRefresh(); }, 1000);
+      window.setInterval(function () { if (!refreshBusy) loadAll(true); }, refreshTotal * 1000);
+    }());
+  </script>
+</body>
+</html>
