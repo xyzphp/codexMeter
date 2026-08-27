@@ -21,6 +21,17 @@ docker compose -f docker-compose.local.yml up -d --build
 
 修改 Go 文件后运行 `gofmt`。遵循 Go 惯用命名：导出标识符使用 `PascalCase`，内部标识符使用 `camelCase`，请求处理函数使用 `handle<Resource>`。HTTP 路径使用小写且表达清晰。前端继续使用当前的原生 HTML、CSS 和 JavaScript 风格，保留响应式布局；除非确有必要，不要新增前端构建依赖。
 
+## 项目专属开发规范
+
+- 本仓库只维护 Go 后端及其内置 Web 页面；不要擅自修改 Android 工程。如确实需要 Android 侧配合，先明确说明影响范围。
+- 页面分为浏览器端和 LX04 设备端：浏览器使用 `web/browser.html`，设备使用 `web/index.html`。LX04 为横屏 `800×480`，不要使用整体 `transform: scale()`，优先采用视口尺寸、固定布局边界和 `overflow` 控制；浏览器端保持响应式布局。
+- 前端 API 一律使用相对路径，确保直接访问和 `/codex` 等反向代理前缀均可用；不要把 `localhost`、开发端口或绝对上游地址写死到页面中。
+- 额度实现只使用 WHAM 上游方案；不要在配置文件、配置页面或公开文档中重新暴露 `usage_mode` 配置项。OAuth、Cookie 和上游请求只在服务端处理。
+- 代理配置支持直连、HTTP、HTTPS 和 SOCKS5。代理测试只验证到 `chatgpt.com` 的网络连通性，不应把上游业务状态码误报为代理连接失败。
+- Basic Auth、App API Key 和配置文件接口必须继续受保护。App API Key 按 `sk-` 前缀生成，可查看和复制，但禁止写入日志、URL、截图或提交记录。
+- 配置页面的字段、默认值和 `config.example.json` 必须保持一致；缓存时间使用受控选项，敏感字段不得回显原文。
+- 版本发布时先同步更新部署用 `docker-compose.yml` 的镜像版本，再推送 `main`，由 GitHub Actions 创建 Release 并构建 GHCR 镜像；本地开发使用 `docker-compose.local.yml`。
+
 ## 测试规范
 
 涉及路由、认证、配置或上游数据解析时，在 `main_test.go` 中新增或更新表驱动测试。提交前运行 `go test ./...`、`go vet ./...` 和 `git diff --check`。修改页面时，还应检查 JavaScript 语法，并通过本地服务或 Docker 容器验证相关路由。
