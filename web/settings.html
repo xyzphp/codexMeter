@@ -183,6 +183,8 @@
     .capture-source-target { margin-top:4px; color:var(--muted); font-size:12px; line-height:18px; }
     .capture-source-target code { color:var(--text); }
     .page-access-grid .full { grid-column:1/-1; }
+    .basic-auth-fields { grid-column:1/-1; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+    .basic-auth-fields[hidden] { display:none; }
     .page-access-config-hint { display:block; margin-top:12px; }
     .page-access-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px; }
     .page-access-actions .proxy-status { flex:1 1 280px; margin-top:0; }
@@ -307,6 +309,7 @@
     }
     @media (max-width:600px) {
       .field-grid { grid-template-columns:1fr; }
+      .basic-auth-fields { grid-template-columns:1fr; gap:10px; }
       .proxy-form-grid { grid-template-columns:1fr 1fr; }
       .proxy-form-grid .field:nth-child(2) { grid-column:1/-1; }
       .field.full { grid-column:auto; }
@@ -464,13 +467,15 @@
                 <input id="basicAuthEnabled" type="checkbox">
                 <div class="check-copy"><label for="basicAuthEnabled">启用页面 Basic Auth</label><span class="hint">保存后刷新页面，浏览器会要求输入下面的账号。</span></div>
               </div>
-              <div class="field">
-                <label for="basicAuthUsername">访问用户名</label>
-                <input id="basicAuthUsername" autocomplete="username" placeholder="例如：admin">
-              </div>
-              <div class="field">
-                <label for="basicAuthPassword">访问密码</label>
-                <input id="basicAuthPassword" type="password" autocomplete="new-password" placeholder="留空保持当前密码">
+              <div id="basicAuthFields" class="basic-auth-fields" hidden>
+                <div class="field">
+                  <label for="basicAuthUsername">访问用户名</label>
+                  <input id="basicAuthUsername" autocomplete="username" placeholder="例如：admin">
+                </div>
+                <div class="field">
+                  <label for="basicAuthPassword">访问密码</label>
+                  <input id="basicAuthPassword" type="password" autocomplete="new-password" placeholder="留空保持当前密码">
+                </div>
               </div>
               <div class="field">
                 <label for="appAPIKey">App API Key</label>
@@ -577,6 +582,7 @@
       var tabAudio = document.getElementById('tabAudio');
       var tabConfigFile = document.getElementById('tabConfigFile');
       var basicAuthEnabledInput = document.getElementById('basicAuthEnabled');
+      var basicAuthFields = document.getElementById('basicAuthFields');
       var basicAuthUsernameInput = document.getElementById('basicAuthUsername');
       var basicAuthPasswordInput = document.getElementById('basicAuthPassword');
       var appAPIKeyInput = document.getElementById('appAPIKey');
@@ -681,6 +687,9 @@
       function setPageAccessState(label, kind) {
         pageAccessStateBadge.textContent = label;
         pageAccessStateBadge.className = 'state-badge ' + (kind || '');
+      }
+      function setBasicAuthFieldsVisibility(visible) {
+        basicAuthFields.hidden = !visible;
       }
       function setProxyButtonsDisabled(disabled) {
         testProxyButton.disabled = disabled;
@@ -957,6 +966,7 @@
       function renderPageAccess(config) {
         var enabled = !!config.basic_auth_enabled;
         basicAuthEnabledInput.checked = enabled;
+        setBasicAuthFieldsVisibility(enabled);
         basicAuthUsernameInput.value = config.basic_auth_username || '';
         basicAuthPasswordInput.value = '';
         appAPIKeyInput.value = '';
@@ -1091,6 +1101,9 @@
         }
         setProxyMode(false);
         testProxy(true, true);
+      });
+      basicAuthEnabledInput.addEventListener('change', function () {
+        setBasicAuthFieldsVisibility(basicAuthEnabledInput.checked);
       });
       testProxyButton.addEventListener('click', function () { testProxy(false); });
       confirmProxyButton.addEventListener('click', function () { testProxy(true); });
