@@ -336,8 +336,9 @@ type ResetCredits struct {
 }
 
 type HistoryPoint struct {
-	At          string  `json:"at"`
-	UsedPercent float64 `json:"used_percent"`
+	At                  string   `json:"at"`
+	UsedPercent         float64  `json:"used_percent"`
+	FiveHourUsedPercent *float64 `json:"five_hour_used_percent,omitempty"`
 }
 
 // UsageAnalytics is the compact date-range payload exposed to the frontend.
@@ -721,6 +722,10 @@ func (s *UsageService) Get(ctx context.Context, force bool) (*UsageResponse, err
 			At:          usage.FetchedAt,
 			UsedPercent: usage.SevenDay.UsedPercent,
 		}
+		if usage.FiveHour != nil {
+			fiveHourUsedPercent := usage.FiveHour.UsedPercent
+			latestHistoryPoint.FiveHourUsedPercent = &fiveHourUsedPercent
+		}
 		hasLatestHistoryPoint = true
 		s.history = append(s.history, latestHistoryPoint)
 		if len(s.history) > maxUsageHistoryPoints {
@@ -762,6 +767,9 @@ func loadUsageHistory(path string) ([]HistoryPoint, error) {
 			continue
 		}
 		if strings.TrimSpace(point.At) == "" || point.UsedPercent < 0 || point.UsedPercent > 100 {
+			continue
+		}
+		if point.FiveHourUsedPercent != nil && (*point.FiveHourUsedPercent < 0 || *point.FiveHourUsedPercent > 100) {
 			continue
 		}
 		if _, err := time.Parse(time.RFC3339, point.At); err != nil {

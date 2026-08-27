@@ -190,6 +190,26 @@ func TestUsageHistoryPersistsAndKeepsMostRecentPoints(t *testing.T) {
 	}
 }
 
+func TestUsageHistoryLoadsFiveHourPercent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
+	fiveHour := 37.5
+	point := HistoryPoint{
+		At:                  "2026-08-28T01:02:03Z",
+		UsedPercent:         12,
+		FiveHourUsedPercent: &fiveHour,
+	}
+	if err := appendUsageHistory(path, point); err != nil {
+		t.Fatalf("append usage history: %v", err)
+	}
+	loaded, err := loadUsageHistory(path)
+	if err != nil {
+		t.Fatalf("load usage history: %v", err)
+	}
+	if len(loaded) != 1 || loaded[0].FiveHourUsedPercent == nil || *loaded[0].FiveHourUsedPercent != fiveHour {
+		t.Fatalf("loaded five-hour usage = %#v, want %v", loaded, fiveHour)
+	}
+}
+
 func TestWhamRequestUsesOAuthHeadersAndGET(t *testing.T) {
 	var captured *http.Request
 	service := &UsageService{

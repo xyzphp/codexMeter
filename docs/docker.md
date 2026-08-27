@@ -126,7 +126,7 @@ Compose 会将宿主机的 `config.json` 挂载到容器的 `/app/config.json`�
 data/usage-history.jsonl
 ```
 
-每行是一条采样记录，服务启动时从文件末尾读取最近 48 条，运行期间新采样会持续追加，页面只滚动展示最新 48 条；文件只包含采样时间和本周已使用百分比，不包含 OAuth Token、Cookie、Basic Auth 密码或 App API Key。使用 `docker compose down -v` 也不会删除该目录，因为它是宿主机 bind mount。日志长期运行后会持续增长，可按需在停机后手动归档或清理。
+每行是一条采样记录，服务启动时从文件末尾读取最近 48 条，运行期间新采样会持续追加，页面只滚动展示最新 48 条；记录包含采样时间、5 小时已使用百分比和本周已使用百分比，不包含 OAuth Token、Cookie、Basic Auth 密码或 App API Key。使用 `docker compose down -v` 也不会删除该目录，因为它是宿主机 bind mount。日志长期运行后会持续增长，可按需在停机后手动归档或清理。
 
 `config.json` 包含 OAuth 凭证，已被 `.gitignore` 和 `.dockerignore` 排除，不要提交到 Git，也不要在 Dockerfile 中复制真实配置。配置项、认证和代理的详细说明见[配置接入文档](openai-config.md)。
 

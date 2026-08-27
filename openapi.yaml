@@ -474,6 +474,12 @@ components:
         used_percent:
           type: number
           format: double
+          description: 采样时本周窗口已使用百分比。
+        five_hour_used_percent:
+          type: number
+          format: double
+          nullable: true
+          description: 采样时 5 小时窗口已使用百分比；旧日志记录可能没有该字段。
 
     UsageResponse:
       type: object
