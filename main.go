@@ -1627,13 +1627,17 @@ func (s *Server) registerRoutes(mux *http.ServeMux, prefix string) {
 
 func (s *Server) withMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		if s.cfg.CORSOrigin != "" {
-			response.Header().Set("Access-Control-Allow-Origin", s.cfg.CORSOrigin)
+		middlewareConfig := s.cfg
+		if s.usage != nil {
+			middlewareConfig = s.usage.currentConfig()
+		}
+		if middlewareConfig.CORSOrigin != "" {
+			response.Header().Set("Access-Control-Allow-Origin", middlewareConfig.CORSOrigin)
 			response.Header().Set("Vary", "Origin")
 			response.Header().Set("Access-Control-Allow-Headers", "Authorization, X-App-API-Key, Content-Type")
 			response.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
 		}
-		if s.cfg.BasicAuthEnabled && !authorizedBasic(request, s.cfg.BasicAuthUsername, s.cfg.BasicAuthPassword) {
+		if middlewareConfig.BasicAuthEnabled && !authorizedBasic(request, middlewareConfig.BasicAuthUsername, middlewareConfig.BasicAuthPassword) {
 			response.Header().Set("WWW-Authenticate", `Basic realm="Codex Usage"`)
 			response.WriteHeader(http.StatusUnauthorized)
 			return
@@ -1641,9 +1645,9 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 		// Basic Auth is the page/API authentication mechanism. If it is enabled
 		// and already passed, do not require a second app API key as well. The
 		// app key remains available for deployments that do not use Basic Auth.
-		appKeyRequired := s.isAPIPath(request.URL.Path) && s.cfg.AppAPIKey != ""
-		basicAuthPassed := s.cfg.BasicAuthEnabled && authorizedBasic(request, s.cfg.BasicAuthUsername, s.cfg.BasicAuthPassword)
-		if appKeyRequired && !basicAuthPassed && !authorized(request, s.cfg.AppAPIKey) {
+		appKeyRequired := s.isAPIPath(request.URL.Path) && middlewareConfig.AppAPIKey != ""
+		basicAuthPassed := middlewareConfig.BasicAuthEnabled && authorizedBasic(request, middlewareConfig.BasicAuthUsername, middlewareConfig.BasicAuthPassword)
+		if appKeyRequired && !basicAuthPassed && !authorized(request, middlewareConfig.AppAPIKey) {
 			writeJSON(response, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 			return
 		}

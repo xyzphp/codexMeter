@@ -580,3 +580,45 @@ func TestBasicAuthSatisfiesAppAPIKey(t *testing.T) {
 		t.Fatalf("Basic Auth plus configured app key returned HTTP %d, want %d", response.Code, http.StatusNoContent)
 	}
 }
+
+func TestMiddlewareUsesUpdatedBasicAuthConfig(t *testing.T) {
+	service := &UsageService{cfg: Config{
+		BasicAuthEnabled:  true,
+		BasicAuthUsername: "old-admin",
+		BasicAuthPassword: "old-password",
+		AppAPIKey:         "admin-key",
+	}}
+	server := &Server{cfg: service.currentConfig(), usage: service}
+	handler := server.withMiddleware(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusNoContent)
+	}))
+
+	request := httptest.NewRequest(http.MethodGet, "/api/usage", nil)
+	request.SetBasicAuth("old-admin", "old-password")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("old Basic Auth credentials returned HTTP %d, want %d before update", response.Code, http.StatusNoContent)
+	}
+
+	service.cfgMu.Lock()
+	service.cfg.BasicAuthUsername = "new-admin"
+	service.cfg.BasicAuthPassword = "new-password"
+	service.cfgMu.Unlock()
+
+	request = httptest.NewRequest(http.MethodGet, "/api/usage", nil)
+	request.SetBasicAuth("old-admin", "old-password")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("old Basic Auth credentials returned HTTP %d after update, want %d", response.Code, http.StatusUnauthorized)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/usage", nil)
+	request.SetBasicAuth("new-admin", "new-password")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("new Basic Auth credentials returned HTTP %d after update, want %d", response.Code, http.StatusNoContent)
+	}
+}
