@@ -45,12 +45,12 @@
     .field { display:flex; flex-direction:column; min-width:0; gap:5px; }
     .field.full { grid-column:1/-1; }
     label { color:var(--text); font-size:11px; font-weight:680; line-height:15px; }
-    input {
+    input, select {
       width:100%; height:40px; padding:0 11px; border:1px solid var(--border); border-radius:9px;
       outline:0; background:var(--card); font-size:12px;
     }
     input::placeholder { color:#a1a1aa; }
-    input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(16,163,127,.12); }
+    input:focus, select:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(16,163,127,.12); }
     input[readonly] { color:var(--accent); background:var(--soft); cursor:default; }
     .hint { color:var(--muted); font-size:10px; line-height:15px; }
     .input-action { display:flex; align-items:stretch; gap:6px; }
@@ -135,7 +135,7 @@
     .field-grid { gap:16px; }
     label { font-size:13px; line-height:18px; }
     .field { gap:7px; }
-    input { height:44px; padding:0 13px; border-radius:10px; background:var(--card); color:var(--text); font-size:14px; color-scheme:light; }
+    input, select { height:44px; padding:0 13px; border-radius:10px; background:var(--card); color:var(--text); font-size:14px; color-scheme:light; }
     html[data-theme="dark"] input { color-scheme:dark; }
     input[readonly] { background:var(--soft); }
     input::placeholder { color:#a1a1aa; }
@@ -195,6 +195,8 @@
     .step-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
     .step-card-title { font-size:14px; font-weight:700; }
     .step-card-copy { margin-top:4px; color:var(--muted); font-size:12px; line-height:18px; }
+    .proxy-form-grid { display:grid; grid-template-columns:minmax(120px,.85fr) minmax(0,2fr) minmax(100px,.8fr); gap:12px; }
+    .proxy-form-actions { display:flex; align-items:center; gap:9px; margin-top:12px; }
     .state-badge { display:inline-flex; align-items:center; flex:0 0 auto; min-height:26px; padding:0 10px; border:1px solid var(--border); border-radius:999px; background:var(--card); color:var(--muted); font-size:11px; font-weight:680; }
     .state-badge.ready { border-color:rgba(16,163,127,.35); background:rgba(16,163,127,.10); color:var(--accent); }
     .state-badge.error { border-color:rgba(194,65,59,.35); background:rgba(194,65,59,.08); color:var(--danger); }
@@ -232,7 +234,7 @@
       .section-hint { font-size:10px; }
       .field-grid { gap:11px; }
       label { font-size:11px; }
-      input { height:40px; padding:0 11px; font-size:12px; }
+      input, select { height:40px; padding:0 11px; font-size:12px; }
       .hint { font-size:10px; line-height:15px; }
       .audio-card, .security-card { padding:12px; border-radius:11px; }
       .audio-card strong, .security-card strong { font-size:11px; }
@@ -255,6 +257,8 @@
       .state-badge { min-height:23px; padding:0 8px; font-size:10px; }
       .proxy-example { font-size:10px; }
       .proxy-actions { gap:7px; margin-top:10px; }
+      .proxy-form-grid { grid-template-columns:minmax(0,1.1fr) minmax(0,1.7fr) minmax(90px,.8fr); gap:8px; }
+      .proxy-form-actions { margin-top:9px; }
       .lock-notice { padding:9px 10px; }
       .advanced-card summary { padding:10px 12px; font-size:11px; }
       .advanced-fields { padding:12px; }
@@ -264,6 +268,8 @@
     }
     @media (max-width:600px) {
       .field-grid { grid-template-columns:1fr; }
+      .proxy-form-grid { grid-template-columns:1fr 1fr; }
+      .proxy-form-grid .field:nth-child(2) { grid-column:1/-1; }
       .field.full { grid-column:auto; }
       .header-actions .action:last-child { display:none; }
       .brand-title { font-size:16px; }
@@ -317,10 +323,28 @@
               <div><div class="step-card-title">先确认服务端网络</div><div class="step-card-copy">没有代理时可以选择直连。代理测试成功后，账号凭证页会自动解锁。</div></div>
               <span id="proxyStateBadge" class="state-badge">待确认</span>
             </div>
-            <div class="field">
-              <label for="proxyUrl">代理地址（可选）</label>
-              <div class="input-action"><input id="proxyUrl" autocomplete="off" placeholder="http://、https:// 或 socks5://host:port"><button id="clearProxy" class="small-button" type="button">使用直连</button></div>
-              <span class="hint">支持 HTTP、HTTPS、SOCKS5；也兼容 socket5://。代理地址需要包含协议和端口。</span>
+            <div class="proxy-form-grid">
+              <div class="field">
+                <label for="proxyScheme">代理协议</label>
+                <select id="proxyScheme">
+                  <option value="http" selected>HTTP</option>
+                  <option value="https">HTTPS</option>
+                  <option value="socks5">SOCKS5</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="proxyHost">IP / 主机</label>
+                <input id="proxyHost" autocomplete="off" placeholder="192.168.0.21">
+              </div>
+              <div class="field">
+                <label for="proxyPort">端口</label>
+                <input id="proxyPort" type="number" inputmode="numeric" min="1" max="65535" value="7890" placeholder="7890">
+              </div>
+            </div>
+            <input id="proxyUrl" class="config-hidden" type="hidden">
+            <div class="proxy-form-actions">
+              <button id="clearProxy" class="small-button" type="button">使用直连</button>
+              <span class="hint">端口默认 7890；支持 HTTP、HTTPS、SOCKS5，也兼容已有的 socket5:// 配置。</span>
             </div>
             <div class="proxy-examples" aria-label="代理地址示例">
               <button class="proxy-example" type="button" data-proxy-example="http://192.168.0.21:7890">HTTP 示例</button>
@@ -380,6 +404,9 @@
       var wizardStatus = document.getElementById('wizardStatus');
       var credentialSummary = document.getElementById('credentialSummary');
       var proxyInput = document.getElementById('proxyUrl');
+      var proxySchemeInput = document.getElementById('proxyScheme');
+      var proxyHostInput = document.getElementById('proxyHost');
+      var proxyPortInput = document.getElementById('proxyPort');
       var proxySection = document.getElementById('proxySection');
       var credentialsSection = document.getElementById('credentialsSection');
       var proxyStateBadge = document.getElementById('proxyStateBadge');
@@ -447,7 +474,59 @@
         testProxyButton.disabled = disabled;
         confirmProxyButton.disabled = disabled;
       }
-      function proxyPayload() { return { proxy_url: proxyInput.value.trim() }; }
+      function proxyURLParts(raw) {
+        raw = (raw || '').trim();
+        if (!raw) return { scheme:'http', host:'', port:'7890' };
+        try {
+          var parsed = new URL(raw);
+          var scheme = (parsed.protocol || 'http:').replace(':', '').toLowerCase();
+          if (scheme === 'socket5' || scheme === 'socks5h') scheme = 'socks5';
+          if (scheme !== 'http' && scheme !== 'https' && scheme !== 'socks5') scheme = 'http';
+          return { scheme:scheme, host:(parsed.hostname || '').replace(/^\[|\]$/g, ''), port:parsed.port || '7890' };
+        } catch (_) {
+          var match = raw.match(/^([a-z][a-z0-9+.-]*):\/\/([^/:]+|\[[^\]]+\])(?::(\d+))?/i);
+          if (!match) return { scheme:'http', host:'', port:'7890' };
+          var fallbackScheme = (match[1] || 'http').toLowerCase();
+          if (fallbackScheme === 'socket5' || fallbackScheme === 'socks5h') fallbackScheme = 'socks5';
+          if (fallbackScheme !== 'http' && fallbackScheme !== 'https' && fallbackScheme !== 'socks5') fallbackScheme = 'http';
+          return { scheme:fallbackScheme, host:(match[2] || '').replace(/^\[|\]$/g, ''), port:match[3] || '7890' };
+        }
+      }
+      function setProxyFieldsFromURL(raw) {
+        var parts = proxyURLParts(raw);
+        proxySchemeInput.value = parts.scheme;
+        proxyHostInput.value = parts.host;
+        proxyPortInput.value = parts.port;
+        proxyInput.value = (raw || '').trim();
+      }
+      function proxyURLValue() {
+        var host = proxyHostInput.value.trim().replace(/^\[|\]$/g, '');
+        var port = proxyPortInput.value.trim() || '7890';
+        if (!host) return { url:'', error:'' };
+        if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
+          return { url:'', error:'端口需为 1～65535 的数字。' };
+        }
+        if (host.indexOf(':') >= 0) host = '[' + host + ']';
+        return { url:proxySchemeInput.value + '://' + host + ':' + port, error:'' };
+      }
+      function syncProxyURL() {
+        var result = proxyURLValue();
+        proxyInput.value = result.url;
+        return result;
+      }
+      function markProxyDraft() {
+        var result = syncProxyURL();
+        if (confirmedProxyValue !== null && (result.error || result.url !== confirmedProxyValue)) {
+          setProxyState('待验证', '');
+          setCredentialAccess(false);
+          setProxyStatus(result.error || '代理配置已变更，请重新测试并保存。', result.error ? 'error' : '');
+        }
+      }
+      function proxyPayload() {
+        var result = syncProxyURL();
+        if (result.error) throw new Error(result.error);
+        return { proxy_url:result.url };
+      }
       function parseResponse(response, fallback) {
         return response.json().then(function (data) {
           if (!response.ok || data.ok === false) throw new Error(data.error || fallback);
@@ -456,11 +535,17 @@
       }
       function testProxy(saveAfterTest) {
         if (proxyBusy) return;
+        var payload;
+        try { payload = proxyPayload(); } catch (error) {
+          setProxyState('格式错误', 'error');
+          setProxyStatus(error.message, 'error');
+          return;
+        }
         proxyBusy = true;
         setProxyButtonsDisabled(true);
         setProxyState('测试中…', '');
         setProxyStatus(saveAfterTest ? '正在测试代理，成功后自动保存…' : '正在测试代理连通性…');
-        fetch('api/config/test-proxy', { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(proxyPayload()) })
+        fetch('api/config/test-proxy', { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(payload) })
           .then(function (response) { return parseResponse(response, '代理测试失败'); })
           .then(function (result) {
             if (!saveAfterTest) {
@@ -468,10 +553,10 @@
               setProxyStatus(result.message + '；请点击“测试并保存，继续配置”。', 'ok');
               return;
             }
-            return fetch('api/config', { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(proxyPayload()) })
+            return fetch('api/config', { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(payload) })
               .then(function (response) { return parseResponse(response, '代理保存失败'); })
               .then(function () {
-                confirmedProxyValue = proxyInput.value.trim();
+                confirmedProxyValue = payload.proxy_url;
                 setProxyState('已保存', 'ready');
                 setCredentialAccess(true);
                 setProxyStatus(result.message + '，代理配置已保存。', 'ok');
@@ -626,8 +711,9 @@
         }).then(function (config) {
           document.getElementById('userAgent').value = config.user_agent || '';
           document.getElementById('accountId').value = config.chatgpt_account_id || '';
-          document.getElementById('proxyUrl').value = config.proxy_url || '';
-          confirmedProxyValue = (config.proxy_url || '').trim();
+          setProxyFieldsFromURL(config.proxy_url || '');
+          syncProxyURL();
+          confirmedProxyValue = proxyInput.value.trim();
           document.getElementById('cacheTTL').value = config.cache_ttl || '10m';
           document.getElementById('fedramp').checked = !!config.fedramp;
           setValue('clientBuildNumber', config.client_build_number);
@@ -650,23 +736,21 @@
           setStatus('配置已读取', 'ok');
         }).catch(function (error) { setStatus(error.message, 'error'); });
       }
-      proxyInput.addEventListener('input', function () {
-        if (confirmedProxyValue !== null && proxyInput.value.trim() !== confirmedProxyValue) {
-          setProxyState('待验证', '');
-          setCredentialAccess(false);
-          setProxyStatus('代理地址已变更，请重新测试并保存。');
-        }
-      });
+      proxySchemeInput.addEventListener('change', markProxyDraft);
+      proxyHostInput.addEventListener('input', markProxyDraft);
+      proxyPortInput.addEventListener('input', markProxyDraft);
       document.getElementById('clearProxy').addEventListener('click', function () {
-        proxyInput.value = '';
-        proxyInput.dispatchEvent(new Event('input'));
-        proxyInput.focus();
+        proxyHostInput.value = '';
+        proxyPortInput.value = '7890';
+        proxySchemeInput.value = 'http';
+        markProxyDraft();
+        proxyHostInput.focus();
       });
       Array.prototype.forEach.call(document.querySelectorAll('[data-proxy-example]'), function (button) {
         button.addEventListener('click', function () {
-          proxyInput.value = button.getAttribute('data-proxy-example') || '';
-          proxyInput.dispatchEvent(new Event('input'));
-          proxyInput.focus();
+          setProxyFieldsFromURL(button.getAttribute('data-proxy-example') || '');
+          markProxyDraft();
+          proxyHostInput.focus();
         });
       });
       testProxyButton.addEventListener('click', function () { testProxy(false); });
