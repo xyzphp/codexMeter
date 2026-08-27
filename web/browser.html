@@ -299,7 +299,7 @@
         </div>
       </div>
       <div class="summary-grid">
-        <div class="summary"><div id="analyticsRangeLabel" class="summary-label">近30天额度使用</div><div id="analyticsUsagePercent" class="summary-value">—</div></div>
+        <div class="summary"><div id="analyticsRangeLabel" class="summary-label">日期范围额度使用</div><div id="analyticsUsagePercent" class="summary-value">—</div></div>
         <div class="summary"><div class="summary-label">总对话轮次</div><div id="analyticsTurns" class="summary-value">—</div></div>
         <div class="summary"><div class="summary-label">总计使用量</div><div id="analyticsTokens" class="summary-value">—</div></div>
       </div>
@@ -339,6 +339,8 @@
       var refreshBusy = false;
       var resetWindows = {};
       var analyticsRange = {startDate:'', endDate:''};
+      var analyticsCalendarData = null;
+      var analyticsCalendarRange = {startDate:'', endDate:''};
       var selectedAnalyticsDate = '';
       var palette = ['#10a37f','#a7c957','#d99a00','#d64545','#7c83fd','#c084fc','#38bdf8','#fb7185'];
       function byId(id) { return document.getElementById(id); }
@@ -358,11 +360,14 @@
       function rangeDayCount(startDate, endDate) { var start = new Date(startDate + 'T12:00:00'); var end = new Date(endDate + 'T12:00:00'); if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return 0; return Math.round((end.getTime() - start.getTime()) / 86400000) + 1; }
       function rangeLabel(startDate, endDate) { var days = rangeDayCount(startDate, endDate); return days ? '近' + days + '天额度使用' : '日期范围额度使用'; }
       function setRangeInputs(days) { var endDate = daysFromToday(1); var startDate = daysFromToday(days); analyticsRange = {startDate:startDate, endDate:endDate}; var startInput = byId('analyticsStart'); var endInput = byId('analyticsEnd'); if (startInput) startInput.value = startDate; if (endInput) endInput.value = endDate; }
-      function analyticsPath(force) { var path = 'api/usage/analytics?start_date=' + encodeURIComponent(analyticsRange.startDate) + '&end_date=' + encodeURIComponent(analyticsRange.endDate); return force ? path + '&force=true' : path; }
+      function fixedCalendarRange() { return {startDate:daysFromToday(365), endDate:daysFromToday(1)}; }
+      function sameAnalyticsRange(left, right) { return Boolean(left && right && left.startDate === right.startDate && left.endDate === right.endDate); }
+      function analyticsPathForRange(range, force) { var path = 'api/usage/analytics?start_date=' + encodeURIComponent(range.startDate) + '&end_date=' + encodeURIComponent(range.endDate); return force ? path + '&force=true' : path; }
+      function analyticsPath(force) { return analyticsPathForRange(analyticsRange, force); }
       function readAnalyticsRange() { var startInput = byId('analyticsStart'); var endInput = byId('analyticsEnd'); return {startDate:startInput ? startInput.value : '', endDate:endInput ? endInput.value : ''}; }
       function isValidAnalyticsRange(range) { return Boolean(range.startDate && range.endDate && range.startDate <= range.endDate && rangeDayCount(range.startDate, range.endDate) <= 367); }
-      function applyCustomRange() { var range = readAnalyticsRange(); if (!isValidAnalyticsRange(range)) { setError(new Error('请选择有效的日期范围')); return; } analyticsRange = range; loadAll(true); }
-      function applyAnalyticsRangeWhenValid() { var range = readAnalyticsRange(); if (!isValidAnalyticsRange(range)) return; analyticsRange = range; loadAll(true); }
+      function applyCustomRange() { var range = readAnalyticsRange(); if (!isValidAnalyticsRange(range)) { setError(new Error('请选择有效的日期范围')); return; } analyticsRange = range; loadAll(true, false); }
+      function applyAnalyticsRangeWhenValid() { var range = readAnalyticsRange(); if (!isValidAnalyticsRange(range)) return; analyticsRange = range; loadAll(true, false); }
       function escaped(value) { return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, function (character) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]; }); }
       function quotaClass(value) { if (!isFinite(value) || value <= 20) return 'critical'; if (value <= 50) return 'warning'; return ''; }
       function renderWindow(window, prefix, resetPrefix) {
@@ -441,16 +446,20 @@
         models.forEach(function (model, index) { svg += '<div class="share-item"><i class="legend-color" style="background:' + palette[index % palette.length] + '"></i><span class="share-name" title="' + escaped(model.name) + '">' + escaped(model.name) + '</span><strong>' + escaped(percent(model.value / total * 100)) + '%</strong></div>'; });
         container.innerHTML = selection + svg + '</div></div>';
       }
-      function renderAnalytics(data) {
-        var days = data && Array.isArray(data.days) ? data.days : []; var summary = data && data.summary || {};
+      function renderAnalyticsSummary(data) {
+        var summary = data && data.summary || {};
         var startDate = data && data.start_date ? data.start_date : analyticsRange.startDate; var endDate = data && data.end_date ? data.end_date : analyticsRange.endDate;
         text('analyticsRangeLabel', startDate && endDate ? rangeLabel(startDate, endDate) : '日期范围额度使用');
         text('analyticsUpdated', data && data.fetched_at ? '更新 ' + date(data.fetched_at) : '日期范围');
         text('analyticsUsagePercent', isFinite(number(summary.token_usage_percent)) ? percent(summary.token_usage_percent) + '%' : '—');
         text('analyticsTurns', isFinite(number(summary.turns)) ? compact(summary.turns) : '—');
         text('analyticsTokens', isFinite(number(summary.text_total_tokens)) ? token(summary.text_total_tokens) : '—');
+      }
+      function renderAnalyticsCalendar(data) {
+        var days = data && Array.isArray(data.days) ? data.days : [];
+        var calendarRange = data && data.start_date && data.end_date ? {startDate:data.start_date, endDate:data.end_date} : fixedCalendarRange();
         selectedAnalyticsDate = days.length ? heatmapDateKey(heatmapDate(days[days.length - 1].date)) : '';
-        renderHeatmap('dailyTokenChart', days, 'text_total_tokens', token, 'Token', startDate, endDate); renderShare(days, selectedAnalyticsDate);
+        renderHeatmap('dailyTokenChart', days, 'text_total_tokens', token, 'Token', calendarRange.startDate, calendarRange.endDate); renderShare(days, selectedAnalyticsDate);
       }
       function renderPrediction(data) {
         var watch = data && data.active_watch; var latest = data && data.latest_reset; var chance = watch ? clamp(number(watch.reset_chance_percent), 0, 100) : NaN;
@@ -462,11 +471,25 @@
       function apiURL(path) { var result = new URL(path, window.location.href); result.username = ''; result.password = ''; return result.toString(); }
       function getJSON(path) { return fetch(apiURL(path), {headers:headers(), credentials:'same-origin', cache:'no-store'}).then(function (response) { if (!response.ok) throw new Error(response.status === 401 ? '认证失败，请检查 Basic Auth' : 'API ' + response.status); return response.json(); }); }
       function setError(error) { classes('statusDot', 'status-dot error'); text('statusText', '连接失败'); text('usageUpdated', error && error.message ? error.message : '请求失败'); }
-      function loadAll(force) {
-        if (refreshBusy) return; refreshBusy = true; var suffix = force ? '?force=true' : ''; var button = byId('refreshButton'); if (button) button.disabled = true;
+      function loadAll(force, refreshCalendar) {
+        if (refreshBusy) return; if (refreshCalendar === undefined) refreshCalendar = Boolean(force); refreshBusy = true; var suffix = force ? '?force=true' : ''; var button = byId('refreshButton'); if (button) button.disabled = true;
+        var fixedRange = fixedCalendarRange();
+        var summaryRequest = getJSON(analyticsPath(force)).then(function (data) { renderAnalyticsSummary(data); return data; });
+        var calendarRequest;
+        if (refreshCalendar || !analyticsCalendarData || !sameAnalyticsRange(analyticsCalendarRange, fixedRange)) {
+          if (sameAnalyticsRange(analyticsRange, fixedRange)) {
+            calendarRequest = summaryRequest.then(function (data) { analyticsCalendarData = data; analyticsCalendarRange = fixedRange; renderAnalyticsCalendar(data); });
+          } else {
+            calendarRequest = getJSON(analyticsPathForRange(fixedRange, refreshCalendar ? force : false)).then(function (data) { analyticsCalendarData = data; analyticsCalendarRange = fixedRange; renderAnalyticsCalendar(data); });
+          }
+        } else {
+          renderAnalyticsCalendar(analyticsCalendarData);
+          calendarRequest = Promise.resolve();
+        }
         var requests = [
           getJSON('api/usage' + suffix).then(renderUsage),
-          getJSON(analyticsPath(force)).then(renderAnalytics),
+          summaryRequest,
+          calendarRequest,
           getJSON('api/prediction' + suffix).then(renderPrediction)
         ];
         Promise.all(requests).then(function () { refreshRemaining = refreshTotal; }).catch(setError).then(function () { refreshBusy = false; if (button) button.disabled = false; });
