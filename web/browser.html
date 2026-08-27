@@ -43,11 +43,7 @@
     .card-head { display:flex; align-items:baseline; justify-content:space-between; gap:16px; }
     .card-title { font-size:22px; font-weight:700; letter-spacing:-.2px; }
     .card-meta { color:var(--muted); font-size:13px; white-space:nowrap; }
-    .analytics-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; margin-top:18px; }
-    .range-presets { display:flex; gap:6px; padding:4px; border:1px solid var(--border); border-radius:11px; background:var(--soft); }
-    .range-button { min-height:32px; padding:0 13px; border:0; border-radius:8px; background:transparent; color:var(--muted); font-size:13px; line-height:1; }
-    .range-button:hover { background:var(--card); color:var(--text); }
-    .range-button.active { background:var(--card); color:var(--text); box-shadow:0 1px 4px rgba(32,33,35,.1); }
+    .analytics-toolbar { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:14px; margin-top:18px; }
     .date-range { display:flex; align-items:center; gap:8px; }
     .date-field { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; white-space:nowrap; }
     .date-field input { width:132px; min-height:32px; padding:0 8px; border:1px solid var(--border); border-radius:8px; background:var(--card); color:var(--text); font:inherit; color-scheme:light; }
@@ -112,18 +108,19 @@
     .heatmap-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:10px; color:var(--muted); font-size:11px; }
     .heatmap-legend { display:flex; align-items:center; gap:4px; white-space:nowrap; }
     .heatmap-legend .heatmap-cell { width:12px; height:12px; }
-    .model-chart { margin-top:4px; }
-    .model-cell { border-color:rgba(0,0,0,.08); }
-    .model-legend { display:flex; flex-wrap:wrap; gap:8px 16px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
-    .model-legend .legend-item { font-size:13px; }
-    .model-legend .legend-label { max-width:none; }
     .heatmap-tooltip { position:fixed; z-index:1000; max-width:min(360px,calc(100vw - 20px)); padding:9px 11px; border:1px solid var(--border); border-radius:8px; background:var(--text); color:var(--card); box-shadow:0 8px 24px rgba(0,0,0,.18); font-size:12px; line-height:1.5; white-space:pre-line; pointer-events:none; opacity:0; visibility:hidden; transition:opacity .12s ease; }
     .heatmap-tooltip.visible { opacity:1; visibility:visible; }
     .legend { display:flex; flex-wrap:wrap; gap:9px 18px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border); }
     .legend-item { display:flex; align-items:center; min-width:0; color:var(--muted); font-size:13px; }
     .legend-color { width:10px; height:10px; flex:0 0 10px; margin-right:7px; border-radius:3px; }
     .legend-label { max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .model-share { min-height:214px; display:flex; align-items:center; gap:26px; margin-top:4px; }
+    .model-share { min-height:214px; margin-top:4px; }
+    .share-selection-head { display:flex; align-items:baseline; justify-content:space-between; gap:16px; color:var(--muted); font-size:13px; }
+    .share-selection-head strong { color:var(--text); font-size:15px; }
+    .share-selection-metrics { display:flex; flex-wrap:wrap; gap:8px 28px; margin-top:10px; color:var(--muted); font-size:13px; }
+    .share-selection-metrics strong { margin-left:6px; color:var(--text); font-size:17px; font-variant-numeric:tabular-nums; }
+    .share-selection-content { display:flex; align-items:center; gap:26px; min-height:174px; margin-top:4px; }
+    .share-legend-title { margin-bottom:8px; color:var(--muted); font-size:13px; }
     .model-share svg { width:190px; height:190px; flex:0 0 190px; color:var(--text); }
     .model-share circle { fill:none; stroke-width:14; }
     .model-share .track { stroke:var(--track); }
@@ -193,8 +190,7 @@
       .card-meta { font-size:10px; }
       .summary-grid, .prediction-grid { gap:7px; margin-top:12px; }
       .analytics-toolbar { align-items:stretch; gap:8px; margin-top:10px; }
-      .range-presets { flex:1 1 100%; gap:3px; padding:3px; }
-      .range-button { flex:1 1 0; min-height:27px; padding:0 6px; font-size:10px; }
+      .analytics-toolbar { justify-content:stretch; }
       .date-range { flex:1 1 100%; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:5px; }
       .date-field { min-width:0; gap:3px; font-size:9px; }
       .date-field input { width:100%; min-width:0; min-height:27px; padding:0 4px; font-size:9px; }
@@ -216,13 +212,17 @@
       .heatmap-cell { width:13px; height:13px; border-radius:2px; }
       .heatmap-footer { margin-top:6px; font-size:9px; }
       .heatmap-legend .heatmap-cell { width:10px; height:10px; }
-      .model-legend { gap:5px 10px; margin-top:7px; padding-top:6px; }
-      .model-legend .legend-item { font-size:9px; }
       .heatmap-tooltip { max-width:260px; padding:7px 9px; font-size:10px; }
       .legend { gap:5px 10px; margin-top:7px; padding-top:6px; }
       .legend-item { font-size:9px; }
       .legend-color { width:7px; height:7px; flex-basis:7px; margin-right:4px; }
-      .model-share { min-height:126px; gap:12px; }
+      .model-share { min-height:126px; }
+      .share-selection-head { font-size:10px; }
+      .share-selection-head strong { font-size:11px; }
+      .share-selection-metrics { gap:5px 12px; margin-top:6px; font-size:9px; }
+      .share-selection-metrics strong { margin-left:4px; font-size:12px; }
+      .share-selection-content { gap:12px; min-height:100px; margin-top:2px; }
+      .share-legend-title { margin-bottom:5px; font-size:10px; }
       .model-share svg { width:112px; height:112px; flex-basis:112px; }
       .model-share .total { font-size:11px; }
       .share-item { font-size:10px; line-height:13px; }
@@ -291,11 +291,6 @@
     <section class="card section" aria-label="使用分析">
       <div class="card-head"><div class="card-title">使用分析</div><div id="analyticsUpdated" class="card-meta">读取中…</div></div>
       <div class="analytics-toolbar">
-        <div class="range-presets" role="group" aria-label="统计日期范围">
-          <button id="range7" class="range-button" type="button">7日</button>
-          <button id="range30" class="range-button active" type="button">30日</button>
-          <button id="range90" class="range-button" type="button">90日</button>
-        </div>
         <div class="date-range">
           <label class="date-field">开始<input id="analyticsStart" type="date"></label>
           <label class="date-field">结束<input id="analyticsEnd" type="date"></label>
@@ -308,9 +303,7 @@
         <div class="summary"><div class="summary-label">总计使用量</div><div id="analyticsTokens" class="summary-value">—</div></div>
       </div>
       <div class="charts-grid">
-        <div class="chart-panel"><div class="chart-head"><span>每日 Token 数</span><strong>单位：M</strong></div><div id="dailyTokenChart" class="heatmap"></div></div>
-        <div class="chart-panel"><div class="chart-head"><span>每日对话轮次</span><strong>工作区统计</strong></div><div id="workspaceUsageChart" class="heatmap"></div></div>
-        <div class="chart-panel"><div class="chart-head"><span>模型每日使用</span><strong>单位：%</strong></div><div id="modelUsageChart" class="model-chart"></div></div>
+        <div class="chart-panel wide"><div class="chart-head"><span>每日 Token 数</span><strong>鼠标移入日期查看详情</strong></div><div id="dailyTokenChart" class="heatmap"></div></div>
         <div class="chart-panel wide"><div class="chart-head"><span>模型使用占比</span><strong>按额度</strong></div><div id="yesterdayModelPieChart" class="model-share"></div></div>
       </div>
     </section>
@@ -362,11 +355,9 @@
       function daysFromToday(offset) { var parsed = new Date(); parsed.setHours(12, 0, 0, 0); parsed.setDate(parsed.getDate() - offset); return inputDate(parsed); }
       function rangeDayCount(startDate, endDate) { var start = new Date(startDate + 'T12:00:00'); var end = new Date(endDate + 'T12:00:00'); if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return 0; return Math.round((end.getTime() - start.getTime()) / 86400000) + 1; }
       function rangeLabel(startDate, endDate) { var days = rangeDayCount(startDate, endDate); return days ? '近' + days + '天额度使用' : '日期范围额度使用'; }
-      function setRangeActive(days) { classes('range7', 'range-button' + (days === 7 ? ' active' : '')); classes('range30', 'range-button' + (days === 30 ? ' active' : '')); classes('range90', 'range-button' + (days === 90 ? ' active' : '')); }
-      function setRangeInputs(days) { var endDate = daysFromToday(1); var startDate = daysFromToday(days); analyticsRange = {startDate:startDate, endDate:endDate}; var startInput = byId('analyticsStart'); var endInput = byId('analyticsEnd'); if (startInput) startInput.value = startDate; if (endInput) endInput.value = endDate; setRangeActive(days); }
+      function setRangeInputs(days) { var endDate = daysFromToday(1); var startDate = daysFromToday(days); analyticsRange = {startDate:startDate, endDate:endDate}; var startInput = byId('analyticsStart'); var endInput = byId('analyticsEnd'); if (startInput) startInput.value = startDate; if (endInput) endInput.value = endDate; }
       function analyticsPath(force) { var path = 'api/usage/analytics?start_date=' + encodeURIComponent(analyticsRange.startDate) + '&end_date=' + encodeURIComponent(analyticsRange.endDate); return force ? path + '&force=true' : path; }
-      function selectRangeDays(days) { setRangeInputs(days); loadAll(true); }
-      function applyCustomRange() { var startInput = byId('analyticsStart'); var endInput = byId('analyticsEnd'); var startDate = startInput ? startInput.value : ''; var endDate = endInput ? endInput.value : ''; if (!startDate || !endDate || startDate > endDate) { setError(new Error('请选择有效的日期范围')); return; } if (rangeDayCount(startDate, endDate) > 367) { setError(new Error('日期范围不能超过367天')); return; } analyticsRange = {startDate:startDate, endDate:endDate}; setRangeActive(0); loadAll(true); }
+      function applyCustomRange() { var startInput = byId('analyticsStart'); var endInput = byId('analyticsEnd'); var startDate = startInput ? startInput.value : ''; var endDate = endInput ? endInput.value : ''; if (!startDate || !endDate || startDate > endDate) { setError(new Error('请选择有效的日期范围')); return; } if (rangeDayCount(startDate, endDate) > 367) { setError(new Error('日期范围不能超过367天')); return; } analyticsRange = {startDate:startDate, endDate:endDate}; loadAll(true); }
       function escaped(value) { return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, function (character) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]; }); }
       function quotaClass(value) { if (!isFinite(value) || value <= 20) return 'critical'; if (value <= 50) return 'warning'; return ''; }
       function renderWindow(window, prefix, resetPrefix) {
@@ -409,57 +400,40 @@
       function heatmapLevel(value, max) { if (!(max > 0) || !(value > 0)) return 0; var ratio = value / max; return ratio <= .25 ? 1 : ratio <= .5 ? 2 : ratio <= .75 ? 3 : 4; }
       function moveHeatmapTooltip(event) { var tooltip = byId('heatmapTooltip'); if (!tooltip || !event) return; var x = Number(event.clientX) || 0; var y = Number(event.clientY) || 0; var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 800; var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 600; var left = x + 14; var top = y + 14; var width = tooltip.offsetWidth || 240; var height = tooltip.offsetHeight || 48; if (left + width > viewportWidth - 8) left = x - width - 14; if (top + height > viewportHeight - 8) top = y - height - 14; tooltip.style.left = Math.max(8, left) + 'px'; tooltip.style.top = Math.max(8, top) + 'px'; }
       function hideHeatmapTooltip() { var tooltip = byId('heatmapTooltip'); if (!tooltip) return; tooltip.textContent = ''; classes('heatmapTooltip', 'heatmap-tooltip'); }
-      function bindHeatmapTooltips(container) { if (!container || !container.querySelectorAll) return; Array.prototype.forEach.call(container.querySelectorAll('.heatmap-cell[aria-label]'), function (cell) { cell.addEventListener('mouseenter', function (event) { var tooltip = byId('heatmapTooltip'); if (!tooltip) return; tooltip.textContent = cell.getAttribute('data-tooltip') || cell.getAttribute('aria-label') || ''; classes('heatmapTooltip', 'heatmap-tooltip visible'); moveHeatmapTooltip(event); }); cell.addEventListener('mousemove', moveHeatmapTooltip); cell.addEventListener('mouseleave', hideHeatmapTooltip); }); }
+      function bindHeatmapTooltips(container, onDate) { if (!container || !container.querySelectorAll) return; Array.prototype.forEach.call(container.querySelectorAll('.heatmap-cell[aria-label]'), function (cell) { cell.addEventListener('mouseenter', function (event) { var tooltip = byId('heatmapTooltip'); if (!tooltip) return; var dateKey = cell.getAttribute('data-date') || ''; if (onDate && dateKey) onDate(dateKey); tooltip.textContent = cell.getAttribute('data-tooltip') || cell.getAttribute('aria-label') || ''; classes('heatmapTooltip', 'heatmap-tooltip visible'); moveHeatmapTooltip(event); }); cell.addEventListener('mousemove', moveHeatmapTooltip); cell.addEventListener('mouseleave', hideHeatmapTooltip); }); }
+      function modelValues(day) { var values = {}; (day && day.models || []).forEach(function (model) { var name = model && model.model ? String(model.model) : 'unknown'; var value = number(model && model.usage_percent); if (isFinite(value) && value > 0) values[name] = (values[name] || 0) + value; }); return values; }
+      function modelShareParts(day) { var values = modelValues(day); var models = Object.keys(values).map(function (name) { return {name:name,value:values[name]}; }).sort(function (left, right) { return right.value - left.value; }); var total = models.reduce(function (sum, model) { return sum + model.value; }, 0); return {models:models, total:total}; }
+      function dayTooltip(day, key, label, value, formatter) { var parts = modelShareParts(day); var modelText = parts.models.length ? parts.models.map(function (model) { return model.name + ' ' + percent(model.value / parts.total * 100) + '%'; }).join('，') : '无模型使用'; return key + ' · ' + label + ': ' + formatter(value) + '\nToken 数: ' + token(day && day.text_total_tokens) + '\n模型占比: ' + modelText + '\n对话轮次: ' + compact(day && day.turns); }
       function renderHeatmap(id, days, property, formatter, label) {
         var container = byId(id); if (!container) return;
-        var entries = (days || []).map(function (day) { var parsed = heatmapDate(day && day.date); var value = number(day && day[property]); return parsed ? {date:parsed, key:heatmapDateKey(parsed), value:isFinite(value) && value > 0 ? value : 0} : null; }).filter(function (entry) { return entry !== null; });
+        var entries = (days || []).map(function (day) { var parsed = heatmapDate(day && day.date); var value = number(day && day[property]); return parsed ? {date:parsed, key:heatmapDateKey(parsed), day:day, value:isFinite(value) && value > 0 ? value : 0} : null; }).filter(function (entry) { return entry !== null; });
         if (!entries.length) { container.innerHTML = '<div class="empty">暂无所选日期范围数据</div>'; return; }
-        var values = {}, start = entries[0].date, end = entries[0].date, max = 0;
-        entries.forEach(function (entry) { values[entry.key] = entry.value; if (entry.date < start) start = entry.date; if (entry.date > end) end = entry.date; if (entry.value > max) max = entry.value; });
+        var values = {}, dayByKey = {}, start = entries[0].date, end = entries[0].date, max = 0;
+        entries.forEach(function (entry) { values[entry.key] = entry.value; dayByKey[entry.key] = entry.day; if (entry.date < start) start = entry.date; if (entry.date > end) end = entry.date; if (entry.value > max) max = entry.value; });
         var startMonday = moveHeatmapDate(start, -((start.getDay() + 6) % 7)); var endSunday = moveHeatmapDate(end, 6 - ((end.getDay() + 6) % 7)); var totalDays = Math.round((endSunday.getTime() - startMonday.getTime()) / 86400000) + 1; var columns = Math.ceil(totalDays / 7); var monthLabels = []; var cells = []; var previousMonth = '';
         for (var column = 0; column < columns; column += 1) {
           var weekStart = moveHeatmapDate(startMonday, column * 7); var monthKey = weekStart.getFullYear() + '-' + weekStart.getMonth();
           if (monthKey !== previousMonth) { monthLabels.push('<span class="heatmap-month-label" style="grid-column:' + (column + 1) + '">' + (weekStart.getMonth() + 1) + '月</span>'); previousMonth = monthKey; }
           for (var row = 0; row < 7; row += 1) {
-            var cellDate = moveHeatmapDate(weekStart, row); var key = heatmapDateKey(cellDate); var inRange = cellDate >= start && cellDate <= end; var value = inRange && values[key] !== undefined ? values[key] : 0; var cellClass = inRange ? 'heatmap-cell level-' + heatmapLevel(value, max) : 'heatmap-cell outside'; var title = inRange ? key + ' · ' + label + ': ' + formatter(value) : ''; cells.push('<div class="' + cellClass + '" role="gridcell"' + (title ? ' data-tooltip="' + escaped(title) + '" title="' + escaped(title) + '" aria-label="' + escaped(title) + '"' : '') + '></div>');
+            var cellDate = moveHeatmapDate(weekStart, row); var key = heatmapDateKey(cellDate); var inRange = cellDate >= start && cellDate <= end; var value = inRange && values[key] !== undefined ? values[key] : 0; var day = inRange ? dayByKey[key] : null; var cellClass = inRange ? 'heatmap-cell level-' + heatmapLevel(value, max) : 'heatmap-cell outside'; var title = inRange ? dayTooltip(day, key, label, value, formatter) : ''; cells.push('<div class="' + cellClass + '" role="gridcell"' + (title ? ' data-date="' + escaped(key) + '" data-tooltip="' + escaped(title) + '" title="' + escaped(title) + '" aria-label="' + escaped(title) + '"' : '') + '></div>');
           }
         }
         var weekdays = ['一', '', '三', '', '五', '', '']; var weekdayHTML = weekdays.map(function (weekday) { return '<span>' + weekday + '</span>'; }).join(''); var legendHTML = '<div class="heatmap-legend"><span>少</span><i class="heatmap-cell level-1"></i><i class="heatmap-cell level-2"></i><i class="heatmap-cell level-3"></i><i class="heatmap-cell level-4"></i><span>多</span></div>';
-        container.innerHTML = '<div class="heatmap-layout"><div class="heatmap-weekdays">' + weekdayHTML + '</div><div class="heatmap-scroll"><div class="heatmap-months" style="--heat-columns:' + columns + '">' + monthLabels.join('') + '</div><div class="heatmap-grid" role="grid" aria-label="' + escaped(label) + '日历热力图" style="--heat-columns:' + columns + '">' + cells.join('') + '</div></div></div><div class="heatmap-footer"><span>' + escaped(inputDate(start) + ' 至 ' + inputDate(end)) + '</span>' + legendHTML + '</div>'; bindHeatmapTooltips(container);
+        container.innerHTML = '<div class="heatmap-layout"><div class="heatmap-weekdays">' + weekdayHTML + '</div><div class="heatmap-scroll"><div class="heatmap-months" style="--heat-columns:' + columns + '">' + monthLabels.join('') + '</div><div class="heatmap-grid" role="grid" aria-label="' + escaped(label) + '日历热力图" style="--heat-columns:' + columns + '">' + cells.join('') + '</div></div></div><div class="heatmap-footer"><span>' + escaped(inputDate(start) + ' 至 ' + inputDate(end)) + '</span>' + legendHTML + '</div>'; bindHeatmapTooltips(container, function (key) { renderShare(days, key); });
       }
-      function renderModelHeatmap(days) {
-        var container = byId('modelUsageChart'); if (!container) return;
-        var entries = (days || []).map(function (day) { var parsed = heatmapDate(day && day.date); return parsed ? {date:parsed, key:heatmapDateKey(parsed)} : null; }).filter(function (entry) { return entry !== null; });
-        var byDate = {}, totals = {};
-        (days || []).forEach(function (day) { var dayDate = day && day.date; if (!dayDate) return; byDate[dayDate] = {}; (day.models || []).forEach(function (model) { var name = model && model.model ? String(model.model) : 'unknown'; var value = number(model && model.usage_percent); if (!isFinite(value) || value < 0) value = 0; byDate[dayDate][name] = (byDate[dayDate][name] || 0) + value; totals[name] = (totals[name] || 0) + value; }); });
-        var names = Object.keys(totals).sort(function (left, right) { return totals[right] - totals[left]; });
-        if (!entries.length || !names.length) { container.innerHTML = '<div class="empty">暂无模型使用数据</div>'; return; }
-        var start = entries[0].date, end = entries[0].date;
-        entries.forEach(function (entry) { if (entry.date < start) start = entry.date; if (entry.date > end) end = entry.date; });
-        var startMonday = moveHeatmapDate(start, -((start.getDay() + 6) % 7)); var endSunday = moveHeatmapDate(end, 6 - ((end.getDay() + 6) % 7)); var totalDays = Math.round((endSunday.getTime() - startMonday.getTime()) / 86400000) + 1; var columns = Math.ceil(totalDays / 7); var monthLabels = []; var cells = []; var previousMonth = '';
-        for (var column = 0; column < columns; column += 1) {
-          var weekStart = moveHeatmapDate(startMonday, column * 7); var monthKey = weekStart.getFullYear() + '-' + weekStart.getMonth();
-          if (monthKey !== previousMonth) { monthLabels.push('<span class="heatmap-month-label" style="grid-column:' + (column + 1) + '">' + (weekStart.getMonth() + 1) + '月</span>'); previousMonth = monthKey; }
-          for (var row = 0; row < 7; row += 1) {
-            var cellDate = moveHeatmapDate(weekStart, row); var key = heatmapDateKey(cellDate); var inRange = cellDate >= start && cellDate <= end; var values = inRange ? (byDate[key] || {}) : {}; var total = names.reduce(function (sum, name) { return sum + (values[name] || 0); }, 0); var titleParts = names.filter(function (name) { return (values[name] || 0) > 0; }).map(function (name) { return name + ': ' + percent(values[name]) + '%'; }); var background = '';
-            if (total > 0) { var offset = 0; var segments = names.filter(function (name) { return (values[name] || 0) > 0; }).map(function (name, index) { var next = offset + values[name] / total * 100; var segment = palette[index % palette.length] + ' ' + offset + '% ' + next + '%'; offset = next; return segment; }); background = ' style="background:conic-gradient(' + segments.join(',') + ')"'; }
-            var title = inRange ? key + ' · 合计 ' + percent(total) + '% · ' + (titleParts.length ? titleParts.join('，') : '无模型使用') : ''; var cellClass = inRange ? 'heatmap-cell model-cell' : 'heatmap-cell outside'; cells.push('<div class="' + cellClass + '" role="gridcell"' + (title ? ' data-tooltip="' + escaped(title) + '" title="' + escaped(title) + '" aria-label="' + escaped(title) + '"' : '') + background + '></div>');
-          }
-        }
-        var weekdays = ['一', '', '三', '', '五', '', '']; var weekdayHTML = weekdays.map(function (weekday) { return '<span>' + weekday + '</span>'; }).join(''); var legendHTML = names.map(function (name, index) { return '<div class="legend-item"><i class="legend-color" style="background:' + palette[index % palette.length] + '"></i><span class="legend-label" title="' + escaped(name) + '">' + escaped(name) + '</span></div>'; }).join('');
-        container.innerHTML = '<div class="heatmap-layout"><div class="heatmap-weekdays">' + weekdayHTML + '</div><div class="heatmap-scroll"><div class="heatmap-months" style="--heat-columns:' + columns + '">' + monthLabels.join('') + '</div><div class="heatmap-grid" role="grid" aria-label="模型每日使用日历热力图" style="--heat-columns:' + columns + '">' + cells.join('') + '</div></div></div><div class="model-legend">' + legendHTML + '</div>'; bindHeatmapTooltips(container);
-      }
-      function renderShare(days) {
+      function renderShare(days, selectedKey) {
         var container = byId('yesterdayModelPieChart'); if (!container) return;
-        var day = days && days.length ? days[days.length - 1] : null; var values = {};
-        (day && day.models || []).forEach(function (model) { var name = model && model.model ? String(model.model) : 'unknown'; var value = number(model && model.usage_percent); if (isFinite(value) && value > 0) values[name] = (values[name] || 0) + value; });
-        var models = Object.keys(values).map(function (name) { return {name:name,value:values[name]}; }).sort(function (left, right) { return right.value - left.value; });
-        if (!models.length) { container.innerHTML = '<div class="empty">暂无模型使用数据</div>'; return; }
-        var total = models.reduce(function (sum, model) { return sum + model.value; }, 0); var circumference = 2 * Math.PI * 40; var offset = 0; var svg = '<svg viewBox="0 0 100 100" role="img" aria-label="模型使用占比"><circle class="track" cx="50" cy="50" r="40"></circle>';
+        var day = null; var dayKey = selectedKey || '';
+        (days || []).forEach(function (candidate) { var candidateKey = heatmapDateKey(heatmapDate(candidate && candidate.date)); if (!day && dayKey && candidateKey === dayKey) day = candidate; });
+        if (!day && days && days.length) { day = days[days.length - 1]; dayKey = heatmapDateKey(heatmapDate(day.date)); }
+        var parts = modelShareParts(day); var models = parts.models; var total = parts.total;
+        var selection = '<div class="share-selection-head"><span>当天使用概览</span><strong>' + escaped(dayKey || '—') + '</strong></div><div class="share-selection-metrics"><span>Token 数<strong>' + escaped(token(day && day.text_total_tokens)) + '</strong></span><span>对话轮次<strong>' + escaped(compact(day && day.turns)) + '</strong></span></div><div class="share-selection-content">';
+        if (!models.length) { container.innerHTML = selection + '<div class="empty">暂无模型使用数据</div></div>'; return; }
+        var circumference = 2 * Math.PI * 40; var offset = 0; var svg = '<svg viewBox="0 0 100 100" role="img" aria-label="模型使用占比"><circle class="track" cx="50" cy="50" r="40"></circle>';
         models.forEach(function (model, index) { var length = circumference * model.value / total; svg += '<circle cx="50" cy="50" r="40" stroke="' + palette[index % palette.length] + '" stroke-dasharray="' + length + ' ' + (circumference - length) + '" stroke-dashoffset="' + (-offset) + '" transform="rotate(-90 50 50)"></circle>'; offset += length; });
-        svg += '<text class="total" x="50" y="55">' + escaped(token(day && day.text_total_tokens)) + '</text></svg><div class="share-legend">';
+        svg += '<text class="total" x="50" y="55">' + escaped(token(day && day.text_total_tokens)) + '</text></svg><div class="share-legend"><div class="share-legend-title">模型占比</div>';
         models.forEach(function (model, index) { svg += '<div class="share-item"><i class="legend-color" style="background:' + palette[index % palette.length] + '"></i><span class="share-name" title="' + escaped(model.name) + '">' + escaped(model.name) + '</span><strong>' + escaped(percent(model.value / total * 100)) + '%</strong></div>'; });
-        container.innerHTML = svg + '</div>';
+        container.innerHTML = selection + svg + '</div></div>';
       }
       function renderAnalytics(data) {
         var days = data && Array.isArray(data.days) ? data.days : []; var summary = data && data.summary || {};
@@ -469,7 +443,7 @@
         text('analyticsUsagePercent', isFinite(number(summary.token_usage_percent)) ? percent(summary.token_usage_percent) + '%' : '—');
         text('analyticsTurns', isFinite(number(summary.turns)) ? compact(summary.turns) : '—');
         text('analyticsTokens', isFinite(number(summary.text_total_tokens)) ? token(summary.text_total_tokens) : '—');
-        renderHeatmap('dailyTokenChart', days, 'text_total_tokens', token, 'Token'); renderHeatmap('workspaceUsageChart', days, 'turns', compact, '对话轮次'); renderModelHeatmap(days); renderShare(days);
+        renderHeatmap('dailyTokenChart', days, 'text_total_tokens', token, 'Token'); renderShare(days);
       }
       function renderPrediction(data) {
         var watch = data && data.active_watch; var latest = data && data.latest_reset; var chance = watch ? clamp(number(watch.reset_chance_percent), 0, 100) : NaN;
@@ -495,11 +469,8 @@
       var savedTheme = null; try { savedTheme = localStorage.getItem('codex-theme'); } catch (_) {} setTheme(savedTheme || (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light'));
       byId('themeButton').addEventListener('click', function () { setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); });
       byId('refreshButton').addEventListener('click', function () { loadAll(true); });
-      byId('range7').addEventListener('click', function () { selectRangeDays(7); });
-      byId('range30').addEventListener('click', function () { selectRangeDays(30); });
-      byId('range90').addEventListener('click', function () { selectRangeDays(90); });
       byId('applyRange').addEventListener('click', applyCustomRange);
-      setRangeInputs(30);
+      setRangeInputs(365);
       loadAll(false); renderRefresh();
       window.setInterval(function () { renderResets(); if (refreshRemaining > 0) refreshRemaining -= 1; else loadAll(true); renderRefresh(); }, 1000);
       window.setInterval(function () { if (!refreshBusy) loadAll(true); }, refreshTotal * 1000);

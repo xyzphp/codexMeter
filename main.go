@@ -357,7 +357,7 @@ func parseAnalyticsDateRange(values url.Values, now time.Time) (analyticsDateRan
 	endRaw := strings.TrimSpace(values.Get("end_date"))
 	if startRaw == "" && endRaw == "" {
 		// Keep the legacy API default for the LX04 page. The browser page sends
-		// its 30-day range explicitly so both layouts can coexist.
+		// its one-year range explicitly so both layouts can coexist.
 		return previousAnalyticsDateRange(now, 7), nil
 	}
 	if startRaw == "" || endRaw == "" {
