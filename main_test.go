@@ -59,6 +59,61 @@ func TestCredentialGuideAssetIsServedAsPNG(t *testing.T) {
 	}
 }
 
+func TestAPIDocsAndOpenAPISpecAreServed(t *testing.T) {
+	server := NewServer(Config{}, &UsageService{})
+
+	pageRequest := httptest.NewRequest(http.MethodGet, "/api-docs", nil)
+	pageRecorder := httptest.NewRecorder()
+	server.handler.ServeHTTP(pageRecorder, pageRequest)
+	if pageRecorder.Code != http.StatusOK {
+		t.Fatalf("API docs status = %d, want %d", pageRecorder.Code, http.StatusOK)
+	}
+	if got := pageRecorder.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
+		t.Fatalf("API docs content type = %q, want HTML", got)
+	}
+	if !strings.Contains(pageRecorder.Body.String(), "在线调试") {
+		t.Fatalf("API docs page does not contain the debugger")
+	}
+
+	specRequest := httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil)
+	specRecorder := httptest.NewRecorder()
+	server.handler.ServeHTTP(specRecorder, specRequest)
+	if specRecorder.Code != http.StatusOK {
+		t.Fatalf("OpenAPI spec status = %d, want %d", specRecorder.Code, http.StatusOK)
+	}
+	if got := specRecorder.Header().Get("Content-Type"); got != "text/yaml; charset=utf-8" {
+		t.Fatalf("OpenAPI content type = %q, want YAML", got)
+	}
+	if !strings.Contains(specRecorder.Body.String(), "openapi: 3.0.3") {
+		t.Fatalf("OpenAPI response does not contain the OpenAPI version")
+	}
+}
+
+func TestAppAPIKeyEndpointReturnsConfiguredKeyAfterAuthentication(t *testing.T) {
+	const appAPIKey = "test-app-key"
+	cfg := Config{AppAPIKey: appAPIKey}
+	service := &UsageService{cfg: cfg}
+	server := NewServer(cfg, service)
+	request := httptest.NewRequest(http.MethodGet, "/api/config/app-key", nil)
+	request.Header.Set("X-App-API-Key", appAPIKey)
+	recorder := httptest.NewRecorder()
+	server.handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("App API key status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	var response struct {
+		Configured bool   `json:"configured"`
+		AppAPIKey  string `json:"app_api_key"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatalf("decode App API key response: %v", err)
+	}
+	if !response.Configured || response.AppAPIKey != appAPIKey {
+		t.Fatalf("App API key response = %#v, want configured key", response)
+	}
+}
+
 func TestWhamResponseDecodesAndNormalizesWindows(t *testing.T) {
 	raw := []byte(`{
         "plan_type":"plus",

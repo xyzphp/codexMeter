@@ -196,6 +196,29 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/config/app-key:
+    get:
+      tags: [config]
+      operationId: getAppAPIKey
+      summary: 读取当前 App API Key
+      description: |
+        在已经通过 Basic Auth 或 App API Key 认证的情况下，返回当前维护的
+        App API Key，供受保护的接口调试页面使用。响应设置为 no-store；请勿
+        把返回值写入日志、URL 或前端源码。
+      security:
+        - basicAuth: []
+        - appApiKey: []
+        - appBearer: []
+      responses:
+        '200':
+          description: 当前管理密钥
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppAPIKeyView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /api/config/test:
     post:
       tags: [config]
@@ -736,6 +759,17 @@ components:
           example: 5m0s
         config_file:
           type: string
+
+    AppAPIKeyView:
+      type: object
+      required: [configured, app_api_key]
+      properties:
+        configured:
+          type: boolean
+        app_api_key:
+          type: string
+          readOnly: true
+          description: 当前 App API Key；仅对已认证请求返回，响应不缓存。
 
     ConfigUpdate:
       type: object

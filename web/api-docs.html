@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f7f8">
+  <title>接口文档 · ChatGPT &amp; Codex 使用面板</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --page:#f7f7f8; --card:#fff; --soft:#f1f1f2; --track:#e5e5e7;
+      --text:#202123; --muted:#626276; --border:#dedee3;
+      --accent:#10a37f; --accent-soft:#e5f6f0; --warning:#b77900; --danger:#c2413b;
+      --shadow:0 18px 42px rgba(32,33,35,.09);
+    }
+    html[data-theme="dark"] {
+      color-scheme:dark;
+      --page:#171717; --card:#242424; --soft:#303030; --track:#44444b;
+      --text:#f4f4f5; --muted:#b5b5c0; --border:#414149;
+      --accent:#34d399; --accent-soft:#173d32; --warning:#facc15; --danger:#f87171;
+      --shadow:0 18px 42px rgba(0,0,0,.26);
+    }
+    * { box-sizing:border-box; }
+    html, body { min-height:100%; margin:0; }
+    body { background:var(--page); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+    button, input, textarea, select, a { font:inherit; color:inherit; }
+    button { cursor:pointer; }
+    button:disabled { cursor:wait; opacity:.62; }
+    .page { width:min(1400px,calc(100% - 48px)); margin:0 auto; padding:28px 0 38px; }
+    .page-header { display:flex; align-items:center; justify-content:space-between; gap:24px; margin-bottom:20px; }
+    .brand { display:inline-flex; align-items:center; min-width:0; color:var(--text); text-decoration:none; }
+    .brand-mark { width:42px; height:42px; flex:0 0 42px; display:block; fill:currentColor; }
+    .brand-title { margin-left:16px; font-size:25px; font-weight:680; letter-spacing:-.3px; white-space:nowrap; }
+    .header-actions { display:flex; align-items:center; gap:10px; }
+    .action { display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:0 15px; border:1px solid var(--border); border-radius:11px; background:var(--card); color:var(--muted); text-decoration:none; font-size:14px; line-height:1; white-space:nowrap; appearance:none; transition:background .18s ease,transform .1s ease; }
+    .action:hover { background:var(--soft); }
+    .action:active { transform:translateY(1px); }
+    .action.primary { border-color:var(--accent); background:var(--accent); color:#fff; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:24px; box-shadow:var(--shadow); }
+    .intro-card { padding:28px 30px 24px; }
+    .card-head { display:flex; align-items:baseline; justify-content:space-between; gap:18px; }
+    .card-title { font-size:23px; font-weight:720; letter-spacing:-.3px; }
+    .card-meta { color:var(--muted); font-size:13px; }
+    .intro-copy { max-width:850px; margin:8px 0 0; color:var(--muted); font-size:14px; line-height:1.65; }
+    .security-note { margin-top:18px; padding:13px 15px; border:1px solid #b7e4d5; border-radius:12px; background:var(--accent-soft); color:var(--text); font-size:13px; line-height:1.6; }
+    html[data-theme="dark"] .security-note { border-color:#286b59; }
+    .layout { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(360px,.85fr); align-items:start; gap:18px; margin-top:18px; }
+    .docs-card, .debugger-card { min-width:0; padding:22px; }
+    .section-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:14px; }
+    .section-title { font-size:18px; font-weight:700; }
+    .section-hint { color:var(--muted); font-size:12px; }
+    .endpoint-list { display:grid; gap:10px; }
+    .endpoint { min-width:0; padding:15px 16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
+    .endpoint-head { display:flex; align-items:center; gap:9px; min-width:0; }
+    .method { display:inline-flex; align-items:center; justify-content:center; min-width:55px; height:25px; padding:0 8px; border-radius:7px; font-size:11px; font-weight:760; letter-spacing:.3px; }
+    .method-get { background:#d8f2e9; color:#087655; }
+    .method-post { background:#e7e2ff; color:#5c45b4; }
+    .method-put { background:#fff0c2; color:#966100; }
+    html[data-theme="dark"] .method-get { background:#174b3b; color:#85e8c2; }
+    html[data-theme="dark"] .method-post { background:#3e356b; color:#c8bdff; }
+    html[data-theme="dark"] .method-put { background:#554014; color:#ffe08a; }
+    .endpoint-path { min-width:0; overflow:hidden; color:var(--text); font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:13px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
+    .endpoint-debug { margin-left:auto; flex:0 0 auto; min-height:29px; padding:0 10px; border:1px solid var(--border); border-radius:8px; background:var(--card); color:var(--muted); font-size:12px; }
+    .endpoint-debug:hover { background:var(--accent-soft); color:var(--accent); }
+    .endpoint-title { margin-top:10px; font-size:15px; font-weight:680; }
+    .endpoint-copy { margin-top:4px; color:var(--muted); font-size:13px; line-height:1.55; }
+    .endpoint-auth { display:inline-flex; margin-top:9px; padding:3px 7px; border:1px solid var(--border); border-radius:6px; color:var(--muted); font-size:11px; }
+    .params { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+    .param { padding:4px 7px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--muted); font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:11px; }
+    .endpoint pre { max-height:130px; margin:10px 0 0; overflow:auto; padding:10px; border-radius:8px; background:var(--card); color:var(--muted); font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:11px; line-height:1.5; white-space:pre-wrap; word-break:break-word; }
+    .debugger-card { position:sticky; top:18px; }
+    .key-panel { padding:14px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
+    .field-label { display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:7px; font-size:13px; font-weight:680; }
+    .field-label span { color:var(--muted); font-size:11px; font-weight:400; }
+    .input-row { display:flex; gap:8px; }
+    input, select, textarea { width:100%; border:1px solid var(--border); border-radius:9px; background:var(--card); color:var(--text); outline:none; }
+    input, select { min-height:38px; padding:0 10px; }
+    textarea { min-height:116px; resize:vertical; padding:10px; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12px; line-height:1.5; }
+    input:focus, select:focus, textarea:focus { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+    .small-action { min-height:38px; flex:0 0 auto; padding:0 11px; border:1px solid var(--border); border-radius:9px; background:var(--card); color:var(--muted); font-size:12px; }
+    .small-action:hover { background:var(--accent-soft); color:var(--accent); }
+    .key-actions { display:flex; gap:8px; margin-top:8px; }
+    .key-status, .debug-status { min-height:20px; margin-top:8px; color:var(--muted); font-size:12px; line-height:1.5; }
+    .key-status.ok, .debug-status.ok { color:var(--accent); }
+    .key-status.error, .debug-status.error { color:var(--danger); }
+    .debug-form { display:grid; gap:13px; margin-top:20px; }
+    .debug-path-row { display:grid; grid-template-columns:92px minmax(0,1fr); gap:8px; }
+    .debug-description { margin-top:6px; color:var(--muted); font-size:12px; line-height:1.5; }
+    .write-warning { margin-top:6px; color:var(--warning); font-size:11px; line-height:1.45; }
+    .send-row { display:flex; align-items:center; gap:10px; }
+    .send-row .action { min-height:38px; }
+    .response-box { margin-top:18px; }
+    .response-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+    .response-head strong { color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+    .response-output { min-height:170px; max-height:430px; margin:8px 0 0; overflow:auto; padding:13px; border:1px solid var(--border); border-radius:10px; background:#18181b; color:#e4e4e7; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12px; line-height:1.55; white-space:pre-wrap; word-break:break-word; }
+    .source-link { color:var(--accent); text-decoration:none; }
+    .source-link:hover { text-decoration:underline; }
+    .footnote { margin-top:18px; color:var(--muted); font-size:12px; line-height:1.55; }
+    @media (max-width:1050px) {
+      .layout { grid-template-columns:1fr; }
+      .debugger-card { position:static; }
+    }
+    @media (max-width:900px) {
+      .page { width:calc(100% - 28px); padding:16px 0 24px; }
+      .page-header { gap:12px; margin-bottom:12px; }
+      .brand-mark { width:32px; height:32px; flex-basis:32px; }
+      .brand-title { margin-left:11px; font-size:19px; }
+      .header-actions { gap:6px; }
+      .action { min-height:34px; padding:0 10px; font-size:12px; }
+      .header-actions .action:last-child { display:none; }
+      .card { border-radius:16px; }
+      .intro-card, .docs-card, .debugger-card { padding:16px; }
+      .card-title { font-size:18px; }
+      .card-meta { font-size:10px; }
+      .intro-copy { font-size:12px; }
+      .layout { gap:12px; margin-top:12px; }
+      .section-title { font-size:16px; }
+    }
+    @media (max-width:600px) {
+      .page-header { align-items:flex-start; }
+      .header-actions { flex-wrap:wrap; justify-content:flex-end; }
+      .brand-title { max-width:180px; overflow:hidden; text-overflow:ellipsis; }
+      .card-head { align-items:flex-start; flex-direction:column; gap:3px; }
+      .debug-path-row { grid-template-columns:1fr; }
+      .input-row { flex-direction:column; }
+      .small-action { width:100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <a class="brand" href="./" aria-label="返回额度面板">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 0 0-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 0 1 .476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 0 1 4.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 0 1-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 0 0 5.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-1 .19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0 0 10.205 0a5.947 5.947 0 0 0-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 0 0 4.162 1.713z" /></svg>
+        <span class="brand-title">ChatGPT &amp; Codex 接口文档</span>
+      </a>
+      <div class="header-actions">
+        <a class="action" href="./">返回面板</a>
+        <a class="action" href="settings">设置</a>
+        <a class="action" href="openapi.yaml" target="_blank" rel="noopener">OpenAPI 原文</a>
+        <button id="themeButton" class="action" type="button">切换主题</button>
+      </div>
+    </header>
+
+    <section class="card intro-card">
+      <div class="card-head"><div class="card-title">接口文档与在线调试</div><div class="card-meta">服务版本 1.0.0</div></div>
+      <p class="intro-copy">下面列出当前服务提供的额度、统计、预测、配置和资源接口。调试器只请求当前页面所在的服务地址，适合检查反向代理路径、认证和返回数据。</p>
+      <div class="security-note">认证规则：启用 Basic Auth 时由浏览器自动携带用户名密码；配置了 App API Key 时，调试器会使用 <code>X-App-API-Key</code> 请求头。OAuth Token 只保留在服务端，不会被本页面读取。</div>
+    </section>
+
+    <div class="layout">
+      <section class="card docs-card" aria-label="接口列表">
+        <div class="section-head"><div class="section-title">接口列表</div><div class="section-hint">来源：<a class="source-link" href="openapi.yaml" target="_blank" rel="noopener">openapi.yaml</a></div></div>
+        <div id="endpointList" class="endpoint-list"></div>
+        <div class="footnote">接口响应会受当前配置的缓存时间影响；额度、统计和预测接口可追加 <code>force=true</code> 绕过缓存。配置写入类接口请确认请求体后再发送。</div>
+      </section>
+
+      <aside class="card debugger-card" aria-label="接口调试器">
+        <div class="section-head"><div class="section-title">在线调试</div><div class="section-hint">同源请求</div></div>
+        <div class="key-panel">
+          <div class="field-label">维护的 App API Key <span>仅当前会话使用</span></div>
+          <div class="input-row"><input id="appAPIKey" type="text" autocomplete="off" spellcheck="false" placeholder="sk-…"><button id="loadAppAPIKey" class="small-action" type="button">读取当前密钥</button></div>
+          <div class="key-actions"><button id="copyAppAPIKey" class="small-action" type="button">复制密钥</button><button id="clearAppAPIKey" class="small-action" type="button">清除</button></div>
+          <div id="keyStatus" class="key-status" role="status" aria-live="polite">如已通过 Basic Auth，可读取当前维护的密钥。</div>
+        </div>
+
+        <div class="debug-form">
+          <div>
+            <label class="field-label" for="debugEndpoint">选择接口</label>
+            <select id="debugEndpoint"></select>
+          </div>
+          <div>
+            <label class="field-label" for="debugPath">请求路径 <span>仅允许当前服务地址</span></label>
+            <div class="debug-path-row"><select id="debugMethod" aria-label="请求方法"><option>GET</option><option>POST</option><option>PUT</option></select><input id="debugPath" spellcheck="false" autocomplete="off"></div>
+            <div id="debugDescription" class="debug-description"></div>
+            <div id="writeWarning" class="write-warning" hidden>这是写入或测试接口，发送后可能修改服务配置或触发上游请求。</div>
+          </div>
+          <div>
+            <label class="field-label" for="debugBody">JSON 请求体 <span>GET 请求可留空</span></label>
+            <textarea id="debugBody" spellcheck="false" placeholder="例如：{&quot;cache_ttl&quot;:&quot;10m&quot;}"></textarea>
+          </div>
+          <div class="send-row"><button id="sendRequest" class="action primary" type="button">发送请求</button><div id="debugStatus" class="debug-status" role="status" aria-live="polite"></div></div>
+        </div>
+
+        <div class="response-box">
+          <div class="response-head"><div class="section-title">响应结果</div><strong id="responseMeta">尚未请求</strong></div>
+          <pre id="responseOutput" class="response-output">选择接口后点击“发送请求”。</pre>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      'use strict';
+      var apiCatalog = [
+        {method:'GET', path:'/healthz', title:'健康检查', auth:'Basic Auth / App API Key', description:'返回服务是否正常运行。', params:[], body:'', response:'{"status":"ok"}'},
+        {method:'GET', path:'/api/usage?force=true', title:'获取当前额度', auth:'Basic Auth / App API Key', description:'获取五小时和七天额度窗口、重置时间及缓存状态。force=true 会绕过缓存。', params:['force=true'], body:'', response:'{"source":"wham_usage","five_hour":{},"seven_day":{}}'},
+        {method:'GET', path:'/api/usage/analytics?start_date=2026-08-01&end_date=2026-08-27&force=true', title:'获取日期范围使用统计', auth:'Basic Auth / App API Key', description:'获取日期范围内的 Token、额度、对话轮次和模型使用统计。最多支持 367 天。', params:['start_date=YYYY-MM-DD','end_date=YYYY-MM-DD','force=true'], body:'', response:'{"summary":{},"days":[]}'},
+        {method:'GET', path:'/api/prediction?force=true', title:'获取重置预测', auth:'Basic Auth / App API Key', description:'获取 codex-resets.com 提供的公共重置信号和历史统计。', params:['force=true'], body:'', response:'{"active_watch":null,"latest_reset":null}'},
+        {method:'GET', path:'/api/config', title:'读取脱敏配置', auth:'Basic Auth / App API Key', description:'读取非敏感运行配置。OAuth Token、Cookie 和密码只返回是否配置或脱敏提示。', params:[], body:'', response:'{"token_configured":true,"app_api_key_hint":"****abcd"}'},
+        {method:'GET', path:'/api/config/app-key', title:'读取当前 App API Key', auth:'Basic Auth / App API Key', description:'在已通过管理认证的情况下读取当前维护的 App API Key，供本页面调试使用。响应不缓存。', params:[], body:'', sensitive:true, response:'{"configured":true,"app_api_key":"sk-..."}'},
+        {method:'POST', path:'/api/config/test-proxy', title:'测试代理连接', auth:'Basic Auth / App API Key', description:'临时测试直连或 HTTP、HTTPS、SOCKS5 代理，不保存配置。', params:[], body:'{"proxy_url":"http://127.0.0.1:7890"}', write:true, response:'{"ok":true,"status_code":200}'},
+        {method:'POST', path:'/api/config/test', title:'临时测试账号配置', auth:'Basic Auth / App API Key', description:'使用请求体中的临时账号配置请求上游额度接口，不写入配置文件。空对象表示测试当前配置。', params:[], body:'{}', write:true, response:'{"ok":true,"email":"...","plan_type":"plus"}'},
+        {method:'PUT', path:'/api/config', title:'更新运行配置', auth:'Basic Auth / App API Key', description:'部分更新运行配置，未提供的字段保持不变；修改后立即生效。', params:[], body:'{"cache_ttl":"10m"}', write:true, response:'{"cache_ttl":"10m0s"}'},
+        {method:'GET', path:'/api/config/file', title:'读取配置文件', auth:'Basic Auth / App API Key', description:'读取原始 JSON 配置文件。需要 Basic Auth 或 App API Key。', params:[], body:'', sensitive:true, response:'{"config_file":"config.json","content":"{...}"}'},
+        {method:'PUT', path:'/api/config/file', title:'保存配置文件', auth:'Basic Auth / App API Key', description:'校验并保存原始 JSON 配置文件，保存后立即重新加载服务配置。', params:[], body:'{"content":"{\n  \\"cache_ttl\\": \\"10m\\"\n}"}', write:true, sensitive:true, response:'{"config_file":"config.json","content":"{...}"}'},
+        {method:'GET', path:'/audio?kind=warning', title:'获取提示音', auth:'Basic Auth / App API Key', description:'获取内置 WAV 提示音，kind 可选 normal、warning、critical。', params:['kind=normal|warning|critical'], body:'', response:'audio/wav'},
+        {method:'GET', path:'/openapi.yaml', title:'获取 OpenAPI 原文', auth:'页面认证（如启用）', description:'返回当前服务维护的 OpenAPI 3.0 接口定义文件。', params:[], body:'', response:'text/yaml'}
+      ];
+      var endpointList = document.getElementById('endpointList');
+      var endpointSelect = document.getElementById('debugEndpoint');
+      var methodInput = document.getElementById('debugMethod');
+      var pathInput = document.getElementById('debugPath');
+      var bodyInput = document.getElementById('debugBody');
+      var description = document.getElementById('debugDescription');
+      var writeWarning = document.getElementById('writeWarning');
+      var apiKeyInput = document.getElementById('appAPIKey');
+      var keyStatus = document.getElementById('keyStatus');
+      var debugStatus = document.getElementById('debugStatus');
+      var responseMeta = document.getElementById('responseMeta');
+      var responseOutput = document.getElementById('responseOutput');
+      function escapeHTML(value) { return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, function (character) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]; }); }
+      function setStatus(element, value, kind) { element.textContent = value; element.className = element.className.replace(/\s+(ok|error)\b/g, '') + (kind ? ' ' + kind : ''); }
+      function setTheme(theme) { document.documentElement.setAttribute('data-theme', theme); try { localStorage.setItem('codex-theme', theme); } catch (_) {} }
+      var savedTheme = null; try { savedTheme = localStorage.getItem('codex-theme'); } catch (_) {}
+      setTheme(savedTheme || (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light'));
+      document.getElementById('themeButton').addEventListener('click', function () { setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); });
+      function copyText(value) {
+        if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(value);
+        var helper = document.createElement('textarea'); helper.value = value; helper.setAttribute('readonly', ''); helper.style.position = 'fixed'; helper.style.opacity = '0'; document.body.appendChild(helper); helper.select(); var copied = false; try { copied = document.execCommand('copy'); } catch (_) {} document.body.removeChild(helper); return copied ? Promise.resolve() : Promise.reject(new Error('当前浏览器不支持复制，请手动复制。'));
+      }
+      function headers() {
+        var result = {'Accept':'application/json'}; var key = apiKeyInput.value.trim();
+        if (key) { result['X-App-API-Key'] = key; try { sessionStorage.setItem('codex-admin-key', key); } catch (_) {} }
+        return result;
+      }
+      function apiURL(path) {
+        var value = String(path || '').trim();
+        if (!value || /^[a-z][a-z0-9+.-]*:/i.test(value)) throw new Error('请求路径必须是当前服务的相对路径');
+        return new URL(value.replace(/^\/+/, ''), window.location.href).toString();
+      }
+      function loadSessionKey() { try { apiKeyInput.value = sessionStorage.getItem('codex-admin-key') || ''; } catch (_) {} }
+      function loadCurrentKey() {
+        setStatus(keyStatus, '正在读取当前维护的密钥…');
+        fetch(apiURL('api/config/app-key'), {headers:headers(), credentials:'same-origin', cache:'no-store'}).then(function (response) { if (!response.ok) throw new Error(response.status === 401 ? '认证失败：请先通过 Basic Auth，或手动填写 App API Key。' : '读取失败：HTTP ' + response.status); return response.json(); }).then(function (data) { if (!data.configured || !data.app_api_key) { apiKeyInput.value = ''; setStatus(keyStatus, '服务当前未配置 App API Key。'); return; } apiKeyInput.value = data.app_api_key; try { sessionStorage.setItem('codex-admin-key', data.app_api_key); } catch (_) {} setStatus(keyStatus, '已读取当前密钥，可直接用于下方调试。', 'ok'); }).catch(function (error) { setStatus(keyStatus, error.message || '读取密钥失败。', 'error'); });
+      }
+      function renderCatalog() {
+        endpointList.innerHTML = ''; endpointSelect.innerHTML = '';
+        apiCatalog.forEach(function (item, index) {
+          var option = document.createElement('option'); option.value = String(index); option.textContent = item.method + '  ' + item.path; endpointSelect.appendChild(option);
+          var params = item.params && item.params.length ? '<div class="params">' + item.params.map(function (param) { return '<span class="param">' + escapeHTML(param) + '</span>'; }).join('') + '</div>' : '';
+          var body = item.body ? '<pre>' + escapeHTML(item.body) + '</pre>' : '';
+          var article = document.createElement('article'); article.className = 'endpoint'; article.innerHTML = '<div class="endpoint-head"><span class="method method-' + item.method.toLowerCase() + '">' + item.method + '</span><code class="endpoint-path" title="' + escapeHTML(item.path) + '">' + escapeHTML(item.path) + '</code><button class="endpoint-debug" type="button" data-debug-index="' + index + '">调试</button></div><div class="endpoint-title">' + escapeHTML(item.title) + '</div><div class="endpoint-copy">' + escapeHTML(item.description) + '</div><span class="endpoint-auth">认证：' + escapeHTML(item.auth) + '</span>' + params + body;
+          endpointList.appendChild(article);
+        });
+        Array.prototype.forEach.call(endpointList.querySelectorAll('[data-debug-index]'), function (button) { button.addEventListener('click', function () { endpointSelect.value = button.getAttribute('data-debug-index'); fillDebugger(Number(endpointSelect.value)); document.querySelector('.debugger-card').scrollIntoView({behavior:'smooth', block:'start'}); }); });
+      }
+      function fillDebugger(index) {
+        var item = apiCatalog[index]; if (!item) return; methodInput.value = item.method; pathInput.value = item.path; bodyInput.value = item.body || ''; description.textContent = item.description + (item.sensitive ? ' 这是敏感配置接口，请确认当前页面受保护。' : ''); writeWarning.hidden = !item.write;
+      }
+      function prettyResponse(raw, contentType) {
+        if (!raw) return '(空响应)';
+        if ((contentType || '').indexOf('json') >= 0) { try { return JSON.stringify(JSON.parse(raw), null, 2); } catch (_) {} }
+        try { return JSON.stringify(JSON.parse(raw), null, 2); } catch (_) { return raw; }
+      }
+      function sendRequest() {
+        var path = pathInput.value.trim(); var method = methodInput.value; var rawBody = bodyInput.value.trim(); var requestHeaders = headers();
+        try { apiURL(path); } catch (error) { setStatus(debugStatus, error.message, 'error'); return; }
+        if (rawBody) { try { JSON.parse(rawBody); } catch (_) { setStatus(debugStatus, 'JSON 请求体格式错误。', 'error'); return; } requestHeaders['Content-Type'] = 'application/json'; }
+        var button = document.getElementById('sendRequest'); button.disabled = true; setStatus(debugStatus, '请求中…'); responseMeta.textContent = '请求中…'; responseOutput.textContent = '';
+        var started = Date.now(); var options = {method:method, headers:requestHeaders, credentials:'same-origin', cache:'no-store'}; if (rawBody && method !== 'GET') options.body = rawBody;
+        fetch(apiURL(path), options).then(function (response) { return response.text().then(function (raw) { return {response:response, raw:raw}; }); }).then(function (result) { var elapsed = Date.now() - started; var contentType = result.response.headers.get('content-type') || ''; responseMeta.textContent = 'HTTP ' + result.response.status + ' · ' + elapsed + ' ms'; responseOutput.textContent = prettyResponse(result.raw, contentType); setStatus(debugStatus, result.response.ok ? '请求完成。' : '请求返回错误，请查看响应体。', result.response.ok ? 'ok' : 'error'); }).catch(function (error) { responseMeta.textContent = '请求失败'; responseOutput.textContent = error.message || '网络请求失败'; setStatus(debugStatus, '请求失败。', 'error'); }).then(function () { button.disabled = false; });
+      }
+      document.getElementById('loadAppAPIKey').addEventListener('click', loadCurrentKey);
+      document.getElementById('copyAppAPIKey').addEventListener('click', function () { var value = apiKeyInput.value.trim(); if (!value) { setStatus(keyStatus, '当前没有可复制的 App API Key。', 'error'); return; } copyText(value).then(function () { setStatus(keyStatus, '已复制 App API Key。', 'ok'); }).catch(function (error) { setStatus(keyStatus, error.message, 'error'); }); });
+      document.getElementById('clearAppAPIKey').addEventListener('click', function () { apiKeyInput.value = ''; try { sessionStorage.removeItem('codex-admin-key'); } catch (_) {} setStatus(keyStatus, '已清除本页面会话中的密钥。'); });
+      apiKeyInput.addEventListener('input', function () { try { sessionStorage.setItem('codex-admin-key', apiKeyInput.value.trim()); } catch (_) {} });
+      endpointSelect.addEventListener('change', function () { fillDebugger(Number(endpointSelect.value)); });
+      document.getElementById('sendRequest').addEventListener('click', sendRequest);
+      loadSessionKey(); renderCatalog(); endpointSelect.value = '1'; fillDebugger(1);
+      if (apiKeyInput.value) setStatus(keyStatus, '已加载当前浏览器会话中的密钥。');
+    }());
+  </script>
+</body>
+</html>

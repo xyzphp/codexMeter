@@ -11,6 +11,7 @@ WORKDIR /src
 COPY go.mod ./
 COPY go.sum ./
 COPY *.go ./
+COPY openapi.yaml ./
 COPY web ./web
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \

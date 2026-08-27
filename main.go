@@ -48,6 +48,12 @@ var browserHTML []byte
 //go:embed web/settings.html
 var settingsHTML []byte
 
+//go:embed web/api-docs.html
+var apiDocsHTML []byte
+
+//go:embed openapi.yaml
+var openAPISpec []byte
+
 //go:embed web/assets/account-credentials-guide.png
 var accountCredentialsGuide []byte
 
@@ -1716,12 +1722,16 @@ func (s *Server) registerRoutes(mux *http.ServeMux, prefix string) {
 	mux.HandleFunc("GET "+route("/healthz"), s.handleHealth)
 	mux.HandleFunc("GET "+route("/"), s.handleIndex)
 	mux.HandleFunc("GET "+route("/settings"), s.handleSettings)
+	mux.HandleFunc("GET "+route("/api-docs"), s.handleAPIDocs)
+	mux.HandleFunc("GET "+route("/api-docs/"), s.handleAPIDocs)
+	mux.HandleFunc("GET "+route("/openapi.yaml"), s.handleOpenAPISpec)
 	mux.HandleFunc("GET "+route("/assets/account-credentials-guide.png"), s.handleCredentialGuide)
 	mux.HandleFunc("GET "+route("/audio"), s.handleAudio)
 	mux.HandleFunc("GET "+route("/api/usage"), s.handleUsage)
 	mux.HandleFunc("GET "+route("/api/usage/analytics"), s.handleUsageAnalytics)
 	mux.HandleFunc("GET "+route("/api/prediction"), s.handlePrediction)
 	mux.HandleFunc("GET "+route("/api/config"), s.handleConfigGet)
+	mux.HandleFunc("GET "+route("/api/config/app-key"), s.handleConfigAppKey)
 	mux.HandleFunc("GET "+route("/api/config/file"), s.handleConfigFileGet)
 	mux.HandleFunc("POST "+route("/api/config/test"), s.handleConfigTest)
 	mux.HandleFunc("POST "+route("/api/config/test-proxy"), s.handleProxyTest)
@@ -1731,6 +1741,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux, prefix string) {
 	mux.HandleFunc("OPTIONS "+route("/api/usage/analytics"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/prediction"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/config"), s.handleOptions)
+	mux.HandleFunc("OPTIONS "+route("/api/config/app-key"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/config/file"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/config/test"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/config/test-proxy"), s.handleOptions)
@@ -1844,6 +1855,21 @@ func (s *Server) handleSettings(response http.ResponseWriter, _ *http.Request) {
 	response.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 	response.WriteHeader(http.StatusOK)
 	_, _ = response.Write(settingsHTML)
+}
+
+func (s *Server) handleAPIDocs(response http.ResponseWriter, _ *http.Request) {
+	response.Header().Set("Content-Type", "text/html; charset=utf-8")
+	response.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	response.WriteHeader(http.StatusOK)
+	_, _ = response.Write(apiDocsHTML)
+}
+
+func (s *Server) handleOpenAPISpec(response http.ResponseWriter, _ *http.Request) {
+	response.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+	response.Header().Set("Content-Disposition", `inline; filename="openapi.yaml"`)
+	response.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	response.WriteHeader(http.StatusOK)
+	_, _ = response.Write(openAPISpec)
 }
 
 func (s *Server) handleCredentialGuide(response http.ResponseWriter, _ *http.Request) {
@@ -1963,6 +1989,18 @@ func (s *Server) handlePrediction(response http.ResponseWriter, request *http.Re
 
 func (s *Server) handleConfigGet(response http.ResponseWriter, _ *http.Request) {
 	writeJSON(response, http.StatusOK, s.usage.ConfigView())
+}
+
+func (s *Server) handleConfigAppKey(response http.ResponseWriter, _ *http.Request) {
+	// This endpoint is intentionally protected by the same middleware as the
+	// other management APIs. It only exposes the explicitly requested App API
+	// Key and never logs or caches the value.
+	response.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	cfg := s.usage.currentConfig()
+	writeJSON(response, http.StatusOK, map[string]any{
+		"configured":  cfg.AppAPIKey != "",
+		"app_api_key": cfg.AppAPIKey,
+	})
 }
 
 func (s *Server) handleConfigFileGet(response http.ResponseWriter, _ *http.Request) {

@@ -8,4 +8,3 @@ config.json
 *.test
 docs
 README.md
-openapi.yaml
