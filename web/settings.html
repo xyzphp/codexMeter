@@ -177,6 +177,13 @@
     .wizard-card .hint { display:block; margin-top:5px; }
     .credential-guide { margin-bottom:16px; overflow:hidden; border:1px solid var(--border); border-radius:12px; background:var(--card); }
     .credential-guide img { display:block; width:100%; height:auto; }
+    .capture-source { display:flex; align-items:center; justify-content:space-between; gap:14px; margin:0 0 16px; padding:12px 14px; border:1px solid var(--border); border-radius:12px; background:var(--card); }
+    .capture-source-copy { min-width:0; }
+    .capture-source-label { color:var(--text); font-size:13px; font-weight:700; line-height:18px; }
+    .capture-source-url { display:block; margin-top:3px; overflow-wrap:anywhere; color:var(--accent); font-size:13px; line-height:19px; text-decoration:none; }
+    .capture-source-url:hover { text-decoration:underline; }
+    .capture-source-target { margin-top:4px; color:var(--muted); font-size:12px; line-height:18px; }
+    .capture-source-target code { color:var(--text); }
     .wizard-actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:12px; }
     .wizard-actions button { min-height:38px; }
     .wizard-status { min-height:18px; margin-top:10px; font-size:12px; line-height:18px; color:var(--muted); }
@@ -368,13 +375,21 @@
           <div class="section-head"><div class="section-title">账号凭证</div><div class="section-hint">步骤 2</div></div>
           <div class="wizard-card">
             <div class="credential-guide">
-              <img src="assets/account-credentials-guide.png" alt="账号凭证获取步骤：打开 ChatGPT，进入设置中的使用情况，在 Network 找到 usage 请求并复制 Fetch 或 cURL">
+              <img src="assets/account-credentials-guide.png" alt="账号凭证获取步骤：打开 ChatGPT 使用分析页，在 Network 找到 usage 请求，右键 Copy 并复制 cURL">
+            </div>
+            <div class="capture-source">
+              <div class="capture-source-copy">
+                <div class="capture-source-label">浏览器抓包入口</div>
+                <a class="capture-source-url" href="https://chatgpt.com/codex/cloud/settings/analytics" target="_blank" rel="noopener">https://chatgpt.com/codex/cloud/settings/analytics</a>
+                <div class="capture-source-target">目标请求：<code>/backend-api/wham/usage</code></div>
+              </div>
+              <button id="copyAnalyticsURL" class="small-button" type="button">复制地址</button>
             </div>
             <div class="capture-field-head">
               <label for="captureInput">粘贴浏览器 Fetch / cURL 请求</label>
               <span class="capture-format">FETCH / CURL</span>
             </div>
-            <textarea id="captureInput" spellcheck="false" placeholder="在 ChatGPT 使用情况页面打开开发者工具 → Network，右键 usage 请求 → Copy as cURL 或 Copy fetch，然后粘贴到这里"></textarea>
+            <textarea id="captureInput" spellcheck="false" placeholder="打开上方抓包入口，在开发者工具 → Network 中右键 usage 请求 → Copy as cURL 或 Copy fetch，然后粘贴到这里"></textarea>
             <span class="hint">只需填写这一项。系统会自动识别 Authorization、Cookie、Account ID、请求上下文和 User-Agent，并覆盖当前账号配置。</span>
             <div class="wizard-actions">
               <button id="parseCapture" class="secondary" type="button">解析请求</button>
@@ -427,6 +442,8 @@
       var confirmProxyButton = document.getElementById('confirmProxy');
       var tabProxy = document.getElementById('tabProxy');
       var tabCredentials = document.getElementById('tabCredentials');
+      var copyAnalyticsURLButton = document.getElementById('copyAnalyticsURL');
+      var analyticsURL = 'https://chatgpt.com/codex/cloud/settings/analytics';
       var storedKey = '';
       var proxyReady = false;
       var proxyBusy = false;
@@ -457,6 +474,22 @@
       function setStatus(text, kind) { status.textContent = text; status.className = 'status ' + (kind || ''); }
       function setWizardStatus(text, kind) { wizardStatus.textContent = text; wizardStatus.className = 'wizard-status ' + (kind || ''); }
       function setProxyStatus(text, kind) { proxyStatus.textContent = text; proxyStatus.className = 'proxy-status ' + (kind || ''); }
+      function copyText(value) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          return navigator.clipboard.writeText(value);
+        }
+        var helper = document.createElement('textarea');
+        helper.value = value;
+        helper.setAttribute('readonly', '');
+        helper.style.position = 'fixed';
+        helper.style.opacity = '0';
+        document.body.appendChild(helper);
+        helper.select();
+        var copied = false;
+        try { copied = document.execCommand('copy'); } catch (_) {}
+        document.body.removeChild(helper);
+        return copied ? Promise.resolve() : Promise.reject(new Error('当前浏览器不支持复制，请长按地址手动复制。'));
+      }
       function showTab(name) {
         if (name === 'credentials' && !proxyReady) {
           setStatus('请先完成步骤 1：测试并保存代理，或使用直连并保存。', 'error');
@@ -764,6 +797,13 @@
       confirmProxyButton.addEventListener('click', function () { testProxy(true); });
       tabProxy.addEventListener('click', function () { showTab('proxy'); });
       tabCredentials.addEventListener('click', function () { showTab('credentials'); });
+      copyAnalyticsURLButton.addEventListener('click', function () {
+        copyText(analyticsURL).then(function () {
+          var original = copyAnalyticsURLButton.textContent;
+          copyAnalyticsURLButton.textContent = '已复制';
+          setTimeout(function () { copyAnalyticsURLButton.textContent = original; }, 1500);
+        }).catch(function (error) { setWizardStatus(error.message, 'error'); });
+      });
       document.getElementById('parseCapture').addEventListener('click', parseCapture);
       document.getElementById('testConnection').addEventListener('click', function () {
         var parsed = parseCapture();
