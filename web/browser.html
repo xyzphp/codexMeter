@@ -163,6 +163,7 @@
     .prediction-history { margin-top:16px; padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
     .prediction-history-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; color:var(--muted); font-size:14px; }
     .prediction-history-head strong { color:var(--text); font-size:14px; }
+    .footnote a { color:var(--accent); text-decoration:underline; text-underline-offset:3px; }
     .reset-calendar { margin-top:14px; }
     .reset-calendar-layout { display:flex; justify-content:center; gap:10px; min-width:0; }
     .reset-calendar-weekdays { width:30px; flex:0 0 30px; display:grid; grid-template-rows:repeat(7,18px); gap:5px; padding-top:26px; color:var(--muted); font-size:11px; line-height:18px; text-align:right; }
@@ -385,7 +386,7 @@
         <div class="prediction-history-head"><span>Codex 重置历史</span><strong>最近 26 周 · UTC</strong></div>
         <div id="predictionHistoryCalendar" class="reset-calendar" aria-label="Codex 重置历史日历"><div class="empty">读取中…</div></div>
       </div>
-      <div class="footnote">数据来源：codex-resets.com · 公共预测仅供参考</div>
+      <div class="footnote">数据来源：<a href="https://codex-resets.com/" target="_blank" rel="noopener noreferrer">codex-resets.com ↗</a> · 公共预测仅供参考</div>
     </section>
   </main>
   <div id="heatmapTooltip" class="heatmap-tooltip" role="tooltip"></div>
