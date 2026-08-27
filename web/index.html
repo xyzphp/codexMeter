@@ -148,6 +148,7 @@
     .prediction-list { margin-top:9px; }
     .prediction-row { min-height:30px; padding:7px 10px; font-size:11px; }
     .prediction-text { max-width:72%; }
+    .prediction-list #predictionLatestAt { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.35; }
     .reset-calendar { margin-top:11px; padding:0 3px; }
     .reset-calendar-head { display:flex; align-items:center; justify-content:space-between; gap:8px; color:var(--muted); font-size:11px; }
     .reset-calendar-head strong { color:var(--text); font-size:10px; font-weight:650; }
@@ -718,6 +719,17 @@
         var pad = function (n) { return String(n).padStart(2, '0'); };
         return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
       }
+      function formatUTCDate(date) {
+        var pad = function (n) { return String(n).padStart(2, '0'); };
+        return date.getUTCFullYear() + '-' + pad(date.getUTCMonth() + 1) + '-' + pad(date.getUTCDate()) + ' ' + pad(date.getUTCHours()) + ':' + pad(date.getUTCMinutes()) + ':' + pad(date.getUTCSeconds());
+      }
+      function formatAnnouncementTime(value) {
+        if (!value) return '—';
+        var date = new Date(value);
+        if (isNaN(date.getTime())) return '—';
+        var china = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+        return formatUTCDate(date) + ' UTC - ' + formatUTCDate(china) + ' 中国时间';
+      }
       function resetTimelineDurationMs(window) {
         var minutes = Number(window && window.window_minutes);
         if (isFinite(minutes) && minutes > 0) return minutes * 60 * 1000;
@@ -1143,7 +1155,7 @@
         setText('predictionAverage', data && data.stats ? formatDays(data.stats.avg_interval_days) : '—');
         setText('predictionUpdated', data && data.fetched_at ? '更新 ' + formatDate(data.fetched_at) : '公共信号');
         setText('predictionLatestType', latest ? formatResetType(latest.reset_type) : '—');
-        setText('predictionLatestAt', latest ? formatDate(latest.announced_at) : '—');
+        setText('predictionLatestAt', latest ? formatAnnouncementTime(latest.announced_at) : '—');
         setText('predictionLatestText', latest ? latest.text : '—');
         renderPredictionHistory(data && data.history);
       }
