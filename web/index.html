@@ -331,6 +331,88 @@
       .overview-model-pie .model-pie-caption { font-size:5px; }
       .model-pie-svg .model-pie-outside-label { font-size:5px; }
     }
+
+    /* Browser workbench: deliberately more spacious than the 800x480 device UI. */
+    @media (min-width:900px) and (min-height:700px) {
+      .app { max-width:1440px; padding:24px 32px 20px; gap:14px; }
+      .card { border-radius:24px; }
+      .overview-card, .detail-card { padding:24px 30px 24px; }
+      .overview-card { padding-bottom:78px; }
+      .detail-card { padding-bottom:26px; }
+      .topbar { min-height:50px; margin-bottom:24px; }
+      .brand-mark { width:38px; height:38px; }
+      .brand-title { margin-left:16px; font-size:22px; }
+      .connection { display:flex; align-items:center; gap:8px; margin-left:auto; color:var(--muted); font-size:13px; }
+      .dot { width:8px; height:8px; }
+      .quota-hero { gap:48px; min-height:190px; }
+      .quota-panel { padding-top:4px; }
+      .quota-panel + .quota-panel { padding-left:48px; }
+      .quota-panel .remaining { font-size:88px; letter-spacing:-5px; }
+      .eyebrow { font-size:16px; margin-bottom:7px; }
+      .remaining span { font-size:34px; margin-left:6px; }
+      .progress-block { max-width:620px; margin-top:10px; }
+      .progress-head { font-size:14px; margin-bottom:8px; }
+      .progress-head strong { font-size:15px; }
+      .progress-track { height:12px; }
+      .rule { margin:12px 0 16px; }
+      .meta-grid { gap:16px; }
+      .meta { padding:14px 18px 18px; border-radius:16px; }
+      .meta-label { font-size:14px; }
+      .meta-value { margin-top:5px; font-size:21px; }
+      .reset-progress-head { margin-top:14px; font-size:13px; }
+      .reset-progress-head strong { font-size:14px; }
+      .reset-progress-track { height:8px; margin-top:6px; }
+      .refresh-status { padding-top:12px; }
+      .overview-card > .refresh-status { left:30px; right:30px; bottom:18px; }
+      .refresh-head { font-size:13px; margin-bottom:7px; }
+      .refresh-head strong { font-size:14px; }
+      .refresh-track { height:8px; }
+      .detail-title { font-size:24px; }
+      .detail-subtitle { font-size:14px; }
+      .metric-grid { margin:18px 0 0; gap:12px; }
+      .metric { flex-basis:calc(25% - 9px); width:calc(25% - 9px); min-height:74px; padding:12px 16px; border-radius:16px; }
+      .metric:nth-child(even), .metric:nth-child(n+3) { margin-left:0; margin-top:0; }
+      .metric-label { font-size:14px; }
+      .metric-value { font-size:22px; margin-top:4px; }
+      .detail-section, .detail-account { margin-top:18px; }
+      .section-title { font-size:18px; }
+      .section-meta { font-size:13px; }
+      .analytics-summary { gap:12px; margin-top:10px; }
+      .analytics-stat { flex-basis:calc(33.333% - 8px); padding:12px 16px; border-radius:14px; }
+      .analytics-stat + .analytics-stat { margin-left:0; }
+      .analytics-stat-label { font-size:13px; }
+      .analytics-stat-value { font-size:21px; }
+      .chart-panel { margin-top:14px; padding:14px 16px 12px; border-radius:16px; }
+      .chart-panel-head, .chart-panel-head strong { font-size:14px; }
+      .chart-bars { height:180px; padding-top:10px; }
+      .chart-bar-value, .model-chart-total { height:20px; font-size:12px; line-height:20px; }
+      .chart-bar-shell, .model-chart-stack { height:120px; }
+      .chart-date, .model-chart-date { margin-top:5px; font-size:12px; }
+      .model-chart-plot { height:184px; padding-top:10px; }
+      .model-pie { min-height:190px; margin-top:12px; }
+      .model-pie-svg { width:180px; height:180px; flex-basis:180px; }
+      .model-pie-legend { margin-left:18px; }
+      .model-pie-legend-item { font-size:14px; line-height:18px; }
+      .model-pie-legend-item + .model-pie-legend-item { margin-top:9px; }
+      .model-pie-legend-value { font-size:14px; }
+      .detail-list { margin-top:12px; border-radius:14px; }
+      .detail-row { min-height:34px; padding:8px 16px; font-size:13px; }
+      .detail-row strong { font-size:13px; }
+      .prediction-card { padding-top:22px; }
+      .prediction-hero { margin-top:12px; padding:14px 16px 16px; border-radius:16px; }
+      .prediction-state { font-size:21px; }
+      .prediction-hint { margin-top:6px; font-size:13px; }
+      .prediction-probability { margin-top:12px; }
+      .prediction-probability-head { font-size:13px; margin-bottom:7px; }
+      .prediction-probability-head strong { font-size:14px; }
+      .prediction-track { height:8px; }
+      .prediction-grid { margin-top:12px; gap:12px; }
+      .prediction-grid .metric { flex-basis:calc(25% - 9px); width:calc(25% - 9px); }
+      .prediction-list { margin-top:12px; }
+      .prediction-foot { margin-top:10px; font-size:12px; }
+      .nav { width:100%; max-width:900px; height:56px; flex-basis:56px; gap:12px; padding:0 16px; }
+      .nav-button { max-width:none; width:auto; height:56px; font-size:18px; border-radius:16px; }
+    }
   </style>
 </head>
 <body>
