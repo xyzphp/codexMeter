@@ -388,7 +388,12 @@
       function setError(error) { classes('statusDot', 'status-dot error'); text('statusText', '连接失败'); text('usageUpdated', error && error.message ? error.message : '请求失败'); }
       function loadAll(force) {
         if (refreshBusy) return; refreshBusy = true; var suffix = force ? '?force=true' : ''; var button = byId('refreshButton'); if (button) button.disabled = true;
-        Promise.all([getJSON('api/usage' + suffix), getJSON('api/usage/analytics' + suffix), getJSON('api/prediction' + suffix)]).then(function (results) { renderUsage(results[0]); renderAnalytics(results[1]); renderPrediction(results[2]); refreshRemaining = refreshTotal; }).catch(setError).then(function () { refreshBusy = false; if (button) button.disabled = false; });
+        var requests = [
+          getJSON('api/usage' + suffix).then(renderUsage),
+          getJSON('api/usage/analytics' + suffix).then(renderAnalytics),
+          getJSON('api/prediction' + suffix).then(renderPrediction)
+        ];
+        Promise.all(requests).then(function () { refreshRemaining = refreshTotal; }).catch(setError).then(function () { refreshBusy = false; if (button) button.disabled = false; });
       }
       function renderRefresh() { text('refreshCountdown', Math.floor(refreshRemaining / 60).toString().padStart(2, '0') + ':' + (refreshRemaining % 60).toString().padStart(2, '0')); style('refreshBar', 'width', refreshRemaining / refreshTotal * 100 + '%'); }
       function setTheme(theme) { document.documentElement.setAttribute('data-theme', theme); try { localStorage.setItem('codex-theme', theme); } catch (_) {} }
