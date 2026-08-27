@@ -562,24 +562,28 @@ type UsageService struct {
 }
 
 func NewUsageService(cfg Config) (*UsageService, error) {
-	proxyFunc, err := buildProxyFunc(cfg.UpstreamProxy)
+	client, err := newUpstreamClient(cfg.UpstreamProxy)
 	if err != nil {
 		return nil, err
 	}
+	return &UsageService{
+		cfg:    cfg,
+		client: client,
+	}, nil
+}
 
+func newUpstreamClient(proxyURL string) (*http.Client, error) {
+	proxyFunc, err := buildProxyFunc(proxyURL)
+	if err != nil {
+		return nil, err
+	}
 	transport := &http.Transport{
 		Proxy:                 proxyFunc,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: 10 * time.Second,
 		IdleConnTimeout:       30 * time.Second,
 	}
-	return &UsageService{
-		cfg: cfg,
-		client: &http.Client{
-			Transport: transport,
-			Timeout:   upstreamRequestTimeout,
-		},
-	}, nil
+	return &http.Client{Transport: transport, Timeout: upstreamRequestTimeout}, nil
 }
 
 func buildProxyFunc(raw string) (func(*http.Request) (*url.URL, error), error) {
@@ -888,12 +892,16 @@ func newWhamRequest(ctx context.Context, endpoint string, cfg Config) (*http.Req
 }
 
 func (s *UsageService) queryWhamJSON(ctx context.Context, cfg Config, endpoint string, target any) error {
+	return s.queryWhamJSONWithClient(ctx, cfg, endpoint, target, s.currentClient())
+}
+
+func (s *UsageService) queryWhamJSONWithClient(ctx context.Context, cfg Config, endpoint string, target any, client *http.Client) error {
 	request, cancel, err := newWhamRequest(ctx, endpoint, cfg)
 	if err != nil {
 		return err
 	}
 	defer cancel()
-	response, err := s.currentClient().Do(request)
+	response, err := client.Do(request)
 	if err != nil {
 		return err
 	}
@@ -974,25 +982,50 @@ func (s *UsageService) queryResetPrediction(ctx context.Context) (*ResetPredicti
 }
 
 type ConfigView struct {
-	BasePath         string `json:"base_path"`
-	BasicAuthEnabled bool   `json:"basic_auth_enabled"`
-	ChatGPTAccountID string `json:"chatgpt_account_id"`
-	UserAgent        string `json:"user_agent"`
-	FedRAMP          bool   `json:"fedramp"`
-	TokenConfigured  bool   `json:"token_configured"`
-	TokenHint        string `json:"token_hint,omitempty"`
-	ProxyURL         string `json:"proxy_url,omitempty"`
-	CacheTTL         string `json:"cache_ttl"`
-	ConfigFile       string `json:"config_file"`
+	BasePath          string `json:"base_path"`
+	BasicAuthEnabled  bool   `json:"basic_auth_enabled"`
+	ChatGPTAccountID  string `json:"chatgpt_account_id"`
+	UserAgent         string `json:"user_agent"`
+	FedRAMP           bool   `json:"fedramp"`
+	TokenConfigured   bool   `json:"token_configured"`
+	TokenHint         string `json:"token_hint,omitempty"`
+	CookieConfigured  bool   `json:"cookie_configured"`
+	CookieHint        string `json:"cookie_hint,omitempty"`
+	ClientBuildNumber string `json:"client_build_number,omitempty"`
+	ClientVersion     string `json:"client_version,omitempty"`
+	DeviceID          string `json:"device_id,omitempty"`
+	SessionID         string `json:"session_id,omitempty"`
+	ClientObservation string `json:"client_observation,omitempty"`
+	Referer           string `json:"referer,omitempty"`
+	ProxyURL          string `json:"proxy_url,omitempty"`
+	CacheTTL          string `json:"cache_ttl"`
+	ConfigFile        string `json:"config_file"`
 }
 
 type ConfigUpdate struct {
-	AccessToken      *string `json:"access_token"`
-	ChatGPTAccountID *string `json:"chatgpt_account_id"`
-	UserAgent        *string `json:"user_agent"`
-	FedRAMP          *bool   `json:"fedramp"`
-	ProxyURL         *string `json:"proxy_url"`
-	CacheTTL         *string `json:"cache_ttl"`
+	AccessToken       *string `json:"access_token"`
+	UpstreamCookie    *string `json:"cookie"`
+	ChatGPTAccountID  *string `json:"chatgpt_account_id"`
+	ClientBuildNumber *string `json:"client_build_number"`
+	ClientVersion     *string `json:"client_version"`
+	DeviceID          *string `json:"device_id"`
+	SessionID         *string `json:"session_id"`
+	ClientObservation *string `json:"client_observation"`
+	Referer           *string `json:"referer"`
+	UserAgent         *string `json:"user_agent"`
+	FedRAMP           *bool   `json:"fedramp"`
+	ProxyURL          *string `json:"proxy_url"`
+	CacheTTL          *string `json:"cache_ttl"`
+}
+
+type ConfigTestResult struct {
+	OK               bool   `json:"ok"`
+	Message          string `json:"message"`
+	StatusCode       int    `json:"status_code"`
+	Email            string `json:"email,omitempty"`
+	PlanType         string `json:"plan_type,omitempty"`
+	TokenConfigured  bool   `json:"token_configured"`
+	CookieConfigured bool   `json:"cookie_configured"`
 }
 
 func (s *UsageService) currentConfig() Config {
@@ -1014,27 +1047,97 @@ func (s *UsageService) ConfigView() ConfigView {
 		tokenHint = "****" + cfg.AccessToken[len(cfg.AccessToken)-4:]
 	}
 	return ConfigView{
-		BasePath:         cfg.BasePath,
-		BasicAuthEnabled: cfg.BasicAuthEnabled,
-		ChatGPTAccountID: cfg.ChatGPTAccountID,
-		UserAgent:        cfg.UserAgent,
-		FedRAMP:          cfg.FedRAMP,
-		TokenConfigured:  cfg.AccessToken != "",
-		TokenHint:        tokenHint,
-		ProxyURL:         cfg.UpstreamProxy,
-		CacheTTL:         cfg.CacheTTL.String(),
-		ConfigFile:       cfg.ConfigPath,
+		BasePath:          cfg.BasePath,
+		BasicAuthEnabled:  cfg.BasicAuthEnabled,
+		ChatGPTAccountID:  cfg.ChatGPTAccountID,
+		UserAgent:         cfg.UserAgent,
+		FedRAMP:           cfg.FedRAMP,
+		TokenConfigured:   cfg.AccessToken != "",
+		TokenHint:         tokenHint,
+		CookieConfigured:  cfg.UpstreamCookie != "",
+		CookieHint:        cookieHint(cfg.UpstreamCookie),
+		ClientBuildNumber: cfg.ClientBuildNumber,
+		ClientVersion:     cfg.ClientVersion,
+		DeviceID:          cfg.DeviceID,
+		SessionID:         cfg.SessionID,
+		ClientObservation: cfg.ClientObservation,
+		Referer:           cfg.UpstreamReferer,
+		ProxyURL:          cfg.UpstreamProxy,
+		CacheTTL:          cfg.CacheTTL.String(),
+		ConfigFile:        cfg.ConfigPath,
 	}
 }
 
 func (s *UsageService) UpdateConfig(update ConfigUpdate) (ConfigView, error) {
 	old := s.currentConfig()
+	next, err := applyConfigUpdate(old, update)
+	if err != nil {
+		return ConfigView{}, err
+	}
+	if _, err := buildProxyFunc(next.UpstreamProxy); err != nil {
+		return ConfigView{}, err
+	}
+	if err := persistConfig(next); err != nil {
+		return ConfigView{}, err
+	}
+
+	if next.UpstreamProxy != old.UpstreamProxy {
+		client, err := newUpstreamClient(next.UpstreamProxy)
+		if err != nil {
+			return ConfigView{}, err
+		}
+		s.clientMu.Lock()
+		s.client = client
+		s.clientMu.Unlock()
+	}
+
+	s.cfgMu.Lock()
+	s.cfg = next
+	s.cfgMu.Unlock()
+
+	// A changed credential, request context, proxy, or cache policy must not
+	// reuse an earlier account snapshot.
+	s.cacheMu.Lock()
+	s.cached = nil
+	s.cachedAt = time.Time{}
+	s.history = nil
+	s.resetCached = nil
+	s.resetCachedAt = time.Time{}
+	s.analyticsCached = nil
+	s.analyticsCachedAt = time.Time{}
+	s.analyticsCachedKey = ""
+	s.cacheMu.Unlock()
+	return s.ConfigView(), nil
+}
+
+func applyConfigUpdate(old Config, update ConfigUpdate) (Config, error) {
 	next := old
 	if update.AccessToken != nil {
 		next.AccessToken = strings.TrimSpace(*update.AccessToken)
 	}
+	if update.UpstreamCookie != nil {
+		next.UpstreamCookie = strings.TrimSpace(*update.UpstreamCookie)
+	}
 	if update.ChatGPTAccountID != nil {
 		next.ChatGPTAccountID = strings.TrimSpace(*update.ChatGPTAccountID)
+	}
+	if update.ClientBuildNumber != nil {
+		next.ClientBuildNumber = strings.TrimSpace(*update.ClientBuildNumber)
+	}
+	if update.ClientVersion != nil {
+		next.ClientVersion = strings.TrimSpace(*update.ClientVersion)
+	}
+	if update.DeviceID != nil {
+		next.DeviceID = strings.TrimSpace(*update.DeviceID)
+	}
+	if update.SessionID != nil {
+		next.SessionID = strings.TrimSpace(*update.SessionID)
+	}
+	if update.ClientObservation != nil {
+		next.ClientObservation = strings.TrimSpace(*update.ClientObservation)
+	}
+	if update.Referer != nil {
+		next.UpstreamReferer = strings.TrimSpace(*update.Referer)
 	}
 	if update.UserAgent != nil {
 		next.UserAgent = strings.TrimSpace(*update.UserAgent)
@@ -1051,53 +1154,63 @@ func (s *UsageService) UpdateConfig(update ConfigUpdate) (ConfigView, error) {
 	if update.CacheTTL != nil {
 		ttl, err := time.ParseDuration(strings.TrimSpace(*update.CacheTTL))
 		if err != nil || ttl < 0 {
-			return ConfigView{}, fmt.Errorf("invalid cache_ttl")
+			return Config{}, fmt.Errorf("invalid cache_ttl")
 		}
 		next.CacheTTL = ttl
 	}
 	if next.AccessToken == "" {
-		return ConfigView{}, errors.New("access_token cannot be empty")
+		return Config{}, errors.New("access_token cannot be empty")
 	}
 	if next.ChatGPTAccountID == "" {
-		return ConfigView{}, errors.New("chatgpt_account_id cannot be empty")
+		return Config{}, errors.New("chatgpt_account_id cannot be empty")
 	}
-	proxyFunc, err := buildProxyFunc(next.UpstreamProxy)
+	return next, nil
+}
+
+func cookieHint(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	count := strings.Count(raw, ";") + 1
+	return fmt.Sprintf("已配置（%d 项）", count)
+}
+
+func (s *UsageService) TestConfig(ctx context.Context, update ConfigUpdate) (ConfigTestResult, error) {
+	current := s.currentConfig()
+	draft, err := applyConfigUpdate(current, update)
 	if err != nil {
-		return ConfigView{}, err
+		return ConfigTestResult{}, err
 	}
-	if err := persistConfig(next); err != nil {
-		return ConfigView{}, err
+	client, err := newUpstreamClient(draft.UpstreamProxy)
+	if err != nil {
+		return ConfigTestResult{}, err
 	}
-
-	if next.UpstreamProxy != old.UpstreamProxy {
-		transport := &http.Transport{
-			Proxy:                 proxyFunc,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: 10 * time.Second,
-			IdleConnTimeout:       30 * time.Second,
+	var upstream whamUsageResponse
+	if err := s.queryWhamJSONWithClient(ctx, draft, "https://chatgpt.com/backend-api/wham/usage", &upstream, client); err != nil {
+		return ConfigTestResult{}, fmt.Errorf("连接 OpenAI 失败：%w", err)
+	}
+	rateLimit := upstream.RateLimit
+	if rateLimit == nil || (rateLimit.PrimaryWindow == nil && rateLimit.SecondaryWindow == nil) {
+		for _, additional := range upstream.AdditionalRateLimits {
+			if additional.MeteredFeature == "codex_bengalfox" && additional.RateLimit != nil {
+				rateLimit = additional.RateLimit
+				break
+			}
 		}
-		s.clientMu.Lock()
-		s.client = &http.Client{Transport: transport, Timeout: upstreamRequestTimeout}
-		s.clientMu.Unlock()
 	}
-
-	s.cfgMu.Lock()
-	s.cfg = next
-	s.cfgMu.Unlock()
-
-	// A changed token, account, proxy, or cache policy must not reuse an earlier
-	// account snapshot.
-	s.cacheMu.Lock()
-	s.cached = nil
-	s.cachedAt = time.Time{}
-	s.history = nil
-	s.resetCached = nil
-	s.resetCachedAt = time.Time{}
-	s.analyticsCached = nil
-	s.analyticsCachedAt = time.Time{}
-	s.analyticsCachedKey = ""
-	s.cacheMu.Unlock()
-	return s.ConfigView(), nil
+	if rateLimit == nil || (rateLimit.PrimaryWindow == nil && rateLimit.SecondaryWindow == nil) {
+		return ConfigTestResult{}, errors.New("上游响应成功，但没有找到可用的额度窗口")
+	}
+	return ConfigTestResult{
+		OK:               true,
+		Message:          "连接成功，已读取额度数据",
+		StatusCode:       http.StatusOK,
+		Email:            upstream.Email,
+		PlanType:         upstream.PlanType,
+		TokenConfigured:  draft.AccessToken != "",
+		CookieConfigured: draft.UpstreamCookie != "",
+	}, nil
 }
 
 func persistConfig(cfg Config) error {
@@ -1381,11 +1494,13 @@ func (s *Server) registerRoutes(mux *http.ServeMux, prefix string) {
 	mux.HandleFunc("GET "+route("/api/usage/analytics"), s.handleUsageAnalytics)
 	mux.HandleFunc("GET "+route("/api/prediction"), s.handlePrediction)
 	mux.HandleFunc("GET "+route("/api/config"), s.handleConfigGet)
+	mux.HandleFunc("POST "+route("/api/config/test"), s.handleConfigTest)
 	mux.HandleFunc("PUT "+route("/api/config"), s.handleConfigPut)
 	mux.HandleFunc("OPTIONS "+route("/api/usage"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/usage/analytics"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/prediction"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/config"), s.handleOptions)
+	mux.HandleFunc("OPTIONS "+route("/api/config/test"), s.handleOptions)
 }
 
 func (s *Server) withMiddleware(next http.Handler) http.Handler {
@@ -1394,7 +1509,7 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 			response.Header().Set("Access-Control-Allow-Origin", s.cfg.CORSOrigin)
 			response.Header().Set("Vary", "Origin")
 			response.Header().Set("Access-Control-Allow-Headers", "Authorization, X-App-API-Key, Content-Type")
-			response.Header().Set("Access-Control-Allow-Methods", "GET, PUT, OPTIONS")
+			response.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
 		}
 		if s.cfg.BasicAuthEnabled && !authorizedBasic(request, s.cfg.BasicAuthUsername, s.cfg.BasicAuthPassword) {
 			response.Header().Set("WWW-Authenticate", `Basic realm="Codex Usage"`)
@@ -1594,10 +1709,27 @@ func (s *Server) handleConfigGet(response http.ResponseWriter, _ *http.Request) 
 	writeJSON(response, http.StatusOK, s.usage.ConfigView())
 }
 
-func (s *Server) handleConfigPut(response http.ResponseWriter, request *http.Request) {
-	request.Body = http.MaxBytesReader(response, request.Body, 16<<10)
+func (s *Server) handleConfigTest(response http.ResponseWriter, request *http.Request) {
+	request.Body = http.MaxBytesReader(response, request.Body, 64<<10)
 	var update ConfigUpdate
-	if err := json.NewDecoder(io.LimitReader(request.Body, 16<<10)).Decode(&update); err != nil {
+	if err := json.NewDecoder(io.LimitReader(request.Body, 64<<10)).Decode(&update); err != nil {
+		writeJSON(response, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+	result, err := s.usage.TestConfig(request.Context(), update)
+	if err != nil {
+		// The error intentionally contains only the upstream status or a safe
+		// network/validation message; credentials are never included.
+		writeJSON(response, http.StatusBadGateway, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(response, http.StatusOK, result)
+}
+
+func (s *Server) handleConfigPut(response http.ResponseWriter, request *http.Request) {
+	request.Body = http.MaxBytesReader(response, request.Body, 64<<10)
+	var update ConfigUpdate
+	if err := json.NewDecoder(io.LimitReader(request.Body, 64<<10)).Decode(&update); err != nil {
 		writeJSON(response, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}

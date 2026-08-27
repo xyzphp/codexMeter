@@ -157,6 +157,23 @@
     .actions { gap:10px; padding-top:22px; }
     .primary, .secondary { min-height:40px; font-size:14px; }
     .status { font-size:12px; line-height:18px; }
+    textarea {
+      width:100%; min-height:150px; resize:vertical; padding:13px; border:1px solid var(--border);
+      border-radius:10px; outline:0; background:var(--card); color:var(--text); font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+    }
+    textarea:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(16,163,127,.12); }
+    textarea::placeholder { color:#a1a1aa; }
+    .wizard-card { padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
+    .wizard-card .hint { display:block; margin-top:5px; }
+    .wizard-actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:12px; }
+    .wizard-actions button { min-height:38px; }
+    .wizard-status { min-height:18px; margin-top:10px; font-size:12px; line-height:18px; color:var(--muted); }
+    .wizard-status.ok { color:var(--accent); }
+    .wizard-status.error { color:var(--danger); }
+    .advanced-card { margin-top:14px; border:1px solid var(--border); border-radius:12px; background:var(--soft); }
+    .advanced-card summary { padding:12px 14px; cursor:pointer; color:var(--text); font-size:13px; font-weight:680; }
+    .advanced-card[open] summary { border-bottom:1px solid var(--border); }
+    .advanced-fields { padding:14px; }
 
     @media (max-width:900px), (max-height:700px) {
       .shell { width:calc(100% - 28px); padding:16px 0 24px; }
@@ -181,6 +198,13 @@
       .audio-card strong, .security-card strong { font-size:11px; }
       .audio-buttons { gap:7px; margin-top:9px; }
       .audio-button { min-height:32px; padding:0 11px; font-size:10px; }
+      .wizard-card { padding:12px; border-radius:11px; }
+      textarea { min-height:120px; padding:10px; font-size:11px; }
+      .wizard-actions { gap:7px; margin-top:9px; }
+      .wizard-actions button { min-height:34px; }
+      .wizard-status { font-size:10px; }
+      .advanced-card summary { padding:10px 12px; font-size:11px; }
+      .advanced-fields { padding:12px; }
       .actions { gap:8px; padding-top:16px; }
       .primary, .secondary { min-height:36px; font-size:12px; }
       .status { font-size:10px; }
@@ -222,6 +246,20 @@
 
       <form id="configForm" class="form">
         <section class="form-section">
+          <div class="section-head"><div class="section-title">快速配置</div><div class="section-hint">推荐方式</div></div>
+          <div class="wizard-card">
+            <label for="captureInput">粘贴浏览器 Fetch / cURL 请求</label>
+            <textarea id="captureInput" spellcheck="false" placeholder="在 ChatGPT 使用情况页面打开开发者工具 → Network，右键 usage 请求 → Copy as cURL 或 Copy fetch，然后粘贴到这里"></textarea>
+            <span class="hint">页面只在本地浏览器解析抓包内容；点击“测试连接”后，解析出的字段才会发送到当前 Go 后端。</span>
+            <div class="wizard-actions">
+              <button id="parseCapture" class="secondary" type="button">自动解析并填充</button>
+              <button id="testConnection" class="primary" type="button">测试连接</button>
+            </div>
+            <div id="wizardStatus" class="wizard-status" role="status" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <section class="form-section">
           <div class="section-head"><div class="section-title">账号与凭证</div><div class="section-hint">用于读取 OpenAI 额度</div></div>
           <div class="field-grid">
             <div class="field full">
@@ -234,6 +272,42 @@
               <div class="token-state"><i id="tokenDot" class="state-dot"></i><span id="tokenHint" class="hint">当前状态：检查中</span></div>
             </div>
           </div>
+          <details class="advanced-card">
+            <summary>浏览器请求上下文（可选）</summary>
+            <div class="advanced-fields">
+              <div class="field-grid">
+                <div class="field full">
+                  <label for="upstreamCookie">Cookie</label>
+                  <div class="input-action"><input id="upstreamCookie" type="password" autocomplete="new-password" placeholder="留空表示保持当前 Cookie"><button id="toggleCookie" class="small-button" type="button">显示</button></div>
+                  <span id="cookieHint" class="hint">Cookie 未配置也可能可以请求；遇到 401 时建议从同一条请求中提取。</span>
+                </div>
+                <div class="field">
+                  <label for="clientBuildNumber">客户端构建号</label>
+                  <input id="clientBuildNumber" autocomplete="off" placeholder="例如：9758774">
+                </div>
+                <div class="field">
+                  <label for="clientVersion">客户端版本</label>
+                  <input id="clientVersion" autocomplete="off" placeholder="prod-...">
+                </div>
+                <div class="field">
+                  <label for="deviceId">设备 ID</label>
+                  <input id="deviceId" autocomplete="off" placeholder="UUID">
+                </div>
+                <div class="field">
+                  <label for="sessionId">会话 ID</label>
+                  <input id="sessionId" autocomplete="off" placeholder="UUID">
+                </div>
+                <div class="field full">
+                  <label for="clientObservation">客户端观察标识</label>
+                  <input id="clientObservation" autocomplete="off" placeholder="x-oai-is-client-observation 的值">
+                </div>
+                <div class="field full">
+                  <label for="referer">Referer</label>
+                  <input id="referer" autocomplete="off" placeholder="例如：https://chatgpt.com/codex/cloud/settings/analytics">
+                </div>
+              </div>
+            </div>
+          </details>
         </section>
 
         <section class="form-section">
@@ -307,6 +381,10 @@
       var tokenInput = document.getElementById('accessToken');
       var tokenDot = document.getElementById('tokenDot');
       var toggleToken = document.getElementById('toggleToken');
+      var cookieInput = document.getElementById('upstreamCookie');
+      var toggleCookie = document.getElementById('toggleCookie');
+      var captureInput = document.getElementById('captureInput');
+      var wizardStatus = document.getElementById('wizardStatus');
       var audioPlayers = {
         normal: document.getElementById('audioNormal'),
         warning: document.getElementById('audioWarning'),
@@ -336,10 +414,108 @@
         return {};
       }
       function setStatus(text, kind) { status.textContent = text; status.className = 'status ' + (kind || ''); }
+      function setWizardStatus(text, kind) { wizardStatus.textContent = text; wizardStatus.className = 'wizard-status ' + (kind || ''); }
       function setTokenState(config) {
         var configured = !!config.token_configured;
         tokenDot.className = 'state-dot ' + (configured ? 'ok' : 'error');
         document.getElementById('tokenHint').textContent = configured ? '当前状态：已配置 ' + (config.token_hint || '') : '当前状态：未配置';
+      }
+      function setCookieState(config) {
+        document.getElementById('cookieHint').textContent = config.cookie_configured ? '当前状态：' + (config.cookie_hint || '已配置') + '；留空保持不变。' : 'Cookie 未配置也可能可以请求；遇到 401 时建议从同一条请求中提取。';
+      }
+      function setValue(id, value) {
+        var field = document.getElementById(id);
+        if (field) field.value = value || '';
+      }
+      function decodeJWTClaims(token) {
+        try {
+          var part = token.split('.')[1];
+          if (!part) return {};
+          part = part.replace(/-/g, '+').replace(/_/g, '/');
+          while (part.length % 4) part += '=';
+          var binary = atob(part);
+          var encoded = '';
+          for (var i = 0; i < binary.length; i += 1) encoded += '%' + ('00' + binary.charCodeAt(i).toString(16)).slice(-2);
+          return JSON.parse(decodeURIComponent(encoded));
+        } catch (_) { return {}; }
+      }
+      function readCapturedHeader(source, name) {
+        var key = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        var objectMatch = source.match(new RegExp('["\\\']' + key + '["\\\']\\s*:\\s*["\\\']([^"\\\']*)["\\\']', 'i'));
+        if (objectMatch) return objectMatch[1].trim();
+        var curlMatch = source.match(new RegExp('(?:-H|--header)\\s+["\\\']?' + key + '\\s*:\\s*([^"\\\'\\r\\n]+)', 'i'));
+        return curlMatch ? curlMatch[1].trim().replace(/["\\\']+$/, '') : '';
+      }
+      function readCapturedCookie(source) {
+        var headerCookie = readCapturedHeader(source, 'cookie');
+        if (headerCookie) return headerCookie;
+        var cookieArg = source.match(/(?:-b|--cookie)\s+["']?([^"'\r\n]+)["']?/i);
+        return cookieArg ? cookieArg[1].trim().replace(/["']+$/, '') : '';
+      }
+      function parseCapture() {
+        var source = captureInput.value.trim();
+        if (!source) {
+          setWizardStatus('请先粘贴 Fetch 或 cURL 请求。', 'error');
+          return null;
+        }
+        source = source.replace(/&#x20;/g, ' ').replace(/&quot;/g, '"').replace(/\\_/g, '_').replace(/\\(["'])/g, '$1').replace(/\^\s*(["'])/g, '$1');
+        var authorization = readCapturedHeader(source, 'authorization');
+        var token = authorization.replace(/^Bearer\s+/i, '').trim();
+        var claims = token ? decodeJWTClaims(token) : {};
+        var authClaims = claims['https://api.openai.com/auth'] || {};
+        var values = {
+          access_token: token,
+          cookie: readCapturedCookie(source),
+          chatgpt_account_id: authClaims.chatgpt_account_id || claims.chatgpt_account_id || '',
+          client_build_number: readCapturedHeader(source, 'oai-client-build-number'),
+          client_version: readCapturedHeader(source, 'oai-client-version'),
+          device_id: readCapturedHeader(source, 'oai-device-id'),
+          session_id: readCapturedHeader(source, 'oai-session-id'),
+          client_observation: readCapturedHeader(source, 'x-oai-is-client-observation'),
+          referer: readCapturedHeader(source, 'referer'),
+          user_agent: readCapturedHeader(source, 'user-agent')
+        };
+        var fields = {
+          access_token: 'accessToken', cookie: 'upstreamCookie', chatgpt_account_id: 'accountId',
+          client_build_number: 'clientBuildNumber', client_version: 'clientVersion', device_id: 'deviceId',
+          session_id: 'sessionId', client_observation: 'clientObservation', referer: 'referer', user_agent: 'userAgent'
+        };
+        var found = [];
+        Object.keys(fields).forEach(function (key) {
+          if (values[key]) {
+            setValue(fields[key], values[key]);
+            found.push(key);
+          }
+        });
+        if (values.cookie) document.getElementById('cookieHint').textContent = '已从抓包中解析 Cookie，保存或测试后生效。';
+        if (!values.access_token && !values.cookie) {
+          setWizardStatus('没有识别到 Authorization 或 Cookie，请确认粘贴的是 usage 请求。', 'error');
+          return null;
+        }
+        setWizardStatus('已解析 ' + found.length + ' 项，请点击“测试连接”验证；确认无误后再保存。', 'ok');
+        return values;
+      }
+      function collectConfigBody() {
+        var body = {
+          user_agent: document.getElementById('userAgent').value.trim(),
+          fedramp: document.getElementById('fedramp').checked,
+          chatgpt_account_id: document.getElementById('accountId').value.trim(),
+          proxy_url: document.getElementById('proxyUrl').value.trim(),
+          cache_ttl: document.getElementById('cacheTTL').value.trim()
+        };
+        var token = tokenInput.value.trim();
+        if (token) body.access_token = token;
+        var cookie = cookieInput.value.trim();
+        if (cookie) body.cookie = cookie;
+        [
+          ['clientBuildNumber', 'client_build_number'], ['clientVersion', 'client_version'],
+          ['deviceId', 'device_id'], ['sessionId', 'session_id'],
+          ['clientObservation', 'client_observation'], ['referer', 'referer']
+        ].forEach(function (pair) {
+          var value = document.getElementById(pair[0]).value.trim();
+          if (value) body[pair[1]] = value;
+        });
+        return body;
       }
       function loadConfig() {
         setStatus('正在读取配置…');
@@ -352,6 +528,14 @@
           document.getElementById('proxyUrl').value = config.proxy_url || '';
           document.getElementById('cacheTTL').value = config.cache_ttl || '10m';
           document.getElementById('fedramp').checked = !!config.fedramp;
+          setValue('clientBuildNumber', config.client_build_number);
+          setValue('clientVersion', config.client_version);
+          setValue('deviceId', config.device_id);
+          setValue('sessionId', config.session_id);
+          setValue('clientObservation', config.client_observation);
+          setValue('referer', config.referer);
+          cookieInput.value = '';
+          setCookieState(config);
           setTokenState(config);
           setStatus('配置已读取', 'ok');
         }).catch(function (error) { setStatus(error.message, 'error'); });
@@ -361,23 +545,37 @@
         tokenInput.type = visible ? 'password' : 'text';
         toggleToken.textContent = visible ? '显示' : '隐藏';
       });
+      toggleCookie.addEventListener('click', function () {
+        var visible = cookieInput.type === 'text';
+        cookieInput.type = visible ? 'password' : 'text';
+        toggleCookie.textContent = visible ? '显示' : '隐藏';
+      });
+      document.getElementById('parseCapture').addEventListener('click', parseCapture);
+      document.getElementById('testConnection').addEventListener('click', function () {
+        var body = collectConfigBody();
+        if (!body.access_token && !body.cookie) {
+          setWizardStatus('请先粘贴抓包并自动解析，或填写已有凭证。', 'error');
+          return;
+        }
+        setWizardStatus('正在连接 OpenAI 并读取额度…');
+        fetch('api/config/test', { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(body) })
+          .then(function (response) { return response.json().then(function (data) { if (!response.ok || !data.ok) throw new Error(data.error || '连接测试失败'); return data; }); })
+          .then(function (data) {
+            var detail = data.plan_type ? '（套餐：' + data.plan_type + '）' : '';
+            setWizardStatus(data.message + detail + '；配置尚未保存。', 'ok');
+          }).catch(function (error) { setWizardStatus(error.message, 'error'); });
+      });
       form.addEventListener('submit', function (event) {
         event.preventDefault();
-        var body = {
-          user_agent: document.getElementById('userAgent').value.trim(),
-          fedramp: document.getElementById('fedramp').checked,
-          chatgpt_account_id: document.getElementById('accountId').value.trim(),
-          proxy_url: document.getElementById('proxyUrl').value.trim(),
-          cache_ttl: document.getElementById('cacheTTL').value.trim()
-        };
-        var token = tokenInput.value.trim();
-        if (token) body.access_token = token;
+        var body = collectConfigBody();
         setStatus('正在保存…');
         fetch('api/config', { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(body) })
           .then(function (response) { return response.json().then(function (data) { if (!response.ok) throw new Error(data.error || '保存失败'); return data; }); })
           .then(function (config) {
             tokenInput.value = '';
+            cookieInput.value = '';
             setTokenState(config);
+            setCookieState(config);
             setStatus('已保存并立即生效', 'ok');
           }).catch(function (error) { setStatus(error.message, 'error'); });
       });

@@ -196,6 +196,39 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/config/test:
+    post:
+      tags: [config]
+      operationId: testConfig
+      summary: 临时测试 OpenAI 额度连接
+      description: |
+        使用请求体中的临时配置与当前配置合并，请求一次 ChatGPT Web 的
+        /backend-api/wham/usage。测试不会写入 config.json，也不会返回完整
+        OAuth Token 或 Cookie。
+      security:
+        - basicAuth: []
+        - appApiKey: []
+        - appBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigUpdate'
+      responses:
+        '200':
+          description: 测试成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigTestResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
   /audio:
     get:
       tags: [assets]
@@ -616,6 +649,7 @@ components:
         - user_agent
         - fedramp
         - token_configured
+        - cookie_configured
         - cache_ttl
         - config_file
       properties:
@@ -635,6 +669,23 @@ components:
         token_hint:
           type: string
           description: 仅显示 Token 最后四位的脱敏提示。
+        cookie_configured:
+          type: boolean
+        cookie_hint:
+          type: string
+          description: 仅返回 Cookie 的配置项数，不返回 Cookie 原文。
+        client_build_number:
+          type: string
+        client_version:
+          type: string
+        device_id:
+          type: string
+        session_id:
+          type: string
+        client_observation:
+          type: string
+        referer:
+          type: string
         proxy_url:
           type: string
           format: uri
@@ -652,7 +703,23 @@ components:
           type: string
           writeOnly: true
           description: ChatGPT OAuth Bearer Token，仅在服务端保存。
+        cookie:
+          type: string
+          writeOnly: true
+          description: ChatGPT Web Cookie，仅在服务端保存。
         chatgpt_account_id:
+          type: string
+        client_build_number:
+          type: string
+        client_version:
+          type: string
+        device_id:
+          type: string
+        session_id:
+          type: string
+        client_observation:
+          type: string
+        referer:
           type: string
         user_agent:
           type: string
@@ -665,3 +732,28 @@ components:
         cache_ttl:
           type: string
           description: Go duration，例如 10m、30s、0。
+
+    ConfigTestResult:
+      type: object
+      required:
+        - ok
+        - message
+        - status_code
+        - token_configured
+        - cookie_configured
+      properties:
+        ok:
+          type: boolean
+        message:
+          type: string
+        status_code:
+          type: integer
+          example: 200
+        email:
+          type: string
+        plan_type:
+          type: string
+        token_configured:
+          type: boolean
+        cookie_configured:
+          type: boolean

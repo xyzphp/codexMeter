@@ -75,6 +75,7 @@ Basic Auth 与管理密钥不要写进前端源码、查询参数、截图或日
 | GET | `/api/usage/analytics` | 日期范围统计，包含模型占比 |
 | GET | `/api/prediction` | 公共重置预测 |
 | GET | `/api/config` | 获取脱敏后的运行配置 |
+| POST | `/api/config/test` | 使用临时配置测试 OpenAI 额度连接，不保存配置 |
 | PUT | `/api/config` | 部分更新运行配置 |
 | GET | `/audio?kind=normal` | 获取内置提示音 |
 
@@ -159,6 +160,29 @@ curl -X PUT \
 - `GET /api/config` 永远不会返回完整 OAuth Token；
 - Token 会写入服务端配置文件，请限制配置文件权限；
 - 不要把这个 PUT 接口直接暴露给不可信的浏览器端用户。
+
+### 临时测试配置
+
+设置页面的“测试连接”调用此接口。它会将请求体与当前服务端配置合并，临时请求一次 `wham/usage`，成功后返回 `ok: true`；不会写入配置文件，也不会返回 OAuth Token 或 Cookie。
+
+```bash
+curl -X POST \
+  -u '用户名:密码' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "access_token": "你的 OAuth Bearer Token",
+    "cookie": "浏览器 Cookie（可选）",
+    "chatgpt_account_id": "你的 ChatGPT Account ID",
+    "client_build_number": "9758774",
+    "client_version": "prod-...",
+    "device_id": "设备 ID",
+    "session_id": "会话 ID",
+    "client_observation": "观察标识",
+    "referer": "https://chatgpt.com/codex/cloud/settings/analytics",
+    "proxy_url": "http://127.0.0.1:7890"
+  }' \
+  'http://127.0.0.1:8123/api/config/test'
+```
 
 ### 获取提示音
 

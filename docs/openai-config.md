@@ -160,7 +160,9 @@ chmod 600 config.json
 | `CORS_ORIGIN` | `cors_origin` | 允许的跨域来源，按需设置 |
 | `CONFIG_FILE` | — | 指定 JSON 配置文件路径 |
 
-配置页面支持修改 Token、账号 ID、User-Agent、代理和缓存时长。Cookie 建议直接写入 `config.json` 或通过 `OPENAI_COOKIE` 环境变量配置，配置页面不会回显 Cookie。服务端固定读取额度和统计接口，不提供查询模式切换。保存配置时，在支持的系统上会使用 `0600` 文件权限。
+配置页面提供“快速配置”向导：把浏览器 Network 中成功的 `/backend-api/wham/usage` 请求复制为 Fetch 或 cURL，粘贴后点击“自动解析并填充”。页面会在本机浏览器中解析 `Authorization`、Cookie、Account ID 和客户端上下文；点击“测试连接”会用临时配置请求一次额度接口，测试成功后再点击“保存配置”。测试阶段不会写入 `config.json`，页面也不会回显完整 Token 或 Cookie。
+
+配置页面也支持手动修改 Token、账号 ID、User-Agent、代理、缓存时长和可选的浏览器请求上下文。Cookie 建议只通过向导或直接写入 `config.json`/`OPENAI_COOKIE` 配置，页面只显示已配置状态。服务端固定读取额度和统计接口，不提供查询模式切换。保存配置时，在支持的系统上会使用 `0600` 文件权限。
 
 代理地址必须包含协议和端口，例如：
 
@@ -193,7 +195,9 @@ http://127.0.0.1:8123/settings
 https://你的域名/codex/settings
 ```
 
-在设置页面填写 Token、Account ID、代理和缓存时长后保存。保存接口只返回脱敏后的 `token_hint`，不会回显完整 Token。
+在设置页面优先使用“快速配置”：粘贴成功请求 → 自动解析并填充 → 测试连接 → 保存配置。保存接口只返回脱敏后的 `token_hint` 和 Cookie 配置状态，不会回显完整 Token 或 Cookie。若只填写 Token 而保留已有 Cookie，Cookie 输入框留空即可。
+
+浏览器只会把点击“测试连接”或“保存配置”时的字段发送到当前服务端；请确保设置页本身通过 HTTPS、Basic Auth 或管理接口密钥保护。
 
 ## 6. 配置后验证
 
@@ -228,6 +232,17 @@ curl -u '管理用户名:管理密码' \
 ```
 
 正常时返回 `source: "wham_usage"`。如果使用了 `app_api_key`，也可以改用 `X-App-API-Key` 请求头。
+
+也可以只测试当前或临时填写的凭证，不保存配置：
+
+```bash
+curl -X POST -u '管理用户名:管理密码' \
+  -H 'Content-Type: application/json' \
+  -d '{"access_token":"你的 OAuth Token","chatgpt_account_id":"你的 ChatGPT Account ID","proxy_url":"http://127.0.0.1:7890"}' \
+  'http://127.0.0.1:8123/api/config/test'
+```
+
+该接口只请求一次 `wham/usage` 并返回连接结果，不会持久化请求体中的凭证。
 
 ## 7. 浏览器 cURL 更新流程
 

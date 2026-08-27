@@ -154,6 +154,7 @@ func TestWhamRequestUsesOAuthHeadersAndGET(t *testing.T) {
 func TestConfigViewDoesNotExposeUsageProvider(t *testing.T) {
 	service := &UsageService{cfg: Config{
 		AccessToken:      "oauth-token",
+		UpstreamCookie:   "session=secret-cookie",
 		ChatGPTAccountID: "account-id",
 		CacheTTL:         time.Minute,
 	}}
@@ -163,6 +164,51 @@ func TestConfigViewDoesNotExposeUsageProvider(t *testing.T) {
 	}
 	if strings.Contains(string(data), `"usage`) {
 		t.Fatalf("config view exposes removed usage provider setting: %s", data)
+	}
+	if strings.Contains(string(data), "secret-cookie") {
+		t.Fatalf("config view exposes upstream cookie: %s", data)
+	}
+	if !strings.Contains(string(data), `"cookie_configured":true`) {
+		t.Fatalf("config view did not expose cookie status: %s", data)
+	}
+}
+
+func TestApplyConfigUpdateSupportsCapturedOpenAIContext(t *testing.T) {
+	old := Config{
+		AccessToken:      "old-token",
+		ChatGPTAccountID: "old-account",
+		UserAgent:        "old-agent",
+		CacheTTL:         time.Minute,
+	}
+	token := "new-token"
+	cookie := "oai-did=device; session=browser"
+	account := "new-account"
+	build := "9758774"
+	version := "prod-test"
+	device := "device-id"
+	session := "session-id"
+	observation := "v1.r.p.test"
+	referer := "https://chatgpt.com/codex/cloud/settings/analytics"
+	proxy := "http://127.0.0.1:7890"
+	update := ConfigUpdate{
+		AccessToken:       &token,
+		UpstreamCookie:    &cookie,
+		ChatGPTAccountID:  &account,
+		ClientBuildNumber: &build,
+		ClientVersion:     &version,
+		DeviceID:          &device,
+		SessionID:         &session,
+		ClientObservation: &observation,
+		Referer:           &referer,
+		ProxyURL:          &proxy,
+	}
+
+	got, err := applyConfigUpdate(old, update)
+	if err != nil {
+		t.Fatalf("apply config update: %v", err)
+	}
+	if got.AccessToken != token || got.UpstreamCookie != cookie || got.ChatGPTAccountID != account || got.ClientBuildNumber != build || got.ClientVersion != version || got.DeviceID != device || got.SessionID != session || got.ClientObservation != observation || got.UpstreamReferer != referer || got.UpstreamProxy != proxy {
+		t.Fatalf("captured context was not applied: %#v", got)
 	}
 }
 
