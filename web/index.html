@@ -156,10 +156,10 @@
     .reset-calendar-scroll { min-width:0; max-width:100%; overflow-x:auto; padding:0 5px 4px 0; -webkit-overflow-scrolling:touch; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
     .reset-calendar-scroll::-webkit-scrollbar { height:3px; }
     .reset-calendar-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:999px; }
-    .reset-calendar-months, .reset-calendar-grid { display:grid; grid-template-columns:repeat(var(--reset-weeks),14px); column-gap:6px; width:max-content; }
+    .reset-calendar-months, .reset-calendar-grid { display:grid; grid-template-columns:repeat(var(--reset-weeks),20px); column-gap:0; width:max-content; }
     .reset-calendar-months { height:18px; align-items:start; color:var(--muted); font-size:8px; line-height:14px; }
     .reset-calendar-month-label { min-width:0; white-space:nowrap; }
-    .reset-calendar-grid { grid-template-rows:repeat(7,14px); row-gap:6px; grid-auto-flow:column; }
+    .reset-calendar-grid { grid-template-rows:repeat(7,20px); row-gap:0; grid-auto-flow:column; align-items:start; }
     .reset-cell { width:14px; height:14px; box-sizing:border-box; border:1px solid transparent; border-radius:3px; cursor:pointer; }
     .reset-cell:hover, .reset-cell.selected { outline:1px solid var(--text); outline-offset:1px; }
     .reset-cell.regular { background:var(--accent); border-color:var(--accent); }
@@ -1095,7 +1095,7 @@
         var weekdays = ['一','二','三','四','五','六','日'];
         var weekdayHTML = weekdays.map(function (weekday) { return '<span>' + weekday + '</span>'; }).join('');
         var legend = '<div class="reset-calendar-legend"><span class="reset-calendar-legend-item"><i class="reset-calendar-legend-color regular"></i>普通重置</span><span class="reset-calendar-legend-item"><i class="reset-calendar-legend-color banked"></i>赠送重置卡</span><span class="reset-calendar-legend-item"><i class="reset-calendar-legend-color none"></i>无重置</span></div>';
-        container.innerHTML = '<div class="reset-calendar-head"><span>Codex 重置历史</span><strong>最近 26 周 · UTC</strong></div><div class="reset-calendar-layout"><div class="reset-calendar-weekdays">' + weekdayHTML + '</div><div class="reset-calendar-scroll"><div class="reset-calendar-months" style="--reset-weeks:' + weeks + '">' + monthLabels.join('') + '</div><div class="reset-calendar-grid" role="grid" aria-label="Codex 重置历史日历" style="--reset-weeks:' + weeks + '">' + cells.join('') + '</div></div></div><div class="reset-calendar-footer"><span>' + escapeHTML(resetCalendarDateKey(start) + ' 至 ' + resetCalendarDateKey(end)) + '</span>' + legend + '</div>';
+        container.innerHTML = '<div class="reset-calendar-head"><span>Codex 重置历史</span><strong>最近 26 周 · UTC</strong></div><div class="reset-calendar-layout"><div class="reset-calendar-weekdays">' + weekdayHTML + '</div><div class="reset-calendar-scroll"><div class="reset-calendar-months" style="grid-template-columns:repeat(' + weeks + ',20px)">' + monthLabels.join('') + '</div><div class="reset-calendar-grid" role="grid" aria-label="Codex 重置历史日历" style="grid-template-columns:repeat(' + weeks + ',20px)">' + cells.join('') + '</div></div></div><div class="reset-calendar-footer"><span>' + escapeHTML(resetCalendarDateKey(start) + ' 至 ' + resetCalendarDateKey(end)) + '</span>' + legend + '</div>';
       }
       function renderPrediction(data) {
         var watch = data && data.active_watch;
