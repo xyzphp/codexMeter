@@ -86,8 +86,8 @@
     .summary { min-width:0; padding:14px 16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
     .summary-label { color:var(--muted); font-size:13px; }
     .summary-value { margin-top:5px; font-size:25px; font-weight:710; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .charts-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:16px; }
-    .chart-panel { min-width:0; padding:16px 18px 14px; border:1px solid var(--border); border-radius:16px; background:var(--soft); }
+    .charts-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:16px; margin-top:16px; }
+    .chart-panel { grid-column:span 2; min-width:0; padding:16px 18px 14px; border:1px solid var(--border); border-radius:16px; background:var(--soft); }
     .chart-panel.wide { grid-column:1/-1; }
     .chart-head { display:flex; justify-content:space-between; gap:12px; color:var(--muted); font-size:14px; }
     .chart-head strong { color:var(--text); font-size:14px; }
@@ -203,7 +203,8 @@
       .summary-label, .prediction-metric-label { font-size:10px; }
       .summary-value { font-size:17px; }
       .charts-grid { gap:9px; margin-top:9px; }
-      .chart-panel { padding:10px 9px 8px; border-radius:10px; }
+      .charts-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+      .chart-panel { grid-column:span 1; padding:10px 9px 8px; border-radius:10px; }
       .chart-head { font-size:10px; }
       .chart-head strong { font-size:10px; }
       .heatmap { margin-top:9px; }
@@ -309,7 +310,7 @@
       <div class="charts-grid">
         <div class="chart-panel"><div class="chart-head"><span>每日 Token 数</span><strong>单位：M</strong></div><div id="dailyTokenChart" class="heatmap"></div></div>
         <div class="chart-panel"><div class="chart-head"><span>每日对话轮次</span><strong>工作区统计</strong></div><div id="workspaceUsageChart" class="heatmap"></div></div>
-        <div class="chart-panel wide"><div class="chart-head"><span>模型每日使用</span><strong>单位：%</strong></div><div id="modelUsageChart" class="model-chart"></div></div>
+        <div class="chart-panel"><div class="chart-head"><span>模型每日使用</span><strong>单位：%</strong></div><div id="modelUsageChart" class="model-chart"></div></div>
         <div class="chart-panel wide"><div class="chart-head"><span>模型使用占比</span><strong>按额度</strong></div><div id="yesterdayModelPieChart" class="model-share"></div></div>
       </div>
     </section>
