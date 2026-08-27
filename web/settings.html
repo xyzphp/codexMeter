@@ -462,11 +462,14 @@
               <div><div class="step-card-title">保护面板和管理接口</div><div class="step-card-copy">启用后，访问面板、设置页和 API 都需要通过 HTTP Basic Auth。密码不会从后端返回或显示。</div></div>
               <span id="pageAccessStateBadge" class="state-badge">未启用</span>
             </div>
+            <div class="proxy-mode-row basic-auth-mode-row">
+              <label class="proxy-toggle" for="basicAuthEnabled">
+                <span class="proxy-toggle-copy"><span class="proxy-toggle-title">启用页面 Basic Auth</span><span class="hint">开启后显示访问用户名和访问密码；关闭后使用无认证访问。</span></span>
+                <input id="basicAuthEnabled" type="checkbox" role="switch">
+                <span class="proxy-switch" aria-hidden="true"></span>
+              </label>
+            </div>
             <div class="field-grid page-access-grid">
-              <div class="check-row full">
-                <input id="basicAuthEnabled" type="checkbox">
-                <div class="check-copy"><label for="basicAuthEnabled">启用页面 Basic Auth</label><span class="hint">保存后刷新页面，浏览器会要求输入下面的账号。</span></div>
-              </div>
               <div id="basicAuthFields" class="basic-auth-fields" hidden>
                 <div class="field">
                   <label for="basicAuthUsername">访问用户名</label>
