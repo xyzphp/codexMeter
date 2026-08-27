@@ -183,8 +183,11 @@
     .capture-source-target { margin-top:4px; color:var(--muted); font-size:12px; line-height:18px; }
     .capture-source-target code { color:var(--text); }
     .page-access-grid .full { grid-column:1/-1; }
-    .basic-auth-fields { grid-column:1/-1; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+    .basic-auth-card { grid-column:1/-1; padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
+    .basic-auth-card .basic-auth-mode-row { margin:0; }
+    .basic-auth-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:14px; padding-top:14px; border-top:1px solid var(--border); }
     .basic-auth-fields[hidden] { display:none; }
+    .app-api-key-field { min-width:0; padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
     .page-access-config-hint { display:block; margin-top:12px; }
     .page-access-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px; }
     .page-access-actions .proxy-status { flex:1 1 280px; margin-top:0; }
@@ -462,31 +465,34 @@
               <div><div class="step-card-title">保护面板和管理接口</div><div class="step-card-copy">启用后，访问面板、设置页和 API 都需要通过 HTTP Basic Auth。密码不会从后端返回或显示。</div></div>
               <span id="pageAccessStateBadge" class="state-badge">未启用</span>
             </div>
-            <div class="proxy-mode-row basic-auth-mode-row">
-              <label class="proxy-toggle" for="basicAuthEnabled">
-                <span class="proxy-toggle-copy"><span class="proxy-toggle-title">启用页面 Basic Auth</span><span class="hint">开启后显示访问用户名和访问密码；关闭后使用无认证访问。</span></span>
-                <input id="basicAuthEnabled" type="checkbox" role="switch">
-                <span class="proxy-switch" aria-hidden="true"></span>
-              </label>
-            </div>
             <div class="field-grid page-access-grid">
-              <div id="basicAuthFields" class="basic-auth-fields" hidden>
-                <div class="field">
-                  <label for="basicAuthUsername">访问用户名</label>
-                  <input id="basicAuthUsername" autocomplete="username" placeholder="例如：admin">
+              <div class="basic-auth-card">
+                <div class="proxy-mode-row basic-auth-mode-row">
+                  <label class="proxy-toggle" for="basicAuthEnabled">
+                    <span class="proxy-toggle-copy"><span class="proxy-toggle-title">启用页面 Basic Auth</span><span class="hint">开启后显示访问用户名和访问密码；关闭后使用无认证访问。</span></span>
+                    <input id="basicAuthEnabled" type="checkbox" role="switch">
+                    <span class="proxy-switch" aria-hidden="true"></span>
+                  </label>
                 </div>
-                <div class="field">
-                  <label for="basicAuthPassword">访问密码</label>
-                  <input id="basicAuthPassword" type="password" autocomplete="new-password" placeholder="留空保持当前密码">
+                <div id="basicAuthFields" class="basic-auth-fields" hidden>
+                  <div class="field">
+                    <label for="basicAuthUsername">访问用户名</label>
+                    <input id="basicAuthUsername" autocomplete="username" placeholder="例如：admin">
+                  </div>
+                  <div class="field">
+                    <label for="basicAuthPassword">访问密码</label>
+                    <input id="basicAuthPassword" type="password" autocomplete="new-password" placeholder="留空保持当前密码">
+                  </div>
                 </div>
               </div>
-              <div class="field">
+              <div class="field app-api-key-field">
                 <label for="appAPIKey">App API Key</label>
                 <div class="input-action">
-                  <input id="appAPIKey" type="password" autocomplete="new-password" placeholder="留空保持当前密钥">
+                  <input id="appAPIKey" type="text" autocomplete="off" spellcheck="false" placeholder="留空保持当前密钥">
                   <button id="generateAppAPIKey" class="small-button" type="button">随机生成</button>
+                  <button id="copyAppAPIKey" class="small-button" type="button">复制</button>
                 </div>
-                <span id="appAPIKeyHint" class="hint"></span>
+                <span id="appAPIKeyHint" class="hint">生成后可查看并复制，点击保存后生效。</span>
               </div>
               <div class="field">
                 <label for="cacheTTL">缓存时间</label>
@@ -592,6 +598,7 @@
       var appAPIKeyHint = document.getElementById('appAPIKeyHint');
       var cacheTTLInput = document.getElementById('cacheTTL');
       var generateAppAPIKeyButton = document.getElementById('generateAppAPIKey');
+      var copyAppAPIKeyButton = document.getElementById('copyAppAPIKey');
       var savePageAccessButton = document.getElementById('savePageAccess');
       var copyAnalyticsURLButton = document.getElementById('copyAnalyticsURL');
       var analyticsURL = 'https://chatgpt.com/codex/cloud/settings/analytics';
@@ -956,15 +963,29 @@
           setPageAccessStatus('当前环境不支持安全随机数，请手动填写 App API Key。', 'error');
           return;
         }
-        var bytes = new Uint8Array(32);
+        var bytes = new Uint8Array(12);
         cryptoSource.getRandomValues(bytes);
         var generated = '';
         for (var i = 0; i < bytes.length; i += 1) {
           generated += ('0' + bytes[i].toString(16)).slice(-2);
         }
         appAPIKeyInput.value = generated;
-        appAPIKeyHint.textContent = '已生成新密钥，点击保存后生效。';
+        appAPIKeyHint.textContent = '已生成 24 位密钥，点击复制或保存后生效。';
         appAPIKeyInput.focus();
+      }
+      function copyAppAPIKey() {
+        var value = appAPIKeyInput.value.trim();
+        if (!value) {
+          setPageAccessStatus('请先填写或生成 App API Key。', 'error');
+          return;
+        }
+        copyText(value).then(function () {
+          var original = copyAppAPIKeyButton.textContent;
+          copyAppAPIKeyButton.textContent = '已复制';
+          setTimeout(function () { copyAppAPIKeyButton.textContent = original; }, 1500);
+        }).catch(function (error) {
+          setPageAccessStatus(error.message, 'error');
+        });
       }
       function renderPageAccess(config) {
         var enabled = !!config.basic_auth_enabled;
@@ -1001,6 +1022,7 @@
       function savePageAccess() {
         if (savePageAccessButton.disabled) return;
         var body = collectPageAccessBody();
+        var savedAppAPIKey = body.app_api_key || '';
         if (body.basic_auth_enabled && !body.basic_auth_username) {
           setPageAccessStatus('启用 Basic Auth 时必须填写访问用户名。', 'error');
           return;
@@ -1012,6 +1034,10 @@
           .then(function (config) {
             basicAuthPasswordInput.value = '';
             renderPageAccess(config);
+            if (savedAppAPIKey) {
+              appAPIKeyInput.value = savedAppAPIKey;
+              appAPIKeyHint.textContent = '已保存，可查看或复制；密钥已立即生效。';
+            }
             setPageAccessStatus(config.basic_auth_enabled ? '已保存。刷新页面后使用新的页面访问账号登录。' : '已保存，页面访问认证已关闭。', 'ok');
             setStatus('页面访问配置已更新', 'ok');
           })
@@ -1108,6 +1134,7 @@
       basicAuthEnabledInput.addEventListener('change', function () {
         setBasicAuthFieldsVisibility(basicAuthEnabledInput.checked);
       });
+      copyAppAPIKeyButton.addEventListener('click', copyAppAPIKey);
       testProxyButton.addEventListener('click', function () { testProxy(false); });
       confirmProxyButton.addEventListener('click', function () { testProxy(true); });
       tabProxy.addEventListener('click', function () { showTab('proxy'); });
