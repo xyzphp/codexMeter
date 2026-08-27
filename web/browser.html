@@ -526,10 +526,16 @@
         var pad = function (part) { return String(part).padStart(2, '0'); };
         return pad(parsed.getMonth() + 1) + '-' + pad(parsed.getDate()) + ' ' + pad(parsed.getHours()) + ':' + pad(parsed.getMinutes());
       }
-      function usageHistoryAxisTicks(points) {
-        var maxTicks = 6; if (points.length <= maxTicks) return points.map(function (point, index) { return {index:index, label:usageHistoryAxisLabel(point.at)}; });
-        var ticks = []; var step = (points.length - 1) / (maxTicks - 1);
-        for (var tickIndex = 0; tickIndex < maxTicks; tickIndex += 1) { var index = Math.round(tickIndex * step); if (!ticks.length || ticks[ticks.length - 1].index !== index) ticks.push({index:index, label:usageHistoryAxisLabel(points[index].at)}); }
+      function usageHistoryAxisTicks(points, sampleCount, plotWidth) {
+        var maxTicks = 6; if (points.length === 1) return [{index:0, label:usageHistoryAxisLabel(points[0].at)}];
+        var targets = []; var targetCount = Math.min(maxTicks, points.length); var tickIndex;
+        for (tickIndex = 0; tickIndex < targetCount; tickIndex += 1) targets.push(tickIndex / (targetCount - 1) * (sampleCount - 1));
+        var candidates = [];
+        targets.forEach(function (target) { var nearest = 0; var distance = Infinity; points.forEach(function (point, index) { var currentDistance = Math.abs(point.position - target); if (currentDistance < distance) { nearest = index; distance = currentDistance; } }); if (candidates.indexOf(nearest) < 0) candidates.push(nearest); });
+        candidates.sort(function (left, right) { return points[left].position - points[right].position; });
+        var minGap = 90; var ticks = [];
+        candidates.forEach(function (index) { var position = points[index].position / (sampleCount - 1) * plotWidth; if (!ticks.length || position - ticks[ticks.length - 1].position >= minGap || index === candidates[candidates.length - 1]) ticks.push({index:index, position:position, label:usageHistoryAxisLabel(points[index].at)}); });
+        while (ticks.length > 2 && ticks[ticks.length - 1].position - ticks[ticks.length - 2].position < minGap) ticks.splice(ticks.length - 2, 1);
         return ticks;
       }
       function usageHistoryTooltip(point, value, label) {
@@ -574,7 +580,7 @@
         var grid = [0, 1, 2, 3, 4].map(function (step) { var level = axisMin + axisSpan * step / 4; var lineY = y(level).toFixed(2); return '<line class="usage-history-gridline" x1="' + left + '" y1="' + lineY + '" x2="' + (width - right) + '" y2="' + lineY + '"></line><text class="usage-history-axis usage-history-axis-end" x="' + (left - 8) + '" y="' + (Number(lineY) + 4) + '">' + percent(level) + '%</text>'; }).join('');
         var resetLines = resetIndexes.map(function (index) { return '<line class="usage-history-reset-line" x1="' + x(index).toFixed(2) + '" y1="' + top + '" x2="' + x(index).toFixed(2) + '" y2="' + (top + plotHeight) + '"></line>'; }).join('');
         var circles = points.map(function (point, index) { var resetClass = resetIndexes.indexOf(index) >= 0 ? ' reset' : ''; var latestClass = index === points.length - 1 ? ' latest' : ''; var staleClass = point.stale ? ' stale' : ''; var label = usageHistoryTooltip(point, point.used, options.label); var cx = x(index).toFixed(2); var cy = y(point.used).toFixed(2); var radius = index === points.length - 1 ? '4' : '3'; return '<circle class="usage-history-point-hit" cx="' + cx + '" cy="' + cy + '" r="9" tabindex="0" data-tooltip="' + escaped(label) + '" aria-label="' + escaped(label) + '"></circle><circle class="usage-history-point' + resetClass + latestClass + staleClass + '" cx="' + cx + '" cy="' + cy + '" r="' + radius + '" aria-hidden="true"></circle>'; }).join('');
-        var axisLabels = usageHistoryAxisTicks(points).map(function (tick, index, ticks) { var anchor = index === 0 ? 'start' : index === ticks.length - 1 ? 'end' : 'middle'; return '<text class="usage-history-axis" text-anchor="' + anchor + '" x="' + x(tick.index).toFixed(2) + '" y="' + (height - 8) + '">' + escaped(tick.label) + '</text>'; }).join(''); var legend = resetIndexes.length ? '<div class="usage-history-legend"><span class="usage-history-legend-item"><i class="usage-history-legend-color"></i>' + escaped(options.label) + '使用百分比</span><span class="usage-history-legend-item"><i class="usage-history-legend-color reset"></i>检测到额度重置</span></div>' : '<div class="usage-history-legend"><span class="usage-history-legend-item"><i class="usage-history-legend-color"></i>' + escaped(options.label) + '使用百分比</span></div>';
+        var axisLabels = usageHistoryAxisTicks(points, sampleCount, plotWidth).map(function (tick, index, ticks) { var anchor = index === 0 ? 'start' : index === ticks.length - 1 ? 'end' : 'middle'; return '<text class="usage-history-axis" text-anchor="' + anchor + '" x="' + x(tick.index).toFixed(2) + '" y="' + (height - 8) + '">' + escaped(tick.label) + '</text>'; }).join(''); var legend = resetIndexes.length ? '<div class="usage-history-legend"><span class="usage-history-legend-item"><i class="usage-history-legend-color"></i>' + escaped(options.label) + '使用百分比</span><span class="usage-history-legend-item"><i class="usage-history-legend-color reset"></i>检测到额度重置</span></div>' : '<div class="usage-history-legend"><span class="usage-history-legend-item"><i class="usage-history-legend-color"></i>' + escaped(options.label) + '使用百分比</span></div>';
         container.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' + escaped(options.label) + '额度使用变化图">' + grid + resetLines + '<path class="usage-history-area" d="' + areaPath + '"></path><path class="usage-history-line" d="' + linePath + '"></path>' + circles + axisLabels + '</svg>' + legend;
         bindUsageHistoryTooltips(container);
       }
