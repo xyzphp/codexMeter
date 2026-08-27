@@ -271,7 +271,7 @@
       </div>
     </header>
 
-    <section class="card quota-card" aria-label="额度概览">
+    <section id="quotaSection" class="card quota-card" aria-label="额度概览">
       <div class="card-head"><div class="card-title">额度概览</div><div id="usageUpdated" class="card-meta">读取中…</div></div>
       <div class="quota-grid">
         <article class="quota-window">
@@ -295,7 +295,7 @@
       <div class="progress-track refresh-track"><div id="refreshBar" class="progress-bar"></div></div>
     </section>
 
-    <section class="card section" aria-label="使用分析">
+    <section id="analyticsSection" class="card section" aria-label="使用分析">
       <div class="card-head"><div class="card-title">使用分析</div><div id="analyticsUpdated" class="card-meta">读取中…</div></div>
       <div class="analytics-toolbar">
         <div class="range-presets" aria-label="快速日期范围">
@@ -321,7 +321,7 @@
       </div>
     </section>
 
-    <section class="card section" aria-label="重置预测">
+    <section id="predictionSection" class="card section" aria-label="重置预测">
       <div class="card-head"><div class="card-title">重置预测</div><div id="predictionUpdated" class="card-meta">公共信号</div></div>
       <div class="prediction-hero">
         <div id="predictionState" class="prediction-state">读取中…</div>
@@ -476,8 +476,15 @@
         selectedAnalyticsDate = days.length ? heatmapDateKey(heatmapDate(days[days.length - 1].date)) : '';
         renderHeatmap('dailyTokenChart', days, 'text_total_tokens', token, 'Token', calendarRange.startDate, calendarRange.endDate); renderShare(days, selectedAnalyticsDate);
       }
+      function positionPrediction(hasSignal) {
+        var quota = byId('quotaSection'); var analytics = byId('analyticsSection'); var prediction = byId('predictionSection');
+        if (!quota || !analytics || !prediction || !prediction.parentNode) return;
+        if (hasSignal) prediction.parentNode.insertBefore(prediction, quota);
+        else prediction.parentNode.insertBefore(prediction, analytics.nextSibling);
+      }
       function renderPrediction(data) {
         var watch = data && data.active_watch; var latest = data && data.latest_reset; var chance = watch ? clamp(number(watch.reset_chance_percent), 0, 100) : NaN;
+        positionPrediction(Boolean(watch));
         if (watch) { text('predictionState', '检测到重置信号'); classes('predictionState', 'prediction-state'); text('predictionHint', watch.forecast_window || '公开监测窗口内'); text('predictionChance', percent(chance) + '%'); style('predictionChanceBar', 'width', chance + '%'); classes('predictionChanceBar', 'prediction-bar ' + (chance >= 70 ? 'high' : '')); text('predictionLevel', watch.level || '观察中'); text('predictionWindow', watch.forecast_window || '—'); }
         else { text('predictionState', '当前无重置信号'); classes('predictionState', 'prediction-state'); text('predictionHint', '公共监测处于空闲状态'); text('predictionChance', '—'); style('predictionChanceBar', 'width', '0%'); classes('predictionChanceBar', 'prediction-bar'); text('predictionLevel', '无预警'); text('predictionWindow', '—'); }
         text('predictionTotal', data && data.stats ? String(data.stats.total || 0) + ' 条' : '—'); text('predictionAverage', data && data.stats && isFinite(number(data.stats.avg_interval_days)) ? percent(data.stats.avg_interval_days) + ' 天' : '—'); text('predictionUpdated', data && data.fetched_at ? '更新 ' + date(data.fetched_at) : '公共信号'); text('predictionLatestType', latest ? (latest.reset_type === 'banked' ? 'Banked Reset' : latest.reset_type === 'regular' ? 'Regular Reset' : latest.reset_type) : '—'); text('predictionLatestAt', latest ? date(latest.announced_at) : '—'); text('predictionLatestText', latest ? latest.text : '—');
