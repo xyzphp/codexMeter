@@ -713,24 +713,26 @@ func (s *UsageService) Get(ctx context.Context, force bool) (*UsageResponse, err
 		return nil, err
 	}
 
-	var historySnapshot []HistoryPoint
+	var latestHistoryPoint HistoryPoint
+	hasLatestHistoryPoint := false
 	s.cacheMu.Lock()
 	if usage.SevenDay != nil {
-		s.history = append(s.history, HistoryPoint{
+		latestHistoryPoint = HistoryPoint{
 			At:          usage.FetchedAt,
 			UsedPercent: usage.SevenDay.UsedPercent,
-		})
+		}
+		hasLatestHistoryPoint = true
+		s.history = append(s.history, latestHistoryPoint)
 		if len(s.history) > maxUsageHistoryPoints {
 			s.history = s.history[len(s.history)-maxUsageHistoryPoints:]
 		}
 	}
 	usage.History = append([]HistoryPoint(nil), s.history...)
-	historySnapshot = append([]HistoryPoint(nil), s.history...)
 	s.cached = cloneUsage(usage)
 	s.cachedAt = time.Now()
 	s.cacheMu.Unlock()
-	if s.historyFile != "" && len(historySnapshot) > 0 {
-		if err := persistUsageHistory(s.historyFile, historySnapshot); err != nil {
+	if s.historyFile != "" && hasLatestHistoryPoint {
+		if err := appendUsageHistory(s.historyFile, latestHistoryPoint); err != nil {
 			slog.Warn("persist usage history failed", "error", err)
 		}
 	}
@@ -776,7 +778,7 @@ func loadUsageHistory(path string) ([]HistoryPoint, error) {
 	return history, nil
 }
 
-func persistUsageHistory(path string, history []HistoryPoint) error {
+func appendUsageHistory(path string, point HistoryPoint) error {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return errors.New("usage history path is empty")
@@ -786,42 +788,17 @@ func persistUsageHistory(path string, history []HistoryPoint) error {
 		return err
 	}
 
-	temporary, err := os.CreateTemp(directory, ".usage-history-*.tmp")
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return err
 	}
-	temporaryPath := temporary.Name()
-	removeTemporary := true
-	defer func() {
-		if removeTemporary {
-			_ = os.Remove(temporaryPath)
-		}
-	}()
-	if err := temporary.Chmod(0o600); err != nil {
-		_ = temporary.Close()
+	defer file.Close()
+	if err := file.Chmod(0o600); err != nil {
 		return err
 	}
-	encoder := json.NewEncoder(temporary)
-	for _, point := range history {
-		if err := encoder.Encode(point); err != nil {
-			_ = temporary.Close()
-			return err
-		}
-	}
-	if err := temporary.Close(); err != nil {
+	if err := json.NewEncoder(file).Encode(point); err != nil {
 		return err
 	}
-	if err := os.Rename(temporaryPath, path); err != nil {
-		// Windows does not replace an existing file during Rename. The
-		// fallback keeps local development behavior consistent with Linux.
-		if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
-			return err
-		}
-		if renameErr := os.Rename(temporaryPath, path); renameErr != nil {
-			return renameErr
-		}
-	}
-	removeTemporary = false
 	return nil
 }
 

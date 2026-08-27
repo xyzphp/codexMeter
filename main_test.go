@@ -173,8 +173,10 @@ func TestUsageHistoryPersistsAndKeepsMostRecentPoints(t *testing.T) {
 		})
 	}
 
-	if err := persistUsageHistory(path, points); err != nil {
-		t.Fatalf("persist usage history: %v", err)
+	for _, point := range points {
+		if err := appendUsageHistory(path, point); err != nil {
+			t.Fatalf("append usage history: %v", err)
+		}
 	}
 	loaded, err := loadUsageHistory(path)
 	if err != nil {
