@@ -144,6 +144,20 @@
     .prediction-grid .metric:nth-child(n+3) { margin-top:0; }
     .prediction-list { margin-top:7px; }
     .prediction-text { max-width:72%; }
+    .prediction-history { margin-top:7px; padding:7px 9px; background:var(--card-muted); border:1px solid var(--border); border-radius:10px; }
+    .prediction-history-head { display:flex; align-items:center; justify-content:space-between; gap:8px; color:var(--muted); font-size:10px; }
+    .prediction-history-head strong { color:var(--text); font-size:10px; }
+    .prediction-history-list { max-height:120px; margin-top:5px; overflow-y:auto; border-top:1px solid var(--border); -webkit-overflow-scrolling:touch; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
+    .prediction-history-list::-webkit-scrollbar { width:3px; }
+    .prediction-history-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:999px; }
+    .prediction-history-item { padding:6px 1px; border-bottom:1px solid var(--border); }
+    .prediction-history-item:last-child { border-bottom:0; }
+    .prediction-history-item-head { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+    .prediction-history-type { color:var(--accent); font-size:10px; font-weight:680; }
+    .prediction-history-type.banked { color:var(--warning); }
+    .prediction-history-date, .prediction-history-source { color:var(--muted); font-size:9px; white-space:nowrap; }
+    .prediction-history-text { margin-top:3px; color:var(--text); font-size:9px; line-height:1.35; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .prediction-history-source { display:inline-block; margin-top:3px; color:var(--accent); text-decoration:none; }
     .prediction-foot { margin-top:6px; color:var(--muted); font-size:9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .metric-grid { margin:6px 3px 0; flex:0 0 auto; gap:6px; }
     .metric { flex:0 0 calc(50% - 3px); width:calc(50% - 3px); border:1px solid var(--border); border-radius:10px; padding:5px 9px; min-height:36px; }
@@ -409,6 +423,14 @@
       .prediction-grid { margin-top:12px; gap:12px; }
       .prediction-grid .metric { flex-basis:calc(25% - 9px); width:calc(25% - 9px); }
       .prediction-list { margin-top:12px; }
+      .prediction-history { margin-top:12px; padding:10px 12px; border-radius:14px; }
+      .prediction-history-head { font-size:13px; }
+      .prediction-history-head strong { font-size:13px; }
+      .prediction-history-list { max-height:220px; margin-top:7px; }
+      .prediction-history-item { padding:9px 1px; }
+      .prediction-history-type { font-size:13px; }
+      .prediction-history-date, .prediction-history-source { font-size:12px; }
+      .prediction-history-text { margin-top:5px; font-size:12px; line-height:1.5; }
       .prediction-foot { margin-top:10px; font-size:12px; }
       .nav { width:100%; max-width:900px; height:56px; flex-basis:56px; gap:12px; padding:0 16px; }
       .nav-button { max-width:none; width:auto; height:56px; font-size:18px; border-radius:16px; }
@@ -525,6 +547,10 @@
           <div class="detail-row"><span>最新公共重置</span><strong id="predictionLatestType">—</strong></div>
           <div class="detail-row"><span>公告时间</span><strong id="predictionLatestAt">—</strong></div>
           <div class="detail-row"><span>公告内容</span><strong id="predictionLatestText" class="prediction-text">—</strong></div>
+        </div>
+        <div class="prediction-history">
+          <div class="prediction-history-head"><span>重置历史</span><strong id="predictionHistoryCount">—</strong></div>
+          <div id="predictionHistoryList" class="prediction-history-list"><div class="empty">读取中…</div></div>
         </div>
         <div class="prediction-foot">数据来源：codex-resets.com · 公共预测仅供参考</div>
       </div>
@@ -997,13 +1023,36 @@
         });
       }
       function formatResetType(value) {
-        if (value === 'banked') return 'Banked Reset';
-        if (value === 'regular') return 'Regular Reset';
+        if (value === 'banked') return '批量重置';
+        if (value === 'regular') return '普通重置';
         return value || '—';
       }
       function formatDays(value) {
         var number = Number(value);
         return isFinite(number) ? formatPercent(number) + ' 天' : '—';
+      }
+      function formatResetHistorySource(value) {
+        var key = String(value || '').toLowerCase();
+        var labels = {webhook:'自动记录', backfill:'历史补录', observed:'公开观测', x_post:'X 帖文'};
+        return labels[key] || String(value || '') || '公开记录';
+      }
+      function renderPredictionHistory(events) {
+        var list = byId('predictionHistoryList');
+        if (!list) return;
+        list.textContent = '';
+        var items = Array.isArray(events) ? events : [];
+        setText('predictionHistoryCount', items.length ? items.length + ' 条' : '暂无记录');
+        if (!items.length) { var empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = '暂无重置历史'; list.appendChild(empty); return; }
+        items.forEach(function (event) {
+          var item = document.createElement('div'); item.className = 'prediction-history-item';
+          var head = document.createElement('div'); head.className = 'prediction-history-item-head';
+          var type = document.createElement('strong'); type.className = 'prediction-history-type' + (String(event && event.reset_type || '').toLowerCase() === 'banked' ? ' banked' : ''); type.textContent = formatResetType(event && event.reset_type); head.appendChild(type);
+          var at = document.createElement('span'); at.className = 'prediction-history-date'; at.textContent = formatDate(event && event.announced_at); head.appendChild(at); item.appendChild(head);
+          var content = document.createElement('div'); content.className = 'prediction-history-text'; content.textContent = event && event.text ? event.text : '—'; item.appendChild(content);
+          var source = event && event.source ? event.source : null;
+          if (source && source.url) { var link = document.createElement('a'); link.className = 'prediction-history-source'; link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = formatResetHistorySource(source.type) + ' · 查看原文'; item.appendChild(link); }
+          list.appendChild(item);
+        });
       }
       function renderPrediction(data) {
         var watch = data && data.active_watch;
@@ -1034,6 +1083,7 @@
         setText('predictionLatestType', latest ? formatResetType(latest.reset_type) : '—');
         setText('predictionLatestAt', latest ? formatDate(latest.announced_at) : '—');
         setText('predictionLatestText', latest ? latest.text : '—');
+        renderPredictionHistory(data && data.history);
       }
       function showPredictionError(error) {
         setText('predictionChance', '—');

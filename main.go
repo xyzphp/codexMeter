@@ -31,6 +31,7 @@ const (
 	defaultCacheTTL             = 10 * time.Minute
 	upstreamRequestTimeout      = 15 * time.Second
 	resetStatusEndpoint         = "https://codex-resets.com/api/v1/status"
+	resetHistoryEndpoint        = "https://codex-resets.com/api/resets"
 	dailyTokenUsageEndpoint     = "https://chatgpt.com/backend-api/wham/usage/daily-token-usage-breakdown"
 	dailyWorkspaceUsageEndpoint = "https://chatgpt.com/backend-api/wham/analytics/daily-workspace-usage-counts"
 )
@@ -466,12 +467,13 @@ type dailyWorkspaceUsageTotals struct {
 }
 
 type ResetPrediction struct {
-	Source      string      `json:"source"`
-	FetchedAt   string      `json:"fetched_at"`
-	FromCache   bool        `json:"from_cache"`
-	LatestReset *ResetEvent `json:"latest_reset,omitempty"`
-	ActiveWatch *ResetWatch `json:"active_watch,omitempty"`
-	Stats       ResetStats  `json:"stats"`
+	Source      string       `json:"source"`
+	FetchedAt   string       `json:"fetched_at"`
+	FromCache   bool         `json:"from_cache"`
+	LatestReset *ResetEvent  `json:"latest_reset,omitempty"`
+	ActiveWatch *ResetWatch  `json:"active_watch,omitempty"`
+	History     []ResetEvent `json:"history,omitempty"`
+	Stats       ResetStats   `json:"stats"`
 }
 
 type ResetEvent struct {
@@ -513,6 +515,19 @@ type resetStatusEnvelope struct {
 		APIVersion  string `json:"api_version"`
 		GeneratedAt string `json:"generated_at"`
 	} `json:"meta"`
+}
+
+type resetHistoryEnvelope struct {
+	Events []resetHistoryEvent `json:"events"`
+}
+
+type resetHistoryEvent struct {
+	TweetID     string `json:"tweet_id"`
+	TweetURL    string `json:"tweet_url"`
+	Text        string `json:"text"`
+	AnnouncedAt string `json:"announced_at"`
+	ResetType   string `json:"reset_type"`
+	Source      string `json:"source"`
 }
 
 type rawWindow struct {
@@ -1011,39 +1026,93 @@ func (s *UsageService) GetPrediction(ctx context.Context, force bool) (*ResetPre
 }
 
 func (s *UsageService) queryResetPrediction(ctx context.Context) (*ResetPrediction, error) {
+	var envelope resetStatusEnvelope
+	if err := s.queryPublicResetJSON(ctx, resetStatusEndpoint, &envelope); err != nil {
+		return nil, fmt.Errorf("reset status request failed: %w", err)
+	}
+
+	var historyEnvelope resetHistoryEnvelope
+	if err := s.queryPublicResetJSON(ctx, resetHistoryEndpoint, &historyEnvelope); err != nil {
+		return nil, fmt.Errorf("reset history request failed: %w", err)
+	}
+	history := normalizeResetHistory(historyEnvelope.Events)
+	fetchedAt := envelope.Meta.GeneratedAt
+	if fetchedAt == "" {
+		fetchedAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	latest := envelope.Data.LatestReset
+	if latest == nil && len(history) > 0 {
+		latest = &history[0]
+	}
+	stats := envelope.Data.Stats
+	if stats.Total == 0 && len(history) > 0 {
+		stats.Total = len(history)
+	}
+	return &ResetPrediction{
+		Source:      "codex_resets_status",
+		FetchedAt:   fetchedAt,
+		LatestReset: latest,
+		ActiveWatch: envelope.Data.ActiveWatch,
+		History:     history,
+		Stats:       stats,
+	}, nil
+}
+
+func (s *UsageService) queryPublicResetJSON(ctx context.Context, endpoint string, target any) error {
 	requestCtx, cancel := context.WithTimeout(ctx, upstreamRequestTimeout)
 	defer cancel()
-	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, resetStatusEndpoint, nil)
+	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create reset status request: %w", err)
+		return fmt.Errorf("create public reset request: %w", err)
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", "codex-usage-dashboard/1.0")
 
 	response, err := s.currentClient().Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("request reset status: %w", err)
+		return err
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("reset status upstream returned HTTP %d", response.StatusCode)
+		return fmt.Errorf("upstream returned HTTP %d", response.StatusCode)
 	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 8<<20)).Decode(target); err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+	return nil
+}
 
-	var envelope resetStatusEnvelope
-	if err := json.NewDecoder(io.LimitReader(response.Body, 2<<20)).Decode(&envelope); err != nil {
-		return nil, fmt.Errorf("decode reset status: %w", err)
+func normalizeResetHistory(events []resetHistoryEvent) []ResetEvent {
+	result := make([]ResetEvent, 0, len(events))
+	seen := make(map[string]struct{}, len(events))
+	for _, event := range events {
+		id := strings.TrimSpace(event.TweetID)
+		if id == "" {
+			id = strings.TrimSpace(event.TweetURL)
+		}
+		if id == "" {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+
+		reset := ResetEvent{
+			ID:          id,
+			ResetType:   strings.TrimSpace(event.ResetType),
+			AnnouncedAt: strings.TrimSpace(event.AnnouncedAt),
+			Text:        event.Text,
+		}
+		if event.Source != "" || event.TweetURL != "" {
+			reset.Source = &ResetSource{
+				Type: strings.TrimSpace(event.Source),
+				URL:  strings.TrimSpace(event.TweetURL),
+			}
+		}
+		result = append(result, reset)
 	}
-	fetchedAt := envelope.Meta.GeneratedAt
-	if fetchedAt == "" {
-		fetchedAt = time.Now().UTC().Format(time.RFC3339)
-	}
-	return &ResetPrediction{
-		Source:      "codex_resets_status",
-		FetchedAt:   fetchedAt,
-		LatestReset: envelope.Data.LatestReset,
-		ActiveWatch: envelope.Data.ActiveWatch,
-		Stats:       envelope.Data.Stats,
-	}, nil
+	return result
 }
 
 type ConfigView struct {
@@ -1534,6 +1603,16 @@ func cloneResetPrediction(input *ResetPrediction) *ResetPrediction {
 	if input.ActiveWatch != nil {
 		watch := *input.ActiveWatch
 		output.ActiveWatch = &watch
+	}
+	if input.History != nil {
+		output.History = make([]ResetEvent, len(input.History))
+		for index, inputEvent := range input.History {
+			output.History[index] = inputEvent
+			if inputEvent.Source != nil {
+				source := *inputEvent.Source
+				output.History[index].Source = &source
+			}
+		}
 	}
 	return &output
 }

@@ -569,14 +569,18 @@ func TestResetStatusResponseDecodesPrediction(t *testing.T) {
 }
 
 func TestResetPredictionRequestUsesPublicStatusEndpoint(t *testing.T) {
-	var captured *http.Request
+	var captured []*http.Request
 	service := &UsageService{
 		cfg: Config{CacheTTL: time.Minute},
 		client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
-			captured = request
+			captured = append(captured, request)
+			body := `{"data":{"active_watch":null,"stats":{"total":0}},"meta":{"generated_at":"2026-08-22T08:34:14Z"}}`
+			if request.URL.String() == resetHistoryEndpoint {
+				body = `{"events":[{"tweet_id":"2090","tweet_url":"https://x.com/thsottiaux/status/2090","text":"Reset complete","announced_at":"2026-08-21T23:40:12Z","reset_type":"regular","source":"webhook"}]}`
+			}
 			return &http.Response{
 				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(`{"data":{"active_watch":null,"stats":{"total":0}},"meta":{"generated_at":"2026-08-22T08:34:14Z"}}`)),
+				Body:       io.NopCloser(strings.NewReader(body)),
 				Header:     make(http.Header),
 			}, nil
 		})},
@@ -585,14 +589,34 @@ func TestResetPredictionRequestUsesPublicStatusEndpoint(t *testing.T) {
 	if _, err := service.queryResetPrediction(context.Background()); err != nil {
 		t.Fatalf("query reset prediction: %v", err)
 	}
-	if captured == nil {
-		t.Fatal("reset status request was not captured")
+	if len(captured) != 2 {
+		t.Fatalf("captured %d requests, want status and history", len(captured))
 	}
-	if captured.Method != http.MethodGet || captured.URL.String() != resetStatusEndpoint {
-		t.Fatalf("request = %s %s, want GET %s", captured.Method, captured.URL, resetStatusEndpoint)
+	if captured[0].Method != http.MethodGet || captured[0].URL.String() != resetStatusEndpoint {
+		t.Fatalf("status request = %s %s, want GET %s", captured[0].Method, captured[0].URL, resetStatusEndpoint)
 	}
-	if got := captured.Header.Get("User-Agent"); got != "codex-usage-dashboard/1.0" {
+	if captured[1].Method != http.MethodGet || captured[1].URL.String() != resetHistoryEndpoint {
+		t.Fatalf("history request = %s %s, want GET %s", captured[1].Method, captured[1].URL, resetHistoryEndpoint)
+	}
+	if got := captured[0].Header.Get("User-Agent"); got != "codex-usage-dashboard/1.0" {
 		t.Fatalf("User-Agent = %q, want dashboard user agent", got)
+	}
+}
+
+func TestNormalizeResetHistory(t *testing.T) {
+	history := normalizeResetHistory([]resetHistoryEvent{
+		{TweetID: "2090", TweetURL: "https://x.com/2090", ResetType: "regular", Source: "webhook"},
+		{TweetID: "2090", TweetURL: "https://x.com/2090", ResetType: "regular", Source: "webhook"},
+		{TweetID: "2091", TweetURL: "https://x.com/2091", ResetType: "banked", Source: "observed"},
+	})
+	if len(history) != 2 {
+		t.Fatalf("history length = %d, want 2 after deduplication", len(history))
+	}
+	if history[0].ID != "2090" || history[0].Source == nil || history[0].Source.Type != "webhook" {
+		t.Fatalf("first history event = %#v", history[0])
+	}
+	if history[1].ResetType != "banked" || history[1].Source.URL != "https://x.com/2091" {
+		t.Fatalf("second history event = %#v", history[1])
 	}
 }
 

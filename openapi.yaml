@@ -695,6 +695,11 @@ components:
         active_watch:
           allOf:
             - $ref: '#/components/schemas/ResetWatch'
+        history:
+          type: array
+          description: codex-resets.com 返回的 Reset 历史记录，按公告时间倒序排列。
+          items:
+            $ref: '#/components/schemas/ResetEvent'
         stats:
           $ref: '#/components/schemas/ResetStats'
 

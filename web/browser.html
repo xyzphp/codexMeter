@@ -160,6 +160,21 @@
     .prediction-row:last-child { border-bottom:0; }
     .prediction-row span { color:var(--muted); }
     .prediction-row strong { min-width:0; overflow:hidden; text-align:right; text-overflow:ellipsis; white-space:nowrap; }
+    .prediction-history { margin-top:16px; padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
+    .prediction-history-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; color:var(--muted); font-size:14px; }
+    .prediction-history-head strong { color:var(--text); font-size:14px; }
+    .prediction-history-list { max-height:340px; margin-top:10px; overflow-y:auto; border-top:1px solid var(--border); scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
+    .prediction-history-list::-webkit-scrollbar { width:6px; }
+    .prediction-history-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:999px; }
+    .prediction-history-item { padding:12px 2px; border-bottom:1px solid var(--border); }
+    .prediction-history-item:last-child { border-bottom:0; }
+    .prediction-history-item-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .prediction-history-type { color:var(--accent); font-size:14px; font-weight:700; }
+    .prediction-history-type.banked { color:var(--warning); }
+    .prediction-history-date, .prediction-history-source { color:var(--muted); font-size:12px; white-space:nowrap; }
+    .prediction-history-text { margin-top:6px; color:var(--text); font-size:13px; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .prediction-history-source { display:inline-block; margin-top:6px; color:var(--accent); text-decoration:none; }
+    .prediction-history-source:hover { text-decoration:underline; }
     .footnote { margin-top:14px; color:var(--muted); font-size:12px; }
 
     @media (max-width:900px), (max-height:700px) {
@@ -246,6 +261,15 @@
       .prediction-metric-value { margin-top:3px; font-size:15px; }
       .prediction-list { margin-top:9px; border-radius:10px; }
       .prediction-row { min-height:27px; padding:6px 9px; gap:8px; font-size:10px; }
+      .prediction-history { margin-top:9px; padding:9px; border-radius:10px; }
+      .prediction-history-head { font-size:10px; }
+      .prediction-history-head strong { font-size:10px; }
+      .prediction-history-list { max-height:180px; margin-top:6px; }
+      .prediction-history-item { padding:8px 1px; }
+      .prediction-history-item-head { gap:6px; }
+      .prediction-history-type { font-size:10px; }
+      .prediction-history-date, .prediction-history-source { font-size:9px; }
+      .prediction-history-text { margin-top:4px; font-size:9px; line-height:1.4; }
       .footnote { margin-top:8px; font-size:9px; }
     }
     @media (max-width:600px) {
@@ -339,6 +363,10 @@
         <div class="prediction-row"><span>最新公共重置</span><strong id="predictionLatestType">—</strong></div>
         <div class="prediction-row"><span>公告时间</span><strong id="predictionLatestAt">—</strong></div>
         <div class="prediction-row"><span>公告内容</span><strong id="predictionLatestText">—</strong></div>
+      </div>
+      <div class="prediction-history">
+        <div class="prediction-history-head"><span>重置历史</span><strong id="predictionHistoryCount">—</strong></div>
+        <div id="predictionHistoryList" class="prediction-history-list"><div class="empty">读取中…</div></div>
       </div>
       <div class="footnote">数据来源：codex-resets.com · 公共预测仅供参考</div>
     </section>
@@ -499,12 +527,36 @@
         if (hasSignal) prediction.parentNode.insertBefore(prediction, quota);
         else prediction.parentNode.insertBefore(prediction, analytics.nextSibling);
       }
+      function resetHistorySource(source) {
+        var key = String(source || '').toLowerCase();
+        var labels = {webhook:'自动记录', backfill:'历史补录', observed:'公开观测', x_post:'X 帖文'};
+        return labels[key] || String(source || '') || '公开记录';
+      }
+      function renderPredictionHistory(events) {
+        var list = byId('predictionHistoryList');
+        if (!list) return;
+        list.textContent = '';
+        var items = Array.isArray(events) ? events : [];
+        text('predictionHistoryCount', items.length ? items.length + ' 条' : '暂无记录');
+        if (!items.length) { var empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = '暂无重置历史'; list.appendChild(empty); return; }
+        items.forEach(function (event) {
+          var item = document.createElement('div'); item.className = 'prediction-history-item';
+          var head = document.createElement('div'); head.className = 'prediction-history-item-head';
+          var type = document.createElement('strong'); type.className = 'prediction-history-type' + (String(event && event.reset_type || '').toLowerCase() === 'banked' ? ' banked' : ''); type.textContent = translateResetType(event && event.reset_type); head.appendChild(type);
+          var at = document.createElement('span'); at.className = 'prediction-history-date'; at.textContent = date(event && event.announced_at); head.appendChild(at); item.appendChild(head);
+          var content = document.createElement('div'); content.className = 'prediction-history-text'; content.textContent = event && event.text ? event.text : '—'; item.appendChild(content);
+          var source = event && event.source ? event.source : null;
+          if (source && source.url) { var link = document.createElement('a'); link.className = 'prediction-history-source'; link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = resetHistorySource(source.type) + ' · 查看原文'; item.appendChild(link); }
+          list.appendChild(item);
+        });
+      }
       function renderPrediction(data) {
         var watch = data && data.active_watch; var latest = data && data.latest_reset; var chance = watch ? clamp(number(watch.reset_chance_percent), 0, 100) : NaN;
         positionPrediction(Boolean(watch));
         if (watch) { text('predictionState', '检测到重置信号'); classes('predictionState', 'prediction-state'); text('predictionHint', translateForecastWindow(watch.forecast_window)); text('predictionChance', percent(chance) + '%'); style('predictionChanceBar', 'width', chance + '%'); classes('predictionChanceBar', 'prediction-bar ' + (chance >= 70 ? 'high' : '')); text('predictionLevel', translateSignalLevel(watch.level)); text('predictionWindow', translateForecastWindow(watch.forecast_window)); }
         else { text('predictionState', '当前无重置信号'); classes('predictionState', 'prediction-state'); text('predictionHint', '公共监测处于空闲状态'); text('predictionChance', '—'); style('predictionChanceBar', 'width', '0%'); classes('predictionChanceBar', 'prediction-bar'); text('predictionLevel', '无预警'); text('predictionWindow', '—'); }
         text('predictionTotal', data && data.stats ? String(data.stats.total || 0) + ' 条' : '—'); text('predictionAverage', data && data.stats && isFinite(number(data.stats.avg_interval_days)) ? percent(data.stats.avg_interval_days) + ' 天' : '—'); text('predictionUpdated', data && data.fetched_at ? '更新 ' + date(data.fetched_at) : '公共信号'); text('predictionLatestType', latest ? translateResetType(latest.reset_type) : '—'); text('predictionLatestAt', latest ? date(latest.announced_at) : '—'); text('predictionLatestText', latest ? latest.text : '—');
+        renderPredictionHistory(data && data.history);
       }
       function headers() { var result = {'Accept':'application/json'}; try { var key = sessionStorage.getItem('codex-admin-key') || ''; if (key) result['X-App-API-Key'] = key; } catch (_) {} return result; }
       function apiURL(path) { var result = new URL(path, window.location.href); result.username = ''; result.password = ''; return result.toString(); }
