@@ -44,14 +44,14 @@
     .intro-copy { max-width:850px; margin:8px 0 0; color:var(--muted); font-size:14px; line-height:1.65; }
     .security-note { margin-top:18px; padding:13px 15px; border:1px solid #b7e4d5; border-radius:12px; background:var(--accent-soft); color:var(--text); font-size:13px; line-height:1.6; }
     html[data-theme="dark"] .security-note { border-color:#286b59; }
-    .layout { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(360px,.85fr); align-items:start; gap:18px; margin-top:18px; }
+    .layout { display:grid; grid-template-columns:minmax(260px,.78fr) minmax(520px,1.72fr); align-items:start; gap:18px; margin-top:18px; }
     .docs-card, .debugger-card { min-width:0; padding:22px; }
     .section-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:14px; }
     .section-title { font-size:18px; font-weight:700; }
     .section-hint { color:var(--muted); font-size:12px; }
     .endpoint-list { display:grid; gap:10px; }
-    .endpoint { min-width:0; padding:15px 16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
-    .endpoint-head { display:flex; align-items:center; gap:9px; min-width:0; }
+    .endpoint { min-width:0; padding:12px 13px; border:1px solid var(--border); border-radius:12px; background:var(--soft); }
+    .endpoint-head { display:flex; align-items:center; justify-content:space-between; gap:9px; min-width:0; }
     .method { display:inline-flex; align-items:center; justify-content:center; min-width:55px; height:25px; padding:0 8px; border-radius:7px; font-size:11px; font-weight:760; letter-spacing:.3px; }
     .method-get { background:#d8f2e9; color:#087655; }
     .method-post { background:#e7e2ff; color:#5c45b4; }
@@ -62,7 +62,7 @@
     .endpoint-path { min-width:0; overflow:hidden; color:var(--text); font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:13px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
     .endpoint-debug { margin-left:auto; flex:0 0 auto; min-height:29px; padding:0 10px; border:1px solid var(--border); border-radius:8px; background:var(--card); color:var(--muted); font-size:12px; }
     .endpoint-debug:hover { background:var(--accent-soft); color:var(--accent); }
-    .endpoint-title { margin-top:10px; font-size:15px; font-weight:680; }
+    .endpoint-title { min-width:0; overflow:hidden; font-size:14px; font-weight:680; line-height:1.45; text-overflow:ellipsis; white-space:nowrap; }
     .endpoint-copy { margin-top:4px; color:var(--muted); font-size:13px; line-height:1.55; }
     .endpoint-auth { display:inline-flex; margin-top:9px; padding:3px 7px; border:1px solid var(--border); border-radius:6px; color:var(--muted); font-size:11px; }
     .params { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
@@ -249,9 +249,7 @@
         endpointList.innerHTML = ''; endpointSelect.innerHTML = '';
         apiCatalog.forEach(function (item, index) {
           var option = document.createElement('option'); option.value = String(index); option.textContent = item.method + '  ' + item.path; endpointSelect.appendChild(option);
-          var params = item.params && item.params.length ? '<div class="params">' + item.params.map(function (param) { return '<span class="param">' + escapeHTML(param) + '</span>'; }).join('') + '</div>' : '';
-          var body = item.body ? '<pre>' + escapeHTML(item.body) + '</pre>' : '';
-          var article = document.createElement('article'); article.className = 'endpoint'; article.innerHTML = '<div class="endpoint-head"><span class="method method-' + item.method.toLowerCase() + '">' + item.method + '</span><code class="endpoint-path" title="' + escapeHTML(item.path) + '">' + escapeHTML(item.path) + '</code><button class="endpoint-debug" type="button" data-debug-index="' + index + '">调试</button></div><div class="endpoint-title">' + escapeHTML(item.title) + '</div><div class="endpoint-copy">' + escapeHTML(item.description) + '</div><span class="endpoint-auth">认证：' + escapeHTML(item.auth) + '</span>' + params + body;
+          var article = document.createElement('article'); article.className = 'endpoint'; article.innerHTML = '<div class="endpoint-head"><div class="endpoint-title" title="' + escapeHTML(item.title) + '">' + escapeHTML(item.title) + '</div><button class="endpoint-debug" type="button" data-debug-index="' + index + '">调试</button></div>';
           endpointList.appendChild(article);
         });
         Array.prototype.forEach.call(endpointList.querySelectorAll('[data-debug-index]'), function (button) { button.addEventListener('click', function () { endpointSelect.value = button.getAttribute('data-debug-index'); fillDebugger(Number(endpointSelect.value)); document.querySelector('.debugger-card').scrollIntoView({behavior:'smooth', block:'start'}); }); });
