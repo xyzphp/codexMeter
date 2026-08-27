@@ -294,6 +294,7 @@
       .header-actions .action:last-child { display:none; }
       .brand-title { font-size:16px; }
       .section-hint { display:none; }
+      .step-tabs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
       .step-tabs { padding-left:13px; padding-right:13px; }
       .step-card-header { gap:7px; }
       .state-badge { padding:0 7px; }
@@ -335,6 +336,9 @@
         </button>
         <button id="tabPageAccess" class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="pageAccessSection">
           <span class="step-number">3</span><span class="step-tab-copy"><span class="step-tab-title">页面访问</span><span class="step-tab-hint">Basic Auth 保护</span></span>
+        </button>
+        <button id="tabAudio" class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="audioSection">
+          <span class="step-number">4</span><span class="step-tab-copy"><span class="step-tab-title">提示音</span><span class="step-tab-hint">试听提醒音</span></span>
         </button>
       </div>
 
@@ -447,7 +451,7 @@
           </div>
         </section>
 
-        <section class="form-section">
+        <section id="audioSection" class="form-section tab-panel" role="tabpanel" aria-labelledby="tabAudio" hidden>
           <div class="section-head"><div class="section-title">提示音试听</div><div class="section-hint">额度页自动播放</div></div>
           <div class="audio-card">
             <strong>本周剩余额度提示音</strong>
@@ -486,6 +490,7 @@
       var proxySection = document.getElementById('proxySection');
       var credentialsSection = document.getElementById('credentialsSection');
       var pageAccessSection = document.getElementById('pageAccessSection');
+      var audioSection = document.getElementById('audioSection');
       var proxyStateBadge = document.getElementById('proxyStateBadge');
       var pageAccessStateBadge = document.getElementById('pageAccessStateBadge');
       var proxyStatus = document.getElementById('proxyStatus');
@@ -496,6 +501,7 @@
       var tabProxy = document.getElementById('tabProxy');
       var tabCredentials = document.getElementById('tabCredentials');
       var tabPageAccess = document.getElementById('tabPageAccess');
+      var tabAudio = document.getElementById('tabAudio');
       var basicAuthEnabledInput = document.getElementById('basicAuthEnabled');
       var basicAuthUsernameInput = document.getElementById('basicAuthUsername');
       var basicAuthPasswordInput = document.getElementById('basicAuthPassword');
@@ -559,19 +565,23 @@
           setStatus('请先完成步骤 1：测试并保存代理，或使用直连并保存。', 'error');
           return;
         }
-        activeTab = name === 'credentials' ? 'credentials' : (name === 'page-access' ? 'page-access' : 'proxy');
+        activeTab = name === 'credentials' ? 'credentials' : (name === 'page-access' ? 'page-access' : (name === 'audio' ? 'audio' : 'proxy'));
         var proxyActive = activeTab === 'proxy';
         var credentialsActive = activeTab === 'credentials';
         var pageAccessActive = activeTab === 'page-access';
+        var audioActive = activeTab === 'audio';
         proxySection.hidden = !proxyActive;
         credentialsSection.hidden = !credentialsActive;
         pageAccessSection.hidden = !pageAccessActive;
+        audioSection.hidden = !audioActive;
         tabCredentials.classList.toggle('active', credentialsActive);
         tabPageAccess.classList.toggle('active', pageAccessActive);
-        tabProxy.classList.toggle('active', !credentialsActive && !pageAccessActive);
-        tabProxy.setAttribute('aria-selected', !credentialsActive && !pageAccessActive ? 'true' : 'false');
+        tabAudio.classList.toggle('active', audioActive);
+        tabProxy.classList.toggle('active', !credentialsActive && !pageAccessActive && !audioActive);
+        tabProxy.setAttribute('aria-selected', !credentialsActive && !pageAccessActive && !audioActive ? 'true' : 'false');
         tabCredentials.setAttribute('aria-selected', credentialsActive ? 'true' : 'false');
         tabPageAccess.setAttribute('aria-selected', pageAccessActive ? 'true' : 'false');
+        tabAudio.setAttribute('aria-selected', audioActive ? 'true' : 'false');
       }
       function setCredentialAccess(ready) {
         proxyReady = !!ready;
@@ -917,6 +927,7 @@
       tabProxy.addEventListener('click', function () { showTab('proxy'); });
       tabCredentials.addEventListener('click', function () { showTab('credentials'); });
       tabPageAccess.addEventListener('click', function () { showTab('page-access'); });
+      tabAudio.addEventListener('click', function () { showTab('audio'); });
       savePageAccessButton.addEventListener('click', savePageAccess);
       copyAnalyticsURLButton.addEventListener('click', function () {
         copyText(analyticsURL).then(function () {
