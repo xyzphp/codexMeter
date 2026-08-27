@@ -417,6 +417,20 @@ components:
         usage_percent:
           type: number
           format: double
+          description: 按上游额度数据计算的模型使用占比。
+        token_count:
+          type: number
+          format: double
+          nullable: true
+          description: 模型 Token 数；仅当上游返回模型级 Token 明细时提供。
+        token_percent:
+          type: number
+          format: double
+          nullable: true
+          description: 按模型 Token 数计算的占比；上游未提供模型级 Token 明细时不返回。
+        token_share_available:
+          type: boolean
+          description: 是否提供了可用于计算 Token 占比的模型级数据。
 
     UsageAnalyticsDay:
       type: object
