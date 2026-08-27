@@ -48,6 +48,9 @@ var browserHTML []byte
 //go:embed web/settings.html
 var settingsHTML []byte
 
+//go:embed web/assets/account-credentials-guide.png
+var accountCredentialsGuide []byte
+
 type Config struct {
 	BindAddr          string
 	BasePath          string
@@ -1586,6 +1589,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux, prefix string) {
 	mux.HandleFunc("GET "+route("/healthz"), s.handleHealth)
 	mux.HandleFunc("GET "+route("/"), s.handleIndex)
 	mux.HandleFunc("GET "+route("/settings"), s.handleSettings)
+	mux.HandleFunc("GET "+route("/assets/account-credentials-guide.png"), s.handleCredentialGuide)
 	mux.HandleFunc("GET "+route("/audio"), s.handleAudio)
 	mux.HandleFunc("GET "+route("/api/usage"), s.handleUsage)
 	mux.HandleFunc("GET "+route("/api/usage/analytics"), s.handleUsageAnalytics)
@@ -1695,6 +1699,14 @@ func (s *Server) handleSettings(response http.ResponseWriter, _ *http.Request) {
 	response.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 	response.WriteHeader(http.StatusOK)
 	_, _ = response.Write(settingsHTML)
+}
+
+func (s *Server) handleCredentialGuide(response http.ResponseWriter, _ *http.Request) {
+	response.Header().Set("Content-Type", "image/png")
+	response.Header().Set("Cache-Control", "private, max-age=3600")
+	response.Header().Set("Content-Length", strconv.Itoa(len(accountCredentialsGuide)))
+	response.WriteHeader(http.StatusOK)
+	_, _ = response.Write(accountCredentialsGuide)
 }
 
 func (s *Server) handleAudio(response http.ResponseWriter, request *http.Request) {

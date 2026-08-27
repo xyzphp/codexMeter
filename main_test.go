@@ -41,6 +41,24 @@ func TestDeviceWebViewDetection(t *testing.T) {
 	}
 }
 
+func TestCredentialGuideAssetIsServedAsPNG(t *testing.T) {
+	server := NewServer(Config{}, &UsageService{})
+	request := httptest.NewRequest(http.MethodGet, "/assets/account-credentials-guide.png", nil)
+	recorder := httptest.NewRecorder()
+	server.handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("guide asset status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if got := recorder.Header().Get("Content-Type"); got != "image/png" {
+		t.Fatalf("guide asset content type = %q, want image/png", got)
+	}
+	data := recorder.Body.Bytes()
+	if len(data) < 8 || string(data[:8]) != "\x89PNG\r\n\x1a\n" {
+		t.Fatalf("guide asset is not a PNG payload")
+	}
+}
+
 func TestWhamResponseDecodesAndNormalizesWindows(t *testing.T) {
 	raw := []byte(`{
         "plan_type":"plus",
