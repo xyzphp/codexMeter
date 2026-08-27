@@ -368,7 +368,7 @@
         <article class="reset-card"><div class="reset-label">5 小时重置</div><div id="fiveHourResetAt" class="reset-at">—</div><div class="reset-head"><span>剩余倒计时</span><strong id="fiveHourResetCountdown">—</strong></div><div class="reset-head"><span>距离重置剩余</span><strong id="fiveHourResetProgress">—%</strong></div><div class="reset-track"><div id="fiveHourResetBar" class="reset-bar"></div></div></article>
         <article class="reset-card"><div class="reset-label">下次重置</div><div id="weeklyResetAt" class="reset-at">—</div><div class="reset-head"><span>剩余倒计时</span><strong id="weeklyResetCountdown">—</strong></div><div class="reset-head"><span>距离重置剩余</span><strong id="weeklyResetProgress">—%</strong></div><div class="reset-track"><div id="weeklyResetBar" class="reset-bar"></div></div></article>
       </div>
-      <div class="refresh-row"><span>自动刷新</span><strong id="refreshCountdown">05:00</strong></div>
+      <div class="refresh-row"><span id="refreshLabel">自动刷新</span><strong id="refreshCountdown">05:00</strong></div>
       <div class="progress-track refresh-track"><div id="refreshBar" class="progress-bar"></div></div>
       <div class="usage-history" aria-label="额度变化历史">
         <div class="usage-history-head"><div><span class="usage-history-title">本周额度使用变化</span><span class="usage-history-meta">中国时间</span></div><span id="usageHistoryCount" class="usage-history-count">等待采样</span></div>
@@ -434,6 +434,7 @@
       'use strict';
       var refreshTotal = 300;
       var refreshRemaining = refreshTotal;
+      var refreshEnabled = true;
       var refreshBusy = false;
       var resetWindows = {};
       var analyticsRange = {startDate:'', endDate:''};
@@ -684,9 +685,12 @@
           calendarRequest,
           getJSON('api/prediction' + suffix).then(renderPrediction)
         ];
-        Promise.all(requests).then(function () { refreshRemaining = refreshTotal; }).catch(setError).then(function () { refreshBusy = false; if (button) button.disabled = false; });
+        Promise.all(requests).then(function () { resetRefreshCountdown(); }).catch(setError).then(function () { refreshBusy = false; if (button) button.disabled = false; });
       }
-      function renderRefresh() { text('refreshCountdown', Math.floor(refreshRemaining / 60).toString().padStart(2, '0') + ':' + (refreshRemaining % 60).toString().padStart(2, '0')); style('refreshBar', 'width', refreshRemaining / refreshTotal * 100 + '%'); }
+      function getRefreshPolicy() { var hour = new Date().getHours(); if (hour < 8) return {enabled:false, seconds:0, label:'自动刷新暂停 · 00:00–08:00'}; if (hour < 9) return {enabled:true, seconds:15 * 60, label:'每 15 分钟自动刷新'}; if (hour < 18) return {enabled:true, seconds:5 * 60, label:'每 5 分钟自动刷新'}; return {enabled:true, seconds:15 * 60, label:'每 15 分钟自动刷新'}; }
+      function resetRefreshCountdown() { var policy = getRefreshPolicy(); refreshEnabled = policy.enabled; refreshTotal = policy.seconds; refreshRemaining = policy.enabled ? policy.seconds : 0; renderRefresh(); }
+      function renderRefresh() { var policy = getRefreshPolicy(); if (policy.enabled !== refreshEnabled || policy.seconds !== refreshTotal) { refreshEnabled = policy.enabled; refreshTotal = policy.seconds; refreshRemaining = policy.enabled ? policy.seconds : 0; } text('refreshLabel', policy.label); text('refreshCountdown', refreshEnabled ? Math.floor(refreshRemaining / 60).toString().padStart(2, '0') + ':' + (refreshRemaining % 60).toString().padStart(2, '0') : '暂停'); style('refreshBar', 'width', refreshEnabled && refreshTotal > 0 ? refreshRemaining / refreshTotal * 100 + '%' : '0%'); }
+      function tickRefresh() { var policy = getRefreshPolicy(); if (policy.enabled !== refreshEnabled || policy.seconds !== refreshTotal) { resetRefreshCountdown(); return; } if (!refreshEnabled || refreshBusy) { renderRefresh(); return; } if (refreshRemaining <= 0) { loadAll(true); return; } refreshRemaining -= 1; renderRefresh(); }
       function setTheme(theme) { document.documentElement.setAttribute('data-theme', theme); try { localStorage.setItem('codex-theme', theme); } catch (_) {} }
       var savedTheme = null; try { savedTheme = localStorage.getItem('codex-theme'); } catch (_) {} setTheme(savedTheme || (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light'));
       byId('themeButton').addEventListener('click', function () { setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); });
@@ -696,9 +700,8 @@
       byId('analyticsEnd').addEventListener('change', applyAnalyticsRangeWhenValid);
       Array.prototype.forEach.call(document.querySelectorAll('[data-range-days]'), function (button) { button.addEventListener('click', function () { applyRangePreset(Number(button.getAttribute('data-range-days'))); }); });
       setRangeInputs(365);
-      loadAll(false); renderRefresh();
-      window.setInterval(function () { renderResets(); if (refreshRemaining > 0) refreshRemaining -= 1; else loadAll(true); renderRefresh(); }, 1000);
-      window.setInterval(function () { if (!refreshBusy) loadAll(true); }, refreshTotal * 1000);
+      resetRefreshCountdown(); loadAll(false);
+      window.setInterval(function () { renderResets(); tickRefresh(); }, 1000);
     }());
   </script>
 </body>
