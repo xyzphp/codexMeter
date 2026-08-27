@@ -44,6 +44,9 @@
     .card-title { font-size:22px; font-weight:700; letter-spacing:-.2px; }
     .card-meta { color:var(--muted); font-size:13px; white-space:nowrap; }
     .analytics-toolbar { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:14px; margin-top:18px; }
+    .range-presets { display:flex; align-items:center; gap:6px; }
+    .range-preset { min-height:32px; padding:0 10px; border-radius:8px; font-size:12px; }
+    .range-preset.active { border-color:var(--accent); background:var(--accent); color:#fff; }
     .date-range { display:flex; align-items:center; gap:8px; }
     .date-field { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; white-space:nowrap; }
     .date-field input { width:132px; min-height:32px; padding:0 8px; border:1px solid var(--border); border-radius:8px; background:var(--card); color:var(--text); font:inherit; color-scheme:light; }
@@ -192,6 +195,8 @@
       .summary-grid, .prediction-grid { gap:7px; margin-top:12px; }
       .analytics-toolbar { align-items:stretch; gap:8px; margin-top:10px; }
       .analytics-toolbar { justify-content:stretch; }
+      .range-presets { flex:1 1 100%; }
+      .range-preset { flex:1 1 0; min-height:27px; padding:0 6px; font-size:10px; }
       .date-range { flex:1 1 100%; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:5px; }
       .date-field { min-width:0; gap:3px; font-size:9px; }
       .date-field input { width:100%; min-width:0; min-height:27px; padding:0 4px; font-size:9px; }
@@ -292,6 +297,12 @@
     <section class="card section" aria-label="使用分析">
       <div class="card-head"><div class="card-title">使用分析</div><div id="analyticsUpdated" class="card-meta">读取中…</div></div>
       <div class="analytics-toolbar">
+        <div class="range-presets" aria-label="快速日期范围">
+          <button class="action range-preset" type="button" data-range-days="7">7天</button>
+          <button class="action range-preset" type="button" data-range-days="30">30天</button>
+          <button class="action range-preset" type="button" data-range-days="60">60天</button>
+          <button class="action range-preset" type="button" data-range-days="90">90天</button>
+        </div>
         <div class="date-range">
           <label class="date-field">开始<input id="analyticsStart" type="date"></label>
           <label class="date-field">结束<input id="analyticsEnd" type="date"></label>
@@ -359,15 +370,17 @@
       function daysFromToday(offset) { var parsed = new Date(); parsed.setHours(12, 0, 0, 0); parsed.setDate(parsed.getDate() - offset); return inputDate(parsed); }
       function rangeDayCount(startDate, endDate) { var start = new Date(startDate + 'T12:00:00'); var end = new Date(endDate + 'T12:00:00'); if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return 0; return Math.round((end.getTime() - start.getTime()) / 86400000) + 1; }
       function rangeLabel(startDate, endDate) { var days = rangeDayCount(startDate, endDate); return days ? '近' + days + '天额度使用' : '日期范围额度使用'; }
-      function setRangeInputs(days) { var endDate = daysFromToday(1); var startDate = daysFromToday(days); analyticsRange = {startDate:startDate, endDate:endDate}; var startInput = byId('analyticsStart'); var endInput = byId('analyticsEnd'); if (startInput) startInput.value = startDate; if (endInput) endInput.value = endDate; }
+      function updateRangePresetState() { var currentDays = rangeDayCount(analyticsRange.startDate, analyticsRange.endDate); Array.prototype.forEach.call(document.querySelectorAll('[data-range-days]'), function (button) { var days = Number(button.getAttribute('data-range-days')); button.classList.toggle('active', days === currentDays); }); }
+      function setRangeInputs(days) { var endDate = daysFromToday(1); var startDate = daysFromToday(days); analyticsRange = {startDate:startDate, endDate:endDate}; var startInput = byId('analyticsStart'); var endInput = byId('analyticsEnd'); if (startInput) startInput.value = startDate; if (endInput) endInput.value = endDate; updateRangePresetState(); }
+      function applyRangePreset(days) { if (!isFinite(days) || days <= 0) return; setRangeInputs(days); loadAll(true, false); }
       function fixedCalendarRange() { return {startDate:daysFromToday(365), endDate:daysFromToday(1)}; }
       function sameAnalyticsRange(left, right) { return Boolean(left && right && left.startDate === right.startDate && left.endDate === right.endDate); }
       function analyticsPathForRange(range, force) { var path = 'api/usage/analytics?start_date=' + encodeURIComponent(range.startDate) + '&end_date=' + encodeURIComponent(range.endDate); return force ? path + '&force=true' : path; }
       function analyticsPath(force) { return analyticsPathForRange(analyticsRange, force); }
       function readAnalyticsRange() { var startInput = byId('analyticsStart'); var endInput = byId('analyticsEnd'); return {startDate:startInput ? startInput.value : '', endDate:endInput ? endInput.value : ''}; }
       function isValidAnalyticsRange(range) { return Boolean(range.startDate && range.endDate && range.startDate <= range.endDate && rangeDayCount(range.startDate, range.endDate) <= 367); }
-      function applyCustomRange() { var range = readAnalyticsRange(); if (!isValidAnalyticsRange(range)) { setError(new Error('请选择有效的日期范围')); return; } analyticsRange = range; loadAll(true, false); }
-      function applyAnalyticsRangeWhenValid() { var range = readAnalyticsRange(); if (!isValidAnalyticsRange(range)) return; analyticsRange = range; loadAll(true, false); }
+      function applyCustomRange() { var range = readAnalyticsRange(); if (!isValidAnalyticsRange(range)) { setError(new Error('请选择有效的日期范围')); return; } analyticsRange = range; updateRangePresetState(); loadAll(true, false); }
+      function applyAnalyticsRangeWhenValid() { var range = readAnalyticsRange(); if (!isValidAnalyticsRange(range)) return; analyticsRange = range; updateRangePresetState(); loadAll(true, false); }
       function escaped(value) { return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, function (character) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]; }); }
       function quotaClass(value) { if (!isFinite(value) || value <= 20) return 'critical'; if (value <= 50) return 'warning'; return ''; }
       function renderWindow(window, prefix, resetPrefix) {
@@ -502,6 +515,7 @@
       byId('applyRange').addEventListener('click', applyCustomRange);
       byId('analyticsStart').addEventListener('change', applyAnalyticsRangeWhenValid);
       byId('analyticsEnd').addEventListener('change', applyAnalyticsRangeWhenValid);
+      Array.prototype.forEach.call(document.querySelectorAll('[data-range-days]'), function (button) { button.addEventListener('click', function () { applyRangePreset(Number(button.getAttribute('data-range-days'))); }); });
       setRangeInputs(365);
       loadAll(false); renderRefresh();
       window.setInterval(function () { renderResets(); if (refreshRemaining > 0) refreshRemaining -= 1; else loadAll(true); renderRefresh(); }, 1000);
