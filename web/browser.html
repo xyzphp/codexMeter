@@ -477,6 +477,22 @@
         selectedAnalyticsDate = days.length ? heatmapDateKey(heatmapDate(days[days.length - 1].date)) : '';
         renderHeatmap('dailyTokenChart', days, 'text_total_tokens', token, 'Token', calendarRange.startDate, calendarRange.endDate); renderShare(days, selectedAnalyticsDate);
       }
+      function translateSignalLevel(value) {
+        var raw = String(value || '').trim(); var key = raw.toLowerCase(); var levels = {strong:'强', high:'高', medium:'中', moderate:'中', normal:'正常', weak:'弱', low:'低', none:'无'};
+        return levels[key] || raw || '观察中';
+      }
+      function translateForecastWindow(value) {
+        var raw = String(value || '').trim(); if (!raw) return '公开监测窗口内';
+        var key = raw.toLowerCase(); var weekdays = {monday:'周一', tuesday:'周二', wednesday:'周三', thursday:'周四', friday:'周五', saturday:'周六', sunday:'周日'};
+        if (key.indexOf('by end of ') === 0) { var day = key.substring(11).trim(); return (weekdays[day] || raw.substring(11).trim()) + '结束前'; }
+        return raw.replace(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi, function (day) { return weekdays[day.toLowerCase()] || day; }).replace(/\bnext week\b/gi, '下周').replace(/\bnext month\b/gi, '下个月').replace(/\bnext 24 hours\b/gi, '未来 24 小时');
+      }
+      function translateResetType(value) {
+        var key = String(value || '').trim().toLowerCase();
+        if (key === 'banked' || key === 'banked reset') return '批量重置';
+        if (key === 'regular' || key === 'regular reset') return '普通重置';
+        return String(value || '').trim() || '—';
+      }
       function positionPrediction(hasSignal) {
         var quota = byId('quotaSection'); var analytics = byId('analyticsSection'); var prediction = byId('predictionSection');
         if (!quota || !analytics || !prediction || !prediction.parentNode) return;
@@ -486,9 +502,9 @@
       function renderPrediction(data) {
         var watch = data && data.active_watch; var latest = data && data.latest_reset; var chance = watch ? clamp(number(watch.reset_chance_percent), 0, 100) : NaN;
         positionPrediction(Boolean(watch));
-        if (watch) { text('predictionState', '检测到重置信号'); classes('predictionState', 'prediction-state'); text('predictionHint', watch.forecast_window || '公开监测窗口内'); text('predictionChance', percent(chance) + '%'); style('predictionChanceBar', 'width', chance + '%'); classes('predictionChanceBar', 'prediction-bar ' + (chance >= 70 ? 'high' : '')); text('predictionLevel', watch.level || '观察中'); text('predictionWindow', watch.forecast_window || '—'); }
+        if (watch) { text('predictionState', '检测到重置信号'); classes('predictionState', 'prediction-state'); text('predictionHint', translateForecastWindow(watch.forecast_window)); text('predictionChance', percent(chance) + '%'); style('predictionChanceBar', 'width', chance + '%'); classes('predictionChanceBar', 'prediction-bar ' + (chance >= 70 ? 'high' : '')); text('predictionLevel', translateSignalLevel(watch.level)); text('predictionWindow', translateForecastWindow(watch.forecast_window)); }
         else { text('predictionState', '当前无重置信号'); classes('predictionState', 'prediction-state'); text('predictionHint', '公共监测处于空闲状态'); text('predictionChance', '—'); style('predictionChanceBar', 'width', '0%'); classes('predictionChanceBar', 'prediction-bar'); text('predictionLevel', '无预警'); text('predictionWindow', '—'); }
-        text('predictionTotal', data && data.stats ? String(data.stats.total || 0) + ' 条' : '—'); text('predictionAverage', data && data.stats && isFinite(number(data.stats.avg_interval_days)) ? percent(data.stats.avg_interval_days) + ' 天' : '—'); text('predictionUpdated', data && data.fetched_at ? '更新 ' + date(data.fetched_at) : '公共信号'); text('predictionLatestType', latest ? (latest.reset_type === 'banked' ? 'Banked Reset' : latest.reset_type === 'regular' ? 'Regular Reset' : latest.reset_type) : '—'); text('predictionLatestAt', latest ? date(latest.announced_at) : '—'); text('predictionLatestText', latest ? latest.text : '—');
+        text('predictionTotal', data && data.stats ? String(data.stats.total || 0) + ' 条' : '—'); text('predictionAverage', data && data.stats && isFinite(number(data.stats.avg_interval_days)) ? percent(data.stats.avg_interval_days) + ' 天' : '—'); text('predictionUpdated', data && data.fetched_at ? '更新 ' + date(data.fetched_at) : '公共信号'); text('predictionLatestType', latest ? translateResetType(latest.reset_type) : '—'); text('predictionLatestAt', latest ? date(latest.announced_at) : '—'); text('predictionLatestText', latest ? latest.text : '—');
       }
       function headers() { var result = {'Accept':'application/json'}; try { var key = sessionStorage.getItem('codex-admin-key') || ''; if (key) result['X-App-API-Key'] = key; } catch (_) {} return result; }
       function apiURL(path) { var result = new URL(path, window.location.href); result.username = ''; result.password = ''; return result.toString(); }
