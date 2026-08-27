@@ -33,6 +33,7 @@ const (
 	defaultCacheTTL             = 10 * time.Minute
 	defaultUsageHistoryFile     = "data/usage-history.jsonl"
 	maxUsageHistoryPoints       = 48
+	usageHistorySampleInterval  = 5 * time.Minute
 	upstreamRequestTimeout      = 15 * time.Second
 	resetStatusEndpoint         = "https://codex-resets.com/api/v1/status"
 	resetHistoryEndpoint        = "https://codex-resets.com/api/resets"
@@ -719,34 +720,81 @@ func (s *UsageService) Get(ctx context.Context, force bool) (*UsageResponse, err
 		return nil, err
 	}
 
-	var latestHistoryPoint HistoryPoint
-	hasLatestHistoryPoint := false
 	s.cacheMu.Lock()
-	if usage.SevenDay != nil {
-		latestHistoryPoint = HistoryPoint{
-			At:          usage.FetchedAt,
-			UsedPercent: usage.SevenDay.UsedPercent,
-		}
-		if usage.FiveHour != nil {
-			fiveHourUsedPercent := usage.FiveHour.UsedPercent
-			latestHistoryPoint.FiveHourUsedPercent = &fiveHourUsedPercent
-		}
-		hasLatestHistoryPoint = true
-		s.history = append(s.history, latestHistoryPoint)
-		if len(s.history) > maxUsageHistoryPoints {
-			s.history = s.history[len(s.history)-maxUsageHistoryPoints:]
-		}
-	}
 	usage.History = append([]HistoryPoint(nil), s.history...)
 	s.cached = cloneUsage(usage)
 	s.cachedAt = time.Now()
 	s.cacheMu.Unlock()
-	if s.historyFile != "" && hasLatestHistoryPoint {
-		if err := appendUsageHistory(s.historyFile, latestHistoryPoint); err != nil {
+	return cloneUsage(usage), nil
+}
+
+// StartHistoryCollector starts the backend sampler independently from page
+// refreshes. The caller owns ctx and should cancel it during shutdown.
+func (s *UsageService) StartHistoryCollector(ctx context.Context) {
+	go func() {
+		s.collectUsageHistory(ctx)
+		ticker := time.NewTicker(usageHistorySampleInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.collectUsageHistory(ctx)
+			}
+		}
+	}()
+}
+
+func (s *UsageService) collectUsageHistory(ctx context.Context) {
+	usage, err := s.Get(ctx, true)
+	if err != nil {
+		slog.Warn("scheduled usage collection failed", "error", err)
+		return
+	}
+	point, ok := usageHistoryPoint(usage)
+	if !ok {
+		return
+	}
+
+	s.cacheMu.Lock()
+	if len(s.history) > 0 {
+		lastAt, parseErr := time.Parse(time.RFC3339, s.history[len(s.history)-1].At)
+		pointAt, pointErr := time.Parse(time.RFC3339, point.At)
+		if parseErr == nil && pointErr == nil && pointAt.Sub(lastAt) < usageHistorySampleInterval {
+			s.cacheMu.Unlock()
+			return
+		}
+	}
+	s.history = append(s.history, point)
+	if len(s.history) > maxUsageHistoryPoints {
+		s.history = s.history[len(s.history)-maxUsageHistoryPoints:]
+	}
+	if s.cached != nil {
+		s.cached.History = append([]HistoryPoint(nil), s.history...)
+	}
+	s.cacheMu.Unlock()
+
+	if s.historyFile != "" {
+		if err := appendUsageHistory(s.historyFile, point); err != nil {
 			slog.Warn("persist usage history failed", "error", err)
 		}
 	}
-	return cloneUsage(usage), nil
+}
+
+func usageHistoryPoint(usage *UsageResponse) (HistoryPoint, bool) {
+	if usage == nil || usage.SevenDay == nil || strings.TrimSpace(usage.FetchedAt) == "" {
+		return HistoryPoint{}, false
+	}
+	point := HistoryPoint{
+		At:          usage.FetchedAt,
+		UsedPercent: usage.SevenDay.UsedPercent,
+	}
+	if usage.FiveHour != nil {
+		fiveHourUsedPercent := usage.FiveHour.UsedPercent
+		point.FiveHourUsedPercent = &fiveHourUsedPercent
+	}
+	return point, true
 }
 
 func loadUsageHistory(path string) ([]HistoryPoint, error) {
@@ -2295,9 +2343,10 @@ func main() {
 
 	stopContext, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	usage.StartHistoryCollector(stopContext)
 
 	go func() {
-		slog.Info("server started", "address", cfg.BindAddr, "cache_ttl", cfg.CacheTTL.String())
+		slog.Info("server started", "address", cfg.BindAddr, "cache_ttl", cfg.CacheTTL.String(), "history_interval", usageHistorySampleInterval.String())
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("server stopped unexpectedly", "error", err)
 			stop()

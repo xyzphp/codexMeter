@@ -210,6 +210,39 @@ func TestUsageHistoryLoadsFiveHourPercent(t *testing.T) {
 	}
 }
 
+func TestUsageRefreshDoesNotPersistHistory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
+	service := &UsageService{
+		cfg: Config{AccessToken: "oauth-token", UserAgent: "test-user-agent"},
+		client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`{"rate_limit":{"primary_window":{"used_percent":12,"limit_window_seconds":604800}}}`)),
+				Header:     make(http.Header),
+			}, nil
+		})},
+		historyFile: path,
+	}
+
+	usage, err := service.Get(context.Background(), true)
+	if err != nil {
+		t.Fatalf("refresh usage: %v", err)
+	}
+	if len(usage.History) != 0 || len(service.history) != 0 {
+		t.Fatalf("refresh unexpectedly persisted history: response=%#v service=%#v", usage.History, service.history)
+	}
+
+	service.collectUsageHistory(context.Background())
+	service.collectUsageHistory(context.Background())
+	loaded, err := loadUsageHistory(path)
+	if err != nil {
+		t.Fatalf("load collected history: %v", err)
+	}
+	if len(loaded) != 1 || loaded[0].UsedPercent != 12 || len(service.history) != 1 {
+		t.Fatalf("collected history = %#v, want one 12%% sample", loaded)
+	}
+}
+
 func TestWhamRequestUsesOAuthHeadersAndGET(t *testing.T) {
 	var captured *http.Request
 	service := &UsageService{
