@@ -10,17 +10,15 @@ https://chatgpt.com/backend-api/wham/usage
 
 ## 一、重新抓取当前请求
 
-1. 打开自己有权访问的 [ChatGPT](https://chatgpt.com/) 并登录。
-2. 进入 **设置 → 使用情况**，或打开 Codex 使用情况页面。
-3. 按 `F12` 打开开发者工具，切换到 **Network/网络**。
-4. 勾选 **Preserve log/保留日志**，过滤 `wham/usage` 或 `usage`。
-5. 刷新使用情况页面，找到状态码为 `200` 的：
+1. 打开自己有权访问的 [ChatGPT 使用分析页](https://chatgpt.com/codex/cloud/settings/analytics) 并登录。
+2. 按 `F12` 打开开发者工具，切换到 **Network/网络**。
+3. 在过滤框输入 `usage`，刷新页面，找到状态码为 `200` 的：
 
    ```text
    /backend-api/wham/usage
    ```
 
-6. 右键该请求，选择 **Copy → Copy as cURL (Windows)**。Windows 用户建议复制 CMD 格式；PowerShell、Linux 和 macOS 用户可以复制对应的 Bash 格式。
+4. 右键该请求，选择 **Copy → Copy as cURL (bash)**；也可以根据当前终端选择 CMD、PowerShell 或其他 cURL 格式。
 
 只从自己当前登录的浏览器会话抓取请求。不要把完整 cURL 粘贴到工单、聊天记录、公共仓库或在线转换网站中。
 

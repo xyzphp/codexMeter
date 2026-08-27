@@ -23,12 +23,12 @@
 
 ### ChatGPT Web 端操作步骤
 
-1. 打开 [ChatGPT](https://chatgpt.com/) 并登录自己的账号。
-2. 打开 **设置 → 使用情况**，进入使用限额页面。
-3. 按 `F12` 打开开发者工具，切换到 **Network/网络** 面板；可勾选 Preserve log，并在过滤框输入 `usage` 或 `wham/usage`。
-4. 在请求列表中找到 `/backend-api/wham/usage`，确认状态码为 `200` 后打开详情。
-5. 在 **Headers → Request Headers** 中找到 `Authorization`。它通常形如 `Bearer <token>`，项目配置时只复制 `Bearer ` 后面的 Token，不要把 `Bearer ` 前缀再次写入 `access_token`。
-6. 如果同一请求包含 `chatgpt-account-id`，将它的值配置到 `openai.chatgpt_account_id`；如果没有该请求头，则按“如何确认 Account ID”一节在本机离线确认。
+1. 打开 [ChatGPT 使用分析页](https://chatgpt.com/codex/cloud/settings/analytics) 并登录自己的账号。
+2. 按 `F12` 打开开发者工具，切换到 **Network/网络** 面板，在过滤框输入 `usage`。
+3. 刷新页面，在请求列表中找到 `/backend-api/wham/usage`，确认状态码为 `200`。
+4. 右键该请求，选择 **Copy → Copy as cURL (bash)**；也可以选择当前终端对应的 CMD 或 PowerShell 格式。
+5. 将复制的 cURL 粘贴到项目设置页的“粘贴浏览器 Fetch / cURL 请求”编辑框，点击识别并覆盖保存。项目会自动提取 `Authorization`、Cookie、Account ID 和客户端上下文。
+6. 如果需要手动核对字段，在 **Headers → Request Headers** 中找到 `Authorization`。它通常形如 `Bearer <token>`，项目配置时只复制 `Bearer ` 后面的 Token，不要把 `Bearer ` 前缀再次写入 `access_token`。
 
 字段对应关系：
 
