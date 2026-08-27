@@ -199,17 +199,11 @@
     .model-pie-svg .model-pie-percent { font-size:20px; font-weight:720; }
     .model-pie-svg .model-pie-caption { fill:var(--muted); font-size:7px; }
     .model-pie-legend { flex:1 1 auto; min-width:0; margin-left:12px; }
-    .model-pie-legend-head, .model-pie-legend-item { display:grid; grid-template-columns:minmax(0,1fr) 43px 43px; align-items:center; min-width:0; column-gap:5px; }
-    .model-pie-legend-head { padding-bottom:4px; color:var(--muted); border-bottom:1px solid var(--border); font-size:8px; line-height:10px; }
-    .model-pie-legend-head span:not(:first-child) { text-align:right; }
-    .model-pie-legend-item { color:var(--muted); font-size:9px; line-height:12px; }
+    .model-pie-legend-item { display:flex; align-items:center; min-width:0; color:var(--muted); font-size:9px; line-height:12px; }
     .model-pie-legend-item + .model-pie-legend-item { margin-top:6px; }
-    .model-pie-legend-model { display:flex; align-items:center; min-width:0; }
     .model-pie-legend-color { width:8px; height:8px; flex:0 0 8px; margin-right:5px; border-radius:2px; }
     .model-pie-legend-label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .model-pie-legend-value, .model-pie-legend-token { min-width:0; padding-left:0; color:var(--text); font-size:9px; font-weight:680; text-align:right; white-space:nowrap; }
-    .model-pie-legend-token { color:var(--accent); }
-    .model-pie-legend-note { margin-top:7px; color:var(--muted); font-size:8px; line-height:10px; }
+    .model-pie-legend-value { margin-left:auto; padding-left:6px; color:var(--text); font-size:9px; font-weight:680; white-space:nowrap; }
     .analytics-empty { height:76px; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:10px; }
     .analytics-error { color:var(--danger); }
     .detail-account { margin:9px 3px 0; }
@@ -350,7 +344,7 @@
             <div id="modelUsageChart" class="model-chart" aria-label="模型每日使用堆叠柱状图"></div>
           </div>
           <div class="chart-panel">
-            <div class="chart-panel-head"><span>昨日模型使用占比</span><strong>额度 / Token</strong></div>
+            <div class="chart-panel-head"><span>昨日模型使用占比</span><strong>按额度</strong></div>
             <div id="yesterdayModelPieChart" class="model-pie" aria-label="昨日模型使用占比饼图"></div>
           </div>
         </section>
@@ -756,13 +750,10 @@
           var name = model && model.model ? String(model.model) : 'unknown';
           var value = Number(model && model.usage_percent);
           if (!isFinite(value) || value <= 0) return;
-          if (!byModel[name]) byModel[name] = { value:0, tokenPercent:NaN };
-          byModel[name].value += value;
-          var tokenPercent = Number(model && model.token_percent);
-          if (isFinite(tokenPercent)) byModel[name].tokenPercent = tokenPercent;
+          byModel[name] = (byModel[name] || 0) + value;
         });
         var models = Object.keys(byModel).map(function (name) {
-          return { name:name, value:byModel[name].value, tokenPercent:byModel[name].tokenPercent };
+          return { name:name, value:byModel[name] };
         }).sort(function (left, right) { return right.value - left.value; });
         if (!models.length) {
           container.innerHTML = compact ? '<span class="overview-model-empty">—</span>' : '<div class="analytics-empty">暂无昨日模型使用数据</div>';
@@ -807,17 +798,13 @@
           }
           return;
         }
-        var hasTokenShare = models.some(function (model) { return isFinite(model.tokenPercent); });
-        var legend = '<div class="model-pie-legend"><div class="model-pie-legend-head"><span>模型</span><span>额度</span><span>Token</span></div>';
+        var legend = '<div class="model-pie-legend">';
         models.forEach(function (model, index) {
           var share = model.value / total * 100;
-          var tokenShare = isFinite(model.tokenPercent) ? formatPercent(model.tokenPercent) + '%' : '—';
-          legend += '<div class="model-pie-legend-item"><span class="model-pie-legend-model"><i class="model-pie-legend-color" style="background:' + palette[index % palette.length] + '"></i>' +
-            '<span class="model-pie-legend-label" title="' + escapeHTML(model.name) + '">' + escapeHTML(model.name) + '</span></span>' +
-            '<strong class="model-pie-legend-value">' + escapeHTML(formatPercent(share)) + '%</strong>' +
-            '<strong class="model-pie-legend-token">' + escapeHTML(tokenShare) + '</strong></div>';
+          legend += '<div class="model-pie-legend-item"><i class="model-pie-legend-color" style="background:' + palette[index % palette.length] + '"></i>' +
+            '<span class="model-pie-legend-label" title="' + escapeHTML(model.name) + '">' + escapeHTML(model.name) + '</span>' +
+            '<strong class="model-pie-legend-value">' + escapeHTML(formatPercent(share)) + '%</strong></div>';
         });
-        if (!hasTokenShare) legend += '<div class="model-pie-legend-note">上游暂未提供按模型拆分的 Token 数</div>';
         legend += '</div>';
         container.innerHTML = svg + legend;
       }

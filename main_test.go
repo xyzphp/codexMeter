@@ -193,22 +193,6 @@ func TestDailyUsageAnalyticsUsesBothEndpoints(t *testing.T) {
 	}
 }
 
-func TestAggregateTokenModelsIncludesTokenShare(t *testing.T) {
-	models := aggregateTokenModels([]dailyTokenModel{
-		{Model: "gpt-5.6-luna", Credits: 30, TextTotalTokens: json.RawMessage(`25`)},
-		{Model: "gpt-5.6-sol", Credits: 70, TextTotalTokens: json.RawMessage(`75`)},
-	})
-	if len(models) != 2 {
-		t.Fatalf("models = %d, want 2", len(models))
-	}
-	if models[0].Model != "gpt-5.6-luna" || models[0].TokenCount == nil || *models[0].TokenCount != 25 || models[0].TokenPercent == nil || *models[0].TokenPercent != 25 || !models[0].TokenShareAvailable {
-		t.Fatalf("luna model = %#v", models[0])
-	}
-	if models[1].Model != "gpt-5.6-sol" || models[1].TokenCount == nil || *models[1].TokenCount != 75 || models[1].TokenPercent == nil || *models[1].TokenPercent != 75 || !models[1].TokenShareAvailable {
-		t.Fatalf("sol model = %#v", models[1])
-	}
-}
-
 func TestMergeUsageAnalyticsUsesPreviousSevenDays(t *testing.T) {
 	tokenUsage := make([]dailyTokenUsagePoint, 0, 8)
 	workspaceUsage := make([]dailyWorkspaceUsagePoint, 0, 8)

@@ -344,11 +344,8 @@ type UsageAnalyticsDay struct {
 }
 
 type UsageAnalyticsModel struct {
-	Model               string   `json:"model"`
-	UsagePercent        float64  `json:"usage_percent"`
-	TokenCount          *float64 `json:"token_count,omitempty"`
-	TokenPercent        *float64 `json:"token_percent,omitempty"`
-	TokenShareAvailable bool     `json:"token_share_available,omitempty"`
+	Model        string  `json:"model"`
+	UsagePercent float64 `json:"usage_percent"`
 }
 
 type UsageAnalyticsSummary struct {
@@ -371,18 +368,9 @@ type dailyTokenUsagePoint struct {
 }
 
 type dailyTokenModel struct {
-	Model            string          `json:"model"`
-	Speed            string          `json:"speed"`
-	Credits          float64         `json:"credits"`
-	Tokens           json.RawMessage `json:"tokens"`
-	TokenCount       json.RawMessage `json:"token_count"`
-	TotalTokens      json.RawMessage `json:"total_tokens"`
-	TextTotalTokens  json.RawMessage `json:"text_total_tokens"`
-	InputTokens      json.RawMessage `json:"input_tokens"`
-	OutputTokens     json.RawMessage `json:"output_tokens"`
-	TextInputTokens  json.RawMessage `json:"text_input_tokens"`
-	TextOutputTokens json.RawMessage `json:"text_output_tokens"`
-	TokenUsage       json.RawMessage `json:"usage"`
+	Model   string  `json:"model"`
+	Speed   string  `json:"speed"`
+	Credits float64 `json:"credits"`
 }
 
 type dailyWorkspaceUsageEnvelope struct {
@@ -719,95 +707,14 @@ func sumTokenCredits(models []dailyTokenModel) float64 {
 	return total
 }
 
-func parseJSONNumber(raw json.RawMessage) (float64, bool) {
-	if len(raw) == 0 || string(raw) == "null" {
-		return 0, false
-	}
-	var number float64
-	if err := json.Unmarshal(raw, &number); err == nil && number >= 0 {
-		return number, true
-	}
-	var text string
-	if err := json.Unmarshal(raw, &text); err == nil {
-		number, err = strconv.ParseFloat(strings.TrimSpace(text), 64)
-		if err == nil && number >= 0 {
-			return number, true
-		}
-	}
-	return 0, false
-}
-
-func firstJSONNumber(values ...json.RawMessage) (float64, bool) {
-	for _, value := range values {
-		if number, ok := parseJSONNumber(value); ok {
-			return number, true
-		}
-	}
-	return 0, false
-}
-
-func modelTokenCount(model dailyTokenModel) (float64, bool) {
-	if number, ok := firstJSONNumber(model.Tokens, model.TokenCount, model.TotalTokens, model.TextTotalTokens); ok {
-		return number, true
-	}
-
-	if len(model.TokenUsage) > 0 && string(model.TokenUsage) != "null" {
-		var usage struct {
-			Tokens          json.RawMessage `json:"tokens"`
-			TokenCount      json.RawMessage `json:"token_count"`
-			TotalTokens     json.RawMessage `json:"total_tokens"`
-			TextTotalTokens json.RawMessage `json:"text_total_tokens"`
-			InputTokens     json.RawMessage `json:"input_tokens"`
-			OutputTokens    json.RawMessage `json:"output_tokens"`
-		}
-		if err := json.Unmarshal(model.TokenUsage, &usage); err == nil {
-			if number, ok := firstJSONNumber(usage.Tokens, usage.TokenCount, usage.TotalTokens, usage.TextTotalTokens); ok {
-				return number, true
-			}
-			input, hasInput := firstJSONNumber(usage.InputTokens)
-			output, hasOutput := firstJSONNumber(usage.OutputTokens)
-			if hasInput || hasOutput {
-				return input + output, true
-			}
-		}
-	}
-
-	input, hasInput := firstJSONNumber(model.InputTokens, model.TextInputTokens)
-	output, hasOutput := firstJSONNumber(model.OutputTokens, model.TextOutputTokens)
-	if hasInput || hasOutput {
-		return input + output, true
-	}
-	return 0, false
-}
-
 func aggregateTokenModels(models []dailyTokenModel) []UsageAnalyticsModel {
-	type modelAggregate struct {
-		credits      float64
-		tokens       float64
-		hasTokenData bool
-	}
-	byModel := make(map[string]modelAggregate, len(models))
-	allPositiveModelsHaveTokens := true
-	hasPositiveModel := false
-	hasTokenData := false
+	byModel := make(map[string]float64, len(models))
 	for _, model := range models {
 		name := strings.TrimSpace(model.Model)
 		if name == "" {
 			name = "unknown"
 		}
-		aggregate := byModel[name]
-		aggregate.credits += model.Credits
-		if tokens, ok := modelTokenCount(model); ok {
-			aggregate.tokens += tokens
-			aggregate.hasTokenData = true
-			hasTokenData = true
-		} else if model.Credits > 0 {
-			allPositiveModelsHaveTokens = false
-		}
-		if model.Credits > 0 {
-			hasPositiveModel = true
-		}
-		byModel[name] = aggregate
+		byModel[name] += model.Credits
 	}
 	names := make([]string, 0, len(byModel))
 	for name := range byModel {
@@ -815,22 +722,8 @@ func aggregateTokenModels(models []dailyTokenModel) []UsageAnalyticsModel {
 	}
 	sort.Strings(names)
 	result := make([]UsageAnalyticsModel, 0, len(names))
-	var totalTokens float64
-	for _, aggregate := range byModel {
-		totalTokens += aggregate.tokens
-	}
-	tokenSharesAvailable := hasPositiveModel && hasTokenData && allPositiveModelsHaveTokens && totalTokens > 0
 	for _, name := range names {
-		aggregate := byModel[name]
-		item := UsageAnalyticsModel{Model: name, UsagePercent: aggregate.credits}
-		if tokenSharesAvailable && aggregate.hasTokenData {
-			tokenCount := aggregate.tokens
-			tokenPercent := aggregate.tokens / totalTokens * 100
-			item.TokenCount = &tokenCount
-			item.TokenPercent = &tokenPercent
-			item.TokenShareAvailable = true
-		}
-		result = append(result, item)
+		result = append(result, UsageAnalyticsModel{Model: name, UsagePercent: byModel[name]})
 	}
 	return result
 }
