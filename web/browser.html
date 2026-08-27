@@ -61,7 +61,7 @@
     .reset-at { margin-top:7px; font-size:24px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .reset-head { display:flex; justify-content:space-between; gap:10px; margin-top:17px; color:var(--muted); font-size:13px; }
     .reset-head + .reset-head { margin-top:7px; }
-    .reset-head strong { color:var(--text); font-size:14px; }
+    .reset-head strong { color:var(--text); font-size:14px; font-variant-numeric:tabular-nums; white-space:nowrap; }
     .reset-track { width:100%; height:8px; margin-top:7px; overflow:hidden; background:var(--track); border-radius:999px; }
     .reset-bar { width:0; height:100%; background:var(--accent); border-radius:inherit; transition:width .35s ease,background .25s ease; }
     .reset-bar.lime { background:var(--lime); }
@@ -302,6 +302,7 @@
       function token(value) { var parsed = number(value); return isFinite(parsed) ? percent(parsed / 1000000) + 'M' : '—'; }
       function compact(value) { var parsed = number(value); if (!isFinite(parsed)) return '—'; if (Math.abs(parsed) >= 1000000) return percent(parsed / 1000000) + 'M'; if (Math.abs(parsed) >= 1000) return percent(parsed / 1000) + 'K'; return String(Math.round(parsed)); }
       function date(value) { if (!value) return '—'; var parsed = new Date(value); if (isNaN(parsed.getTime())) return '—'; var pad = function (v) { return String(v).padStart(2, '0'); }; return parsed.getFullYear() + '-' + pad(parsed.getMonth() + 1) + '-' + pad(parsed.getDate()) + ' ' + pad(parsed.getHours()) + ':' + pad(parsed.getMinutes()) + ':' + pad(parsed.getSeconds()); }
+      function timestamp(value) { if (value === undefined || value === null || value === '') return 0; var parsedNumber = Number(value); if (isFinite(parsedNumber)) { if (parsedNumber > 0 && parsedNumber < 100000000000) parsedNumber *= 1000; return parsedNumber > 0 ? parsedNumber : 0; } var parsedDate = new Date(value); return isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime(); }
       function formatDuration(seconds) { if (!isFinite(seconds)) return '—'; var total = Math.max(0, Math.floor(seconds)); var days = Math.floor(total / 86400); var hours = Math.floor(total % 86400 / 3600); var minutes = Math.floor(total % 3600 / 60); var rest = total % 60; var pad = function (value) { return String(value).padStart(2, '0'); }; return (days ? days + '天 ' : '') + pad(hours) + ':' + pad(minutes) + ':' + pad(rest); }
       function escaped(value) { return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, function (character) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]; }); }
       function quotaClass(value) { if (!isFinite(value) || value <= 20) return 'critical'; if (value <= 50) return 'warning'; return ''; }
@@ -315,14 +316,16 @@
       }
       function resetClass(value) { if (!isFinite(value) || value <= 20) return 'critical'; if (value <= 50) return 'warning'; if (value < 80) return 'lime'; return ''; }
       function renderReset(window, prefix) {
-        var at = window && new Date(window.reset_at);
-        var atMs = at && !isNaN(at.getTime()) ? at.getTime() : 0;
+        var resetValue = window && (window.reset_at !== undefined ? window.reset_at : (window.resetAt !== undefined ? window.resetAt : (window.reset_at_unix !== undefined ? window.reset_at_unix : window.resetAtUnix)));
+        var atMs = timestamp(resetValue);
         var windowDuration = number(window && window.window_minutes) * 60 * 1000;
         var seconds = number(window && window.remaining_seconds);
+        if (!isFinite(seconds)) seconds = number(window && window.reset_after_seconds);
         var hasCountdown = Boolean(atMs || isFinite(seconds));
+        if (!atMs && isFinite(seconds)) atMs = Date.now() + Math.max(0, seconds) * 1000;
         var left = atMs ? Math.max(0, atMs - Date.now()) : (hasCountdown ? Math.max(0, seconds * 1000) : 0);
         var ratio = windowDuration > 0 ? clamp(left / windowDuration * 100, 0, 100) : 0;
-        text(prefix + 'At', atMs ? date(at) : '—');
+        text(prefix + 'At', atMs ? date(atMs) : '—');
         text(prefix + 'Countdown', hasCountdown ? formatDuration(left / 1000) : '—');
         text(prefix + 'Progress', atMs && windowDuration > 0 ? percent(ratio) + '%' : '—%');
         style(prefix + 'Bar', 'width', ratio + '%');
