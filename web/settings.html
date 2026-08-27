@@ -413,6 +413,22 @@
           <input id="fedramp" class="config-hidden" type="hidden">
         </section>
 
+        <section class="form-section">
+          <div class="section-head"><div class="section-title">提示音试听</div><div class="section-hint">额度页自动播放</div></div>
+          <div class="audio-card">
+            <strong>本周剩余额度提示音</strong>
+            <span class="hint">点击按钮会在当前设置页直接播放对应提示音。</span>
+            <div class="audio-buttons">
+              <button class="audio-button" type="button" data-preview-audio="normal">试听 50%–80%</button>
+              <button class="audio-button" type="button" data-preview-audio="warning">试听 20%–50%</button>
+              <button class="audio-button" type="button" data-preview-audio="critical">试听 0%–20%</button>
+            </div>
+            <audio id="audioNormal" preload="auto" src="audio?kind=normal"></audio>
+            <audio id="audioWarning" preload="auto" src="audio?kind=warning"></audio>
+            <audio id="audioCritical" preload="auto" src="audio?kind=critical"></audio>
+          </div>
+        </section>
+
         <div class="actions"><button id="reload" class="secondary" type="button">重新读取</button><span id="status" class="status" role="status" aria-live="polite"></span></div>
       </form>
     </section>
@@ -444,6 +460,11 @@
       var tabCredentials = document.getElementById('tabCredentials');
       var copyAnalyticsURLButton = document.getElementById('copyAnalyticsURL');
       var analyticsURL = 'https://chatgpt.com/codex/cloud/settings/analytics';
+      var audioPlayers = {
+        normal: document.getElementById('audioNormal'),
+        warning: document.getElementById('audioWarning'),
+        critical: document.getElementById('audioCritical')
+      };
       var storedKey = '';
       var proxyReady = false;
       var proxyBusy = false;
@@ -803,6 +824,24 @@
           copyAnalyticsURLButton.textContent = '已复制';
           setTimeout(function () { copyAnalyticsURLButton.textContent = original; }, 1500);
         }).catch(function (error) { setWizardStatus(error.message, 'error'); });
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-preview-audio]'), function (button) {
+        button.addEventListener('click', function () {
+          var kind = button.getAttribute('data-preview-audio');
+          var audio = audioPlayers[kind];
+          if (!audio) return;
+          Object.keys(audioPlayers).forEach(function (name) {
+            if (name !== kind && audioPlayers[name]) {
+              audioPlayers[name].pause();
+              audioPlayers[name].currentTime = 0;
+            }
+          });
+          audio.currentTime = 0;
+          var playback = audio.play();
+          if (playback && typeof playback.catch === 'function') {
+            playback.catch(function () { setStatus('设备阻止了播放，请先点击页面后重试', 'error'); });
+          }
+        });
       });
       document.getElementById('parseCapture').addEventListener('click', parseCapture);
       document.getElementById('testConnection').addEventListener('click', function () {
