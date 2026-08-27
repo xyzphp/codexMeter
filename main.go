@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/subtle"
@@ -15,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,6 +31,8 @@ const (
 	defaultBindAddr             = "127.0.0.1:8080"
 	defaultUserAgent            = "codex-tui/0.146.0 (Ubuntu 22.4.0; x86_64) xterm-256color"
 	defaultCacheTTL             = 10 * time.Minute
+	defaultUsageHistoryFile     = "data/usage-history.jsonl"
+	maxUsageHistoryPoints       = 48
 	upstreamRequestTimeout      = 15 * time.Second
 	resetStatusEndpoint         = "https://codex-resets.com/api/v1/status"
 	resetHistoryEndpoint        = "https://codex-resets.com/api/resets"
@@ -588,6 +592,7 @@ type UsageService struct {
 	analyticsCached    *UsageAnalytics
 	analyticsCachedAt  time.Time
 	analyticsCachedKey string
+	historyFile        string
 }
 
 func NewUsageService(cfg Config) (*UsageService, error) {
@@ -595,9 +600,15 @@ func NewUsageService(cfg Config) (*UsageService, error) {
 	if err != nil {
 		return nil, err
 	}
+	history, err := loadUsageHistory(defaultUsageHistoryFile)
+	if err != nil {
+		return nil, fmt.Errorf("load usage history: %w", err)
+	}
 	return &UsageService{
-		cfg:    cfg,
-		client: client,
+		cfg:         cfg,
+		client:      client,
+		history:     history,
+		historyFile: defaultUsageHistoryFile,
 	}, nil
 }
 
@@ -702,21 +713,116 @@ func (s *UsageService) Get(ctx context.Context, force bool) (*UsageResponse, err
 		return nil, err
 	}
 
+	var historySnapshot []HistoryPoint
 	s.cacheMu.Lock()
 	if usage.SevenDay != nil {
 		s.history = append(s.history, HistoryPoint{
 			At:          usage.FetchedAt,
 			UsedPercent: usage.SevenDay.UsedPercent,
 		})
-		if len(s.history) > 48 {
-			s.history = s.history[len(s.history)-48:]
+		if len(s.history) > maxUsageHistoryPoints {
+			s.history = s.history[len(s.history)-maxUsageHistoryPoints:]
 		}
 	}
 	usage.History = append([]HistoryPoint(nil), s.history...)
+	historySnapshot = append([]HistoryPoint(nil), s.history...)
 	s.cached = cloneUsage(usage)
 	s.cachedAt = time.Now()
 	s.cacheMu.Unlock()
+	if s.historyFile != "" && len(historySnapshot) > 0 {
+		if err := persistUsageHistory(s.historyFile, historySnapshot); err != nil {
+			slog.Warn("persist usage history failed", "error", err)
+		}
+	}
 	return cloneUsage(usage), nil
+}
+
+func loadUsageHistory(path string) ([]HistoryPoint, error) {
+	raw, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer raw.Close()
+
+	history := make([]HistoryPoint, 0, maxUsageHistoryPoints)
+	scanner := bufio.NewScanner(raw)
+	scanner.Buffer(make([]byte, 1024), 1024*1024)
+	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+		var point HistoryPoint
+		if err := json.Unmarshal(line, &point); err != nil {
+			continue
+		}
+		if strings.TrimSpace(point.At) == "" || point.UsedPercent < 0 || point.UsedPercent > 100 {
+			continue
+		}
+		if _, err := time.Parse(time.RFC3339, point.At); err != nil {
+			continue
+		}
+		history = append(history, point)
+		if len(history) > maxUsageHistoryPoints {
+			history = history[len(history)-maxUsageHistoryPoints:]
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return history, nil
+}
+
+func persistUsageHistory(path string, history []HistoryPoint) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return errors.New("usage history path is empty")
+	}
+	directory := filepath.Dir(path)
+	if err := os.MkdirAll(directory, 0o750); err != nil {
+		return err
+	}
+
+	temporary, err := os.CreateTemp(directory, ".usage-history-*.tmp")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	removeTemporary := true
+	defer func() {
+		if removeTemporary {
+			_ = os.Remove(temporaryPath)
+		}
+	}()
+	if err := temporary.Chmod(0o600); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	encoder := json.NewEncoder(temporary)
+	for _, point := range history {
+		if err := encoder.Encode(point); err != nil {
+			_ = temporary.Close()
+			return err
+		}
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		// Windows does not replace an existing file during Rename. The
+		// fallback keeps local development behavior consistent with Linux.
+		if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
+			return err
+		}
+		if renameErr := os.Rename(temporaryPath, path); renameErr != nil {
+			return renameErr
+		}
+	}
+	removeTemporary = false
+	return nil
 }
 
 func (s *UsageService) GetAnalytics(ctx context.Context, force bool) (*UsageAnalytics, error) {

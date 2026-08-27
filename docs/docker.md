@@ -89,13 +89,13 @@ docker pull ghcr.io/xyzphp/codexmeter:latest
 PowerShell：
 
 ```powershell
-docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "${PWD}/config.json:/app/config.json" -e BIND_ADDR=0.0.0.0:8123 ghcr.io/xyzphp/codexmeter:latest
+docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "${PWD}/config.json:/app/config.json" -v "${PWD}/data:/app/data" -e BIND_ADDR=0.0.0.0:8123 ghcr.io/xyzphp/codexmeter:latest
 ```
 
 Linux 或 macOS：
 
 ```bash
-docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "$(pwd)/config.json:/app/config.json" -e BIND_ADDR=0.0.0.0:8123 ghcr.io/xyzphp/codexmeter:latest
+docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "$(pwd)/config.json:/app/config.json" -v "$(pwd)/data:/app/data" -e BIND_ADDR=0.0.0.0:8123 ghcr.io/xyzphp/codexmeter:latest
 ```
 
 如果不使用本地 Compose，也可以手动从当前源码构建：
@@ -107,18 +107,26 @@ docker build -t codex-meter:local .
 PowerShell：
 
 ```powershell
-docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "${PWD}/config.json:/app/config.json" -e BIND_ADDR=0.0.0.0:8123 codex-meter:local
+docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "${PWD}/config.json:/app/config.json" -v "${PWD}/data:/app/data" -e BIND_ADDR=0.0.0.0:8123 codex-meter:local
 ```
 
 Linux 或 macOS：
 
 ```bash
-docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "$(pwd)/config.json:/app/config.json" -e BIND_ADDR=0.0.0.0:8123 codex-meter:local
+docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "$(pwd)/config.json:/app/config.json" -v "$(pwd)/data:/app/data" -e BIND_ADDR=0.0.0.0:8123 codex-meter:local
 ```
 
 ## 配置和数据持久化
 
-Compose 会将宿主机的 `config.json` 挂载到容器的 `/app/config.json`，挂载默认可写，因此设置页面保存的配置可以保留在宿主机文件中。停止或重新创建容器不会删除该文件。
+Compose 会将宿主机的 `config.json` 挂载到容器的 `/app/config.json`，并将宿主机的 `data/` 挂载到容器的 `/app/data`。设置页面保存的配置和额度采样历史可以保留在宿主机文件中。停止或重新创建容器不会删除这些文件。
+
+额度采样历史保存在：
+
+```text
+data/usage-history.jsonl
+```
+
+每行是一条采样记录，服务启动时读取最近 48 条；文件只包含采样时间和本周已使用百分比，不包含 OAuth Token、Cookie、Basic Auth 密码或 App API Key。使用 `docker compose down -v` 也不会删除该目录，因为它是宿主机 bind mount。
 
 `config.json` 包含 OAuth 凭证，已被 `.gitignore` 和 `.dockerignore` 排除，不要提交到 Git，也不要在 Dockerfile 中复制真实配置。配置项、认证和代理的详细说明见[配置接入文档](openai-config.md)。
 

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -159,6 +160,31 @@ func TestAdditionalCodexRateLimitShapeDecodes(t *testing.T) {
 	}
 	if len(response.AdditionalRateLimits) != 1 || response.AdditionalRateLimits[0].RateLimit == nil {
 		t.Fatalf("additional rate limit was not decoded: %#v", response.AdditionalRateLimits)
+	}
+}
+
+func TestUsageHistoryPersistsAndKeepsMostRecentPoints(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
+	points := make([]HistoryPoint, 0, maxUsageHistoryPoints+2)
+	for index := 0; index < maxUsageHistoryPoints+2; index++ {
+		points = append(points, HistoryPoint{
+			At:          time.Date(2026, time.August, 27, 12, index, 0, 0, time.UTC).Format(time.RFC3339),
+			UsedPercent: float64(index),
+		})
+	}
+
+	if err := persistUsageHistory(path, points); err != nil {
+		t.Fatalf("persist usage history: %v", err)
+	}
+	loaded, err := loadUsageHistory(path)
+	if err != nil {
+		t.Fatalf("load usage history: %v", err)
+	}
+	if len(loaded) != maxUsageHistoryPoints {
+		t.Fatalf("loaded %d history points, want %d", len(loaded), maxUsageHistoryPoints)
+	}
+	if loaded[0].UsedPercent != 2 || loaded[len(loaded)-1].UsedPercent != maxUsageHistoryPoints+1 {
+		t.Fatalf("loaded history range = %v..%v, want 2..%d", loaded[0].UsedPercent, loaded[len(loaded)-1].UsedPercent, maxUsageHistoryPoints+1)
 	}
 }
 

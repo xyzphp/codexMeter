@@ -12,6 +12,7 @@ services:
       BIND_ADDR: 0.0.0.0:8123
     volumes:
       - ./config.json:/app/config.json
+      - ./data:/app/data
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8123/healthz || exit 1"]
       interval: 30s
