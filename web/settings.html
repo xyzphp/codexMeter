@@ -187,7 +187,7 @@
     .basic-auth-card .basic-auth-mode-row { margin:0; }
     .basic-auth-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:14px; padding-top:14px; border-top:1px solid var(--border); }
     .basic-auth-fields[hidden] { display:none; }
-    .app-api-key-field { min-width:0; padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
+    .app-api-key-field, .cache-ttl-field { min-width:0; padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
     .page-access-config-hint { display:block; margin-top:12px; }
     .page-access-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px; }
     .page-access-actions .proxy-status { flex:1 1 280px; margin-top:0; }
@@ -494,7 +494,7 @@
                 </div>
                 <span id="appAPIKeyHint" class="hint">生成后可查看并复制，点击保存后生效。</span>
               </div>
-              <div class="field">
+              <div class="field cache-ttl-field">
                 <label for="cacheTTL">缓存时间</label>
                 <select id="cacheTTL">
                   <option value="0s">不缓存</option>
@@ -969,8 +969,8 @@
         for (var i = 0; i < bytes.length; i += 1) {
           generated += ('0' + bytes[i].toString(16)).slice(-2);
         }
-        appAPIKeyInput.value = generated;
-        appAPIKeyHint.textContent = '已生成 24 位密钥，点击复制或保存后生效。';
+        appAPIKeyInput.value = 'sk-' + generated;
+        appAPIKeyHint.textContent = '已生成 sk- 前缀密钥，点击复制或保存后生效。';
         appAPIKeyInput.focus();
       }
       function copyAppAPIKey() {
