@@ -183,6 +183,7 @@
     .capture-source-target { margin-top:4px; color:var(--muted); font-size:12px; line-height:18px; }
     .capture-source-target code { color:var(--text); }
     .page-access-grid .full { grid-column:1/-1; }
+    .page-access-config-hint { display:block; margin-top:12px; }
     .page-access-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px; }
     .page-access-actions .proxy-status { flex:1 1 280px; margin-top:0; }
     .proxy-mode-row { display:flex; align-items:stretch; gap:12px; margin-bottom:14px; }
@@ -448,7 +449,6 @@
           <input id="clientObservation" class="config-hidden" type="hidden">
           <input id="referer" class="config-hidden" type="hidden">
           <input id="userAgent" class="config-hidden" type="hidden">
-          <input id="cacheTTL" class="config-hidden" type="hidden">
           <input id="fedramp" class="config-hidden" type="hidden">
         </section>
 
@@ -472,7 +472,25 @@
                 <label for="basicAuthPassword">访问密码</label>
                 <input id="basicAuthPassword" type="password" autocomplete="new-password" placeholder="留空保持当前密码">
               </div>
+              <div class="field">
+                <label for="bindAddr">服务监听地址</label>
+                <input id="bindAddr" autocomplete="off" placeholder="0.0.0.0:8123">
+              </div>
+              <div class="field">
+                <label for="basePath">访问基础路径</label>
+                <input id="basePath" autocomplete="off" placeholder="/codex">
+              </div>
+              <div class="field">
+                <label for="appAPIKey">App API Key</label>
+                <input id="appAPIKey" type="password" autocomplete="new-password" placeholder="留空保持当前密钥">
+                <span id="appAPIKeyHint" class="hint"></span>
+              </div>
+              <div class="field">
+                <label for="cacheTTL">缓存时间</label>
+                <input id="cacheTTL" autocomplete="off" placeholder="例如：10m0s">
+              </div>
             </div>
+            <div class="hint page-access-config-hint">监听地址和基础路径保存后需重启服务；App API Key 和缓存时间保存后立即生效。环境变量配置优先于文件配置。</div>
             <div class="page-access-actions">
               <button id="savePageAccess" class="primary" type="button">保存页面访问配置</button>
               <span id="pageAccessStatus" class="proxy-status" role="status" aria-live="polite">当前未启用页面访问认证。</span>
@@ -558,6 +576,10 @@
       var basicAuthEnabledInput = document.getElementById('basicAuthEnabled');
       var basicAuthUsernameInput = document.getElementById('basicAuthUsername');
       var basicAuthPasswordInput = document.getElementById('basicAuthPassword');
+      var bindAddrInput = document.getElementById('bindAddr');
+      var basePathInput = document.getElementById('basePath');
+      var appAPIKeyInput = document.getElementById('appAPIKey');
+      var appAPIKeyHint = document.getElementById('appAPIKeyHint');
       var savePageAccessButton = document.getElementById('savePageAccess');
       var copyAnalyticsURLButton = document.getElementById('copyAnalyticsURL');
       var analyticsURL = 'https://chatgpt.com/codex/cloud/settings/analytics';
@@ -904,6 +926,11 @@
         basicAuthEnabledInput.checked = enabled;
         basicAuthUsernameInput.value = config.basic_auth_username || '';
         basicAuthPasswordInput.value = '';
+        bindAddrInput.value = config.bind_addr || '';
+        basePathInput.value = config.base_path || '';
+        appAPIKeyInput.value = '';
+        appAPIKeyHint.textContent = config.app_api_key_configured ? '当前已配置：' + (config.app_api_key_hint || '****') : '当前未配置 App API Key。';
+        document.getElementById('cacheTTL').value = config.cache_ttl || '10m0s';
         if (!enabled) {
           setPageAccessState('未启用', '');
           setPageAccessStatus('当前未启用页面访问认证。');
@@ -918,10 +945,15 @@
       function collectPageAccessBody() {
         var body = {
           basic_auth_enabled: basicAuthEnabledInput.checked,
-          basic_auth_username: basicAuthUsernameInput.value.trim()
+          basic_auth_username: basicAuthUsernameInput.value.trim(),
+          bind_addr: bindAddrInput.value.trim(),
+          base_path: basePathInput.value.trim(),
+          cache_ttl: document.getElementById('cacheTTL').value.trim()
         };
         var password = basicAuthPasswordInput.value;
         if (password) body.basic_auth_password = password;
+        var appAPIKey = appAPIKeyInput.value.trim();
+        if (appAPIKey) body.app_api_key = appAPIKey;
         return body;
       }
       function savePageAccess() {
