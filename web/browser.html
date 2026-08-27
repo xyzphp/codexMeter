@@ -93,8 +93,9 @@
     .usage-history-axis { fill:var(--muted); font-size:11px; }
     .usage-history-axis-end { text-anchor:end; }
     .usage-history-area { fill:var(--accent); opacity:.1; }
+    .usage-history-point-hit { fill:transparent; cursor:pointer; pointer-events:all; }
     .usage-history-line { fill:none; stroke:var(--accent); stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
-    .usage-history-point { fill:var(--card); stroke:var(--accent); stroke-width:2; cursor:pointer; }
+    .usage-history-point { fill:var(--card); stroke:var(--accent); stroke-width:2; pointer-events:none; }
     .usage-history-point.latest { fill:var(--accent); }
     .usage-history-point.reset { stroke:var(--warning); stroke-width:3; }
     .usage-history-reset-line { stroke:var(--warning); stroke-width:1.5; stroke-dasharray:4 4; opacity:.8; }
@@ -529,7 +530,7 @@
       }
       function bindUsageHistoryTooltips(container) {
         if (!container || !container.querySelectorAll) return;
-        Array.prototype.forEach.call(container.querySelectorAll('.usage-history-point[aria-label]'), function (point) {
+        Array.prototype.forEach.call(container.querySelectorAll('.usage-history-point-hit[aria-label]'), function (point) {
           point.addEventListener('mouseenter', function (event) { var tooltip = byId('heatmapTooltip'); if (!tooltip) return; tooltip.textContent = point.getAttribute('data-tooltip') || point.getAttribute('aria-label') || ''; classes('heatmapTooltip', 'heatmap-tooltip visible'); moveHeatmapTooltip(event); });
           point.addEventListener('mousemove', moveHeatmapTooltip);
           point.addEventListener('mouseleave', hideHeatmapTooltip);
@@ -551,7 +552,7 @@
         var linePath = points.map(function (point, index) { return (index ? 'L' : 'M') + x(index).toFixed(2) + ' ' + y(point.used).toFixed(2); }).join(' '); var areaPath = linePath + ' L ' + x(points.length - 1).toFixed(2) + ' ' + (top + plotHeight).toFixed(2) + ' L ' + x(0).toFixed(2) + ' ' + (top + plotHeight).toFixed(2) + ' Z';
         var grid = [0, 1, 2, 3, 4].map(function (step) { var level = axisMin + axisSpan * step / 4; var lineY = y(level).toFixed(2); return '<line class="usage-history-gridline" x1="' + left + '" y1="' + lineY + '" x2="' + (width - right) + '" y2="' + lineY + '"></line><text class="usage-history-axis usage-history-axis-end" x="' + (left - 8) + '" y="' + (Number(lineY) + 4) + '">' + percent(level) + '%</text>'; }).join('');
         var resetLines = resetIndexes.map(function (index) { return '<line class="usage-history-reset-line" x1="' + x(index).toFixed(2) + '" y1="' + top + '" x2="' + x(index).toFixed(2) + '" y2="' + (top + plotHeight) + '"></line>'; }).join('');
-        var circles = points.map(function (point, index) { var resetClass = resetIndexes.indexOf(index) >= 0 ? ' reset' : ''; var latestClass = index === points.length - 1 ? ' latest' : ''; var label = usageHistoryTooltip(point, point.used, options.label); return '<circle class="usage-history-point' + resetClass + latestClass + '" cx="' + x(index).toFixed(2) + '" cy="' + y(point.used).toFixed(2) + '" r="' + (index === points.length - 1 ? '4' : '3') + '" tabindex="0" data-tooltip="' + escaped(label) + '" aria-label="' + escaped(label) + '"><title>' + escaped(label) + '</title></circle>'; }).join('');
+        var circles = points.map(function (point, index) { var resetClass = resetIndexes.indexOf(index) >= 0 ? ' reset' : ''; var latestClass = index === points.length - 1 ? ' latest' : ''; var label = usageHistoryTooltip(point, point.used, options.label); var cx = x(index).toFixed(2); var cy = y(point.used).toFixed(2); var radius = index === points.length - 1 ? '4' : '3'; return '<circle class="usage-history-point-hit" cx="' + cx + '" cy="' + cy + '" r="9" tabindex="0" data-tooltip="' + escaped(label) + '" aria-label="' + escaped(label) + '"></circle><circle class="usage-history-point' + resetClass + latestClass + '" cx="' + cx + '" cy="' + cy + '" r="' + radius + '" aria-hidden="true"></circle>'; }).join('');
         var firstLabel = usageHistoryAxisLabel(points[0].at); var lastLabel = usageHistoryAxisLabel(points[points.length - 1].at); var legend = resetIndexes.length ? '<div class="usage-history-legend"><span class="usage-history-legend-item"><i class="usage-history-legend-color"></i>' + escaped(options.label) + '使用百分比</span><span class="usage-history-legend-item"><i class="usage-history-legend-color reset"></i>检测到额度重置</span></div>' : '<div class="usage-history-legend"><span class="usage-history-legend-item"><i class="usage-history-legend-color"></i>' + escaped(options.label) + '使用百分比</span></div>';
         container.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' + escaped(options.label) + '额度使用变化图">' + grid + resetLines + '<path class="usage-history-area" d="' + areaPath + '"></path><path class="usage-history-line" d="' + linePath + '"></path>' + circles + '<text class="usage-history-axis" x="' + left + '" y="' + (height - 8) + '">' + escaped(firstLabel) + '</text><text class="usage-history-axis usage-history-axis-end" x="' + (width - right) + '" y="' + (height - 8) + '">' + escaped(lastLabel) + '</text></svg>' + legend;
         bindUsageHistoryTooltips(container);

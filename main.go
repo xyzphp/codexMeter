@@ -690,6 +690,7 @@ func isSOCKS5Proxy(proxyURL *url.URL) bool {
 }
 
 func (s *UsageService) Get(ctx context.Context, force bool) (*UsageResponse, error) {
+	requestStartedAt := time.Now()
 	if !force {
 		if cached := s.getFreshCache(); cached != nil {
 			cached.FromCache = true
@@ -698,7 +699,8 @@ func (s *UsageService) Get(ctx context.Context, force bool) (*UsageResponse, err
 	}
 
 	// Serialize upstream usage requests and check the cache again after waiting.
-	// This prevents concurrent WebView refreshes from producing duplicate requests.
+	// A forced request that was already in flight when this request started can
+	// reuse its result, preventing duplicate samples from concurrent WebViews.
 	s.refreshMu.Lock()
 	defer s.refreshMu.Unlock()
 
@@ -707,6 +709,9 @@ func (s *UsageService) Get(ctx context.Context, force bool) (*UsageResponse, err
 			cached.FromCache = true
 			return cached, nil
 		}
+	} else if cached := s.getCacheUpdatedAfter(requestStartedAt); cached != nil {
+		cached.FromCache = true
+		return cached, nil
 	}
 
 	usage, err := s.queryWhamUsage(ctx, s.currentConfig())
@@ -1644,6 +1649,15 @@ func (s *UsageService) getFreshCache() *UsageResponse {
 	s.cacheMu.Lock()
 	defer s.cacheMu.Unlock()
 	if s.cached == nil || time.Since(s.cachedAt) >= s.currentConfig().CacheTTL {
+		return nil
+	}
+	return cloneUsage(s.cached)
+}
+
+func (s *UsageService) getCacheUpdatedAfter(startedAt time.Time) *UsageResponse {
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	if s.cached == nil || !s.cachedAt.After(startedAt) {
 		return nil
 	}
 	return cloneUsage(s.cached)
