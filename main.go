@@ -1081,6 +1081,16 @@ type ConfigTestResult struct {
 	CookieConfigured bool   `json:"cookie_configured"`
 }
 
+type ProxyTestRequest struct {
+	ProxyURL string `json:"proxy_url"`
+}
+
+type ProxyTestResult struct {
+	OK         bool   `json:"ok"`
+	Message    string `json:"message"`
+	StatusCode int    `json:"status_code"`
+}
+
 func (s *UsageService) currentConfig() Config {
 	s.cfgMu.RLock()
 	defer s.cfgMu.RUnlock()
@@ -1263,6 +1273,40 @@ func (s *UsageService) TestConfig(ctx context.Context, update ConfigUpdate) (Con
 		PlanType:         upstream.PlanType,
 		TokenConfigured:  draft.AccessToken != "",
 		CookieConfigured: draft.UpstreamCookie != "",
+	}, nil
+}
+
+func (s *UsageService) TestProxy(ctx context.Context, rawProxyURL string) (ProxyTestResult, error) {
+	client, err := newUpstreamClient(rawProxyURL)
+	if err != nil {
+		return ProxyTestResult{}, err
+	}
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://chatgpt.com/", nil)
+	if err != nil {
+		return ProxyTestResult{}, fmt.Errorf("create proxy test request: %w", err)
+	}
+	request.Header.Set("User-Agent", s.currentConfig().UserAgent)
+
+	response, err := client.Do(request)
+	if err != nil {
+		return ProxyTestResult{}, fmt.Errorf("代理连接失败：%w", err)
+	}
+	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
+
+	if response.StatusCode >= http.StatusInternalServerError {
+		return ProxyTestResult{}, fmt.Errorf("代理已连通，但上游返回 HTTP %d", response.StatusCode)
+	}
+
+	message := fmt.Sprintf("代理连接成功（上游 HTTP %d）", response.StatusCode)
+	if strings.TrimSpace(rawProxyURL) == "" {
+		message = fmt.Sprintf("直连成功（上游 HTTP %d）", response.StatusCode)
+	}
+	return ProxyTestResult{
+		OK:         true,
+		Message:    message,
+		StatusCode: response.StatusCode,
 	}, nil
 }
 
@@ -1548,12 +1592,14 @@ func (s *Server) registerRoutes(mux *http.ServeMux, prefix string) {
 	mux.HandleFunc("GET "+route("/api/prediction"), s.handlePrediction)
 	mux.HandleFunc("GET "+route("/api/config"), s.handleConfigGet)
 	mux.HandleFunc("POST "+route("/api/config/test"), s.handleConfigTest)
+	mux.HandleFunc("POST "+route("/api/config/test-proxy"), s.handleProxyTest)
 	mux.HandleFunc("PUT "+route("/api/config"), s.handleConfigPut)
 	mux.HandleFunc("OPTIONS "+route("/api/usage"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/usage/analytics"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/prediction"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/config"), s.handleOptions)
 	mux.HandleFunc("OPTIONS "+route("/api/config/test"), s.handleOptions)
+	mux.HandleFunc("OPTIONS "+route("/api/config/test-proxy"), s.handleOptions)
 }
 
 func (s *Server) withMiddleware(next http.Handler) http.Handler {
@@ -1773,6 +1819,21 @@ func (s *Server) handleConfigTest(response http.ResponseWriter, request *http.Re
 	if err != nil {
 		// The error intentionally contains only the upstream status or a safe
 		// network/validation message; credentials are never included.
+		writeJSON(response, http.StatusBadGateway, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(response, http.StatusOK, result)
+}
+
+func (s *Server) handleProxyTest(response http.ResponseWriter, request *http.Request) {
+	request.Body = http.MaxBytesReader(response, request.Body, 8<<10)
+	var input ProxyTestRequest
+	if err := json.NewDecoder(io.LimitReader(request.Body, 8<<10)).Decode(&input); err != nil {
+		writeJSON(response, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+	result, err := s.usage.TestProxy(request.Context(), input.ProxyURL)
+	if err != nil {
 		writeJSON(response, http.StatusBadGateway, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}

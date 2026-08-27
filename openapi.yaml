@@ -229,6 +229,41 @@ paths:
         '502':
           $ref: '#/components/responses/UpstreamError'
 
+  /api/config/test-proxy:
+    post:
+      tags: [config]
+      operationId: testProxy
+      summary: 测试上游代理连接
+      description: |
+        使用请求体中的 proxy_url 临时访问 ChatGPT 首页，用于在填写账号凭证前
+        验证直连或 HTTP、HTTPS、SOCKS5 代理是否可用。测试不会写入 config.json，
+        也不会发送或返回 OAuth Token、Cookie。
+      security:
+        - basicAuth: []
+        - appApiKey: []
+        - appBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProxyTestRequest'
+            example:
+              proxy_url: http://127.0.0.1:7890
+      responses:
+        '200':
+          description: 代理连接测试成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyTestResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
   /audio:
     get:
       tags: [assets]
@@ -757,3 +792,26 @@ components:
           type: boolean
         cookie_configured:
           type: boolean
+
+    ProxyTestRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        proxy_url:
+          type: string
+          format: uri
+          description: 支持 http、https、socks5，也兼容 socket5；留空表示直连。
+
+    ProxyTestResult:
+      type: object
+      required:
+        - ok
+        - message
+        - status_code
+      properties:
+        ok:
+          type: boolean
+        message:
+          type: string
+        status_code:
+          type: integer

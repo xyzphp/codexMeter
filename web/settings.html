@@ -170,6 +170,34 @@
     .wizard-status { min-height:18px; margin-top:10px; font-size:12px; line-height:18px; color:var(--muted); }
     .wizard-status.ok { color:var(--accent); }
     .wizard-status.error { color:var(--danger); }
+    .setup-progress { display:flex; align-items:center; gap:10px; margin:0 0 2px; padding:14px 30px 0; }
+    .setup-step { display:flex; align-items:center; gap:7px; min-width:0; color:var(--muted); font-size:12px; white-space:nowrap; }
+    .step-number { display:inline-flex; align-items:center; justify-content:center; width:23px; height:23px; flex:0 0 23px; border:1px solid var(--border); border-radius:50%; background:var(--soft); color:var(--muted); font-size:11px; font-weight:700; }
+    .setup-step.active { color:var(--text); font-weight:680; }
+    .setup-step.active .step-number { border-color:var(--accent); background:var(--accent); color:#fff; }
+    .setup-step.done { color:var(--accent); }
+    .setup-step.done .step-number { border-color:var(--accent); color:var(--accent); }
+    .step-line { height:1px; flex:1 1 24px; min-width:12px; background:var(--border); }
+    .setup-section { scroll-margin-top:18px; }
+    .step-card { padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
+    .step-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
+    .step-card-title { font-size:14px; font-weight:700; }
+    .step-card-copy { margin-top:4px; color:var(--muted); font-size:12px; line-height:18px; }
+    .state-badge { display:inline-flex; align-items:center; flex:0 0 auto; min-height:26px; padding:0 10px; border:1px solid var(--border); border-radius:999px; background:var(--card); color:var(--muted); font-size:11px; font-weight:680; }
+    .state-badge.ready { border-color:rgba(16,163,127,.35); background:rgba(16,163,127,.10); color:var(--accent); }
+    .state-badge.error { border-color:rgba(194,65,59,.35); background:rgba(194,65,59,.08); color:var(--danger); }
+    .proxy-examples { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+    .proxy-example { padding:5px 8px; border:1px solid var(--border); border-radius:7px; background:var(--card); color:var(--muted); font:11px/16px ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace; cursor:pointer; }
+    .proxy-example:hover { border-color:var(--accent); color:var(--accent); }
+    .proxy-actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:14px; }
+    .proxy-status { min-height:18px; margin-top:10px; color:var(--muted); font-size:12px; line-height:18px; }
+    .proxy-status.ok { color:var(--accent); }
+    .proxy-status.error { color:var(--danger); }
+    .lock-notice { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; padding:11px 12px; border:1px solid var(--border); border-radius:10px; background:var(--soft); color:var(--muted); font-size:12px; line-height:18px; }
+    .lock-notice[hidden] { display:none; }
+    .setup-section.is-locked #credentialContent { opacity:.52; pointer-events:none; user-select:none; }
+    button:disabled { cursor:wait; opacity:.58; transform:none!important; }
+    .section-step-label { display:inline-flex; align-items:center; gap:7px; }
     .advanced-card { margin-top:14px; border:1px solid var(--border); border-radius:12px; background:var(--soft); }
     .advanced-card summary { padding:12px 14px; cursor:pointer; color:var(--text); font-size:13px; font-weight:680; }
     .advanced-card[open] summary { border-bottom:1px solid var(--border); }
@@ -203,6 +231,17 @@
       .wizard-actions { gap:7px; margin-top:9px; }
       .wizard-actions button { min-height:34px; }
       .wizard-status { font-size:10px; }
+      .setup-progress { padding:12px 16px 0; gap:7px; }
+      .setup-step { gap:5px; font-size:10px; }
+      .step-number { width:21px; height:21px; flex-basis:21px; font-size:10px; }
+      .step-card { padding:12px; border-radius:11px; }
+      .step-card-title { font-size:12px; }
+      .step-card-copy, .proxy-status, .lock-notice { font-size:10px; line-height:15px; }
+      .step-card-header { margin-bottom:10px; }
+      .state-badge { min-height:23px; padding:0 8px; font-size:10px; }
+      .proxy-example { font-size:10px; }
+      .proxy-actions { gap:7px; margin-top:10px; }
+      .lock-notice { padding:9px 10px; }
       .advanced-card summary { padding:10px 12px; font-size:11px; }
       .advanced-fields { padding:12px; }
       .actions { gap:8px; padding-top:16px; }
@@ -215,6 +254,12 @@
       .header-actions .action:last-child { display:none; }
       .brand-title { font-size:16px; }
       .section-hint { display:none; }
+      .setup-progress { padding-left:13px; padding-right:13px; }
+      .setup-step { flex:1 1 0; }
+      .setup-step span:last-child { overflow:hidden; text-overflow:ellipsis; }
+      .step-line { min-width:6px; }
+      .step-card-header { gap:7px; }
+      .state-badge { padding:0 7px; }
       .actions { flex-wrap:wrap; }
       .status { flex-basis:100%; order:3; }
     }
@@ -244,79 +289,107 @@
         </div>
       </div>
 
+      <div class="setup-progress" aria-label="配置步骤">
+        <div id="progressProxy" class="setup-step active"><span class="step-number">1</span><span>网络代理</span></div>
+        <span class="step-line" aria-hidden="true"></span>
+        <div id="progressCredentials" class="setup-step"><span class="step-number">2</span><span>账号凭证</span></div>
+        <span class="step-line" aria-hidden="true"></span>
+        <div id="progressOptions" class="setup-step"><span class="step-number">3</span><span>运行选项</span></div>
+      </div>
+
       <form id="configForm" class="form">
-        <section class="form-section">
-          <div class="section-head"><div class="section-title">快速配置</div><div class="section-hint">推荐方式</div></div>
-          <div class="wizard-card">
-            <label for="captureInput">粘贴浏览器 Fetch / cURL 请求</label>
-            <textarea id="captureInput" spellcheck="false" placeholder="在 ChatGPT 使用情况页面打开开发者工具 → Network，右键 usage 请求 → Copy as cURL 或 Copy fetch，然后粘贴到这里"></textarea>
-            <span class="hint">页面只在本地浏览器解析抓包内容；点击“测试连接”后，解析出的字段才会发送到当前 Go 后端。</span>
-            <div class="wizard-actions">
-              <button id="parseCapture" class="secondary" type="button">自动解析并填充</button>
-              <button id="testConnection" class="primary" type="button">测试连接</button>
+        <section id="proxySection" class="form-section setup-section">
+          <div class="section-head"><div class="section-title"><span class="section-step-label"><span class="step-number">1</span>网络代理</span></div><div class="section-hint">先测试并保存</div></div>
+          <div class="step-card">
+            <div class="step-card-header">
+              <div><div class="step-card-title">配置上游连接</div><div class="step-card-copy">先确认服务端能访问 ChatGPT。没有代理时可以选择直连。</div></div>
+              <span id="proxyStateBadge" class="state-badge">待确认</span>
             </div>
-            <div id="wizardStatus" class="wizard-status" role="status" aria-live="polite"></div>
+            <div class="field">
+              <label for="proxyUrl">代理地址（可选）</label>
+              <div class="input-action"><input id="proxyUrl" autocomplete="off" placeholder="http://、https:// 或 socks5://host:port"><button id="clearProxy" class="small-button" type="button">使用直连</button></div>
+              <span class="hint">支持 HTTP、HTTPS、SOCKS5；也兼容 socket5://。代理地址需要包含协议和端口。</span>
+            </div>
+            <div class="proxy-examples" aria-label="代理地址示例">
+              <button class="proxy-example" type="button" data-proxy-example="http://192.168.0.21:7890">HTTP 示例</button>
+              <button class="proxy-example" type="button" data-proxy-example="https://127.0.0.1:7890">HTTPS 示例</button>
+              <button class="proxy-example" type="button" data-proxy-example="socks5://127.0.0.1:1080">SOCKS5 示例</button>
+            </div>
+            <div class="proxy-actions">
+              <button id="testProxy" class="secondary" type="button">只测试代理</button>
+              <button id="confirmProxy" class="primary" type="button">测试并保存，继续配置</button>
+            </div>
+            <div id="proxyStatus" class="proxy-status" role="status" aria-live="polite">等待配置代理。</div>
           </div>
         </section>
 
-        <section class="form-section">
-          <div class="section-head"><div class="section-title">账号与凭证</div><div class="section-hint">用于读取 OpenAI 额度</div></div>
-          <div class="field-grid">
-            <div class="field full">
-              <label for="accountId">ChatGPT Account ID</label>
-              <input id="accountId" autocomplete="off" placeholder="例如：org-...">
+        <section id="credentialsSection" class="form-section setup-section is-locked" aria-disabled="true">
+          <div class="section-head"><div class="section-title"><span class="section-step-label"><span class="step-number">2</span>账号与凭证</span></div><div id="credentialStepHint" class="section-hint">完成步骤 1 后解锁</div></div>
+          <div id="credentialLock" class="lock-notice"><span>请先完成网络代理测试并保存，或确认使用直连。</span><button id="goProxy" class="small-button" type="button">去配置网络</button></div>
+          <div id="credentialContent">
+            <div class="wizard-card">
+              <label for="captureInput">粘贴浏览器 Fetch / cURL 请求</label>
+              <textarea id="captureInput" spellcheck="false" placeholder="在 ChatGPT 使用情况页面打开开发者工具 → Network，右键 usage 请求 → Copy as cURL 或 Copy fetch，然后粘贴到这里"></textarea>
+              <span class="hint">页面只在本地浏览器解析抓包内容；解析后请点击“测试账号连接”。</span>
+              <div class="wizard-actions">
+                <button id="parseCapture" class="secondary" type="button">自动解析并填充</button>
+                <button id="testConnection" class="primary" type="button">测试账号连接</button>
+              </div>
+              <div id="wizardStatus" class="wizard-status" role="status" aria-live="polite"></div>
             </div>
-            <div class="field full">
-              <label for="accessToken">OpenAI OAuth Access Token</label>
-              <div class="input-action"><input id="accessToken" type="password" autocomplete="new-password" placeholder="留空表示保持当前 Token"><button id="toggleToken" class="small-button" type="button">显示</button></div>
-              <div class="token-state"><i id="tokenDot" class="state-dot"></i><span id="tokenHint" class="hint">当前状态：检查中</span></div>
-            </div>
-          </div>
-          <details class="advanced-card">
-            <summary>浏览器请求上下文（可选）</summary>
-            <div class="advanced-fields">
-              <div class="field-grid">
-                <div class="field full">
-                  <label for="upstreamCookie">Cookie</label>
-                  <div class="input-action"><input id="upstreamCookie" type="password" autocomplete="new-password" placeholder="留空表示保持当前 Cookie"><button id="toggleCookie" class="small-button" type="button">显示</button></div>
-                  <span id="cookieHint" class="hint">Cookie 未配置也可能可以请求；遇到 401 时建议从同一条请求中提取。</span>
-                </div>
-                <div class="field">
-                  <label for="clientBuildNumber">客户端构建号</label>
-                  <input id="clientBuildNumber" autocomplete="off" placeholder="例如：9758774">
-                </div>
-                <div class="field">
-                  <label for="clientVersion">客户端版本</label>
-                  <input id="clientVersion" autocomplete="off" placeholder="prod-...">
-                </div>
-                <div class="field">
-                  <label for="deviceId">设备 ID</label>
-                  <input id="deviceId" autocomplete="off" placeholder="UUID">
-                </div>
-                <div class="field">
-                  <label for="sessionId">会话 ID</label>
-                  <input id="sessionId" autocomplete="off" placeholder="UUID">
-                </div>
-                <div class="field full">
-                  <label for="clientObservation">客户端观察标识</label>
-                  <input id="clientObservation" autocomplete="off" placeholder="x-oai-is-client-observation 的值">
-                </div>
-                <div class="field full">
-                  <label for="referer">Referer</label>
-                  <input id="referer" autocomplete="off" placeholder="例如：https://chatgpt.com/codex/cloud/settings/analytics">
-                </div>
+            <div class="field-grid" style="margin-top:16px">
+              <div class="field full">
+                <label for="accountId">ChatGPT Account ID</label>
+                <input id="accountId" autocomplete="off" placeholder="例如：org-...">
+              </div>
+              <div class="field full">
+                <label for="accessToken">OpenAI OAuth Access Token</label>
+                <div class="input-action"><input id="accessToken" type="password" autocomplete="new-password" placeholder="留空表示保持当前 Token"><button id="toggleToken" class="small-button" type="button">显示</button></div>
+                <div class="token-state"><i id="tokenDot" class="state-dot"></i><span id="tokenHint" class="hint">当前状态：检查中</span></div>
               </div>
             </div>
-          </details>
+            <details class="advanced-card">
+              <summary>浏览器请求上下文（可选）</summary>
+              <div class="advanced-fields">
+                <div class="field-grid">
+                  <div class="field full">
+                    <label for="upstreamCookie">Cookie</label>
+                    <div class="input-action"><input id="upstreamCookie" type="password" autocomplete="new-password" placeholder="留空表示保持当前 Cookie"><button id="toggleCookie" class="small-button" type="button">显示</button></div>
+                    <span id="cookieHint" class="hint">Cookie 未配置也可能可以请求；遇到 401 时建议从同一条请求中提取。</span>
+                  </div>
+                  <div class="field">
+                    <label for="clientBuildNumber">客户端构建号</label>
+                    <input id="clientBuildNumber" autocomplete="off" placeholder="例如：9758774">
+                  </div>
+                  <div class="field">
+                    <label for="clientVersion">客户端版本</label>
+                    <input id="clientVersion" autocomplete="off" placeholder="prod-...">
+                  </div>
+                  <div class="field">
+                    <label for="deviceId">设备 ID</label>
+                    <input id="deviceId" autocomplete="off" placeholder="UUID">
+                  </div>
+                  <div class="field">
+                    <label for="sessionId">会话 ID</label>
+                    <input id="sessionId" autocomplete="off" placeholder="UUID">
+                  </div>
+                  <div class="field full">
+                    <label for="clientObservation">客户端观察标识</label>
+                    <input id="clientObservation" autocomplete="off" placeholder="x-oai-is-client-observation 的值">
+                  </div>
+                  <div class="field full">
+                    <label for="referer">Referer</label>
+                    <input id="referer" autocomplete="off" placeholder="例如：https://chatgpt.com/codex/cloud/settings/analytics">
+                  </div>
+                </div>
+              </div>
+            </details>
+          </div>
         </section>
 
-        <section class="form-section">
-          <div class="section-head"><div class="section-title">查询与网络</div><div class="section-hint">修改后立即生效</div></div>
+        <section id="optionsSection" class="form-section setup-section">
+          <div class="section-head"><div class="section-title"><span class="section-step-label"><span class="step-number">3</span>运行选项</span></div><div class="section-hint">修改后立即生效</div></div>
           <div class="field-grid">
-            <div class="field full">
-              <label for="proxyUrl">上游代理地址</label>
-              <input id="proxyUrl" autocomplete="off" placeholder="http://、https:// 或 socks5://host:port（兼容 socket5://）">
-            </div>
             <div class="field full">
               <label for="userAgent">上游 User-Agent</label>
               <input id="userAgent" autocomplete="off" placeholder="Codex client User-Agent">
@@ -385,12 +458,26 @@
       var toggleCookie = document.getElementById('toggleCookie');
       var captureInput = document.getElementById('captureInput');
       var wizardStatus = document.getElementById('wizardStatus');
+      var proxyInput = document.getElementById('proxyUrl');
+      var proxySection = document.getElementById('proxySection');
+      var credentialsSection = document.getElementById('credentialsSection');
+      var credentialLock = document.getElementById('credentialLock');
+      var credentialStepHint = document.getElementById('credentialStepHint');
+      var proxyStateBadge = document.getElementById('proxyStateBadge');
+      var proxyStatus = document.getElementById('proxyStatus');
+      var testProxyButton = document.getElementById('testProxy');
+      var confirmProxyButton = document.getElementById('confirmProxy');
+      var progressProxy = document.getElementById('progressProxy');
+      var progressCredentials = document.getElementById('progressCredentials');
       var audioPlayers = {
         normal: document.getElementById('audioNormal'),
         warning: document.getElementById('audioWarning'),
         critical: document.getElementById('audioCritical')
       };
       var storedKey = '';
+      var proxyReady = false;
+      var proxyBusy = false;
+      var confirmedProxyValue = null;
       try { storedKey = sessionStorage.getItem('codex-admin-key') || ''; } catch (_) {}
       keyInput.value = storedKey;
 
@@ -415,6 +502,68 @@
       }
       function setStatus(text, kind) { status.textContent = text; status.className = 'status ' + (kind || ''); }
       function setWizardStatus(text, kind) { wizardStatus.textContent = text; wizardStatus.className = 'wizard-status ' + (kind || ''); }
+      function setProxyStatus(text, kind) { proxyStatus.textContent = text; proxyStatus.className = 'proxy-status ' + (kind || ''); }
+      function setCredentialAccess(ready) {
+        proxyReady = !!ready;
+        credentialsSection.classList.toggle('is-locked', !proxyReady);
+        credentialsSection.setAttribute('aria-disabled', proxyReady ? 'false' : 'true');
+        credentialLock.hidden = proxyReady;
+        credentialStepHint.textContent = proxyReady ? '已解锁，可测试账号' : '完成步骤 1 后解锁';
+        progressCredentials.classList.toggle('active', proxyReady);
+        progressCredentials.classList.toggle('done', false);
+        progressProxy.classList.toggle('done', proxyReady);
+        progressProxy.classList.toggle('active', !proxyReady);
+      }
+      function setProxyState(label, kind) {
+        proxyStateBadge.textContent = label;
+        proxyStateBadge.className = 'state-badge ' + (kind || '');
+      }
+      function setProxyButtonsDisabled(disabled) {
+        testProxyButton.disabled = disabled;
+        confirmProxyButton.disabled = disabled;
+      }
+      function proxyPayload() { return { proxy_url: proxyInput.value.trim() }; }
+      function parseResponse(response, fallback) {
+        return response.json().then(function (data) {
+          if (!response.ok || data.ok === false) throw new Error(data.error || fallback);
+          return data;
+        });
+      }
+      function testProxy(saveAfterTest) {
+        if (proxyBusy) return;
+        proxyBusy = true;
+        setProxyButtonsDisabled(true);
+        setProxyState('测试中…', '');
+        setProxyStatus(saveAfterTest ? '正在测试代理，成功后自动保存…' : '正在测试代理连通性…');
+        fetch('api/config/test-proxy', { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(proxyPayload()) })
+          .then(function (response) { return parseResponse(response, '代理测试失败'); })
+          .then(function (result) {
+            if (!saveAfterTest) {
+              setProxyState('已连通', 'ready');
+              setProxyStatus(result.message + '；请点击“测试并保存，继续配置”。', 'ok');
+              return;
+            }
+            return fetch('api/config', { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(proxyPayload()) })
+              .then(function (response) { return parseResponse(response, '代理保存失败'); })
+              .then(function () {
+                confirmedProxyValue = proxyInput.value.trim();
+                setProxyState('已保存', 'ready');
+                setCredentialAccess(true);
+                setProxyStatus(result.message + '，代理配置已保存。', 'ok');
+                setStatus('代理已保存，请继续配置账号凭证', 'ok');
+                credentialsSection.scrollIntoView({ behavior:'smooth', block:'start' });
+              });
+          })
+          .catch(function (error) {
+            setProxyState('测试失败', 'error');
+            setCredentialAccess(false);
+            setProxyStatus(error.message, 'error');
+          })
+          .then(function () {
+            proxyBusy = false;
+            setProxyButtonsDisabled(false);
+          });
+      }
       function setTokenState(config) {
         var configured = !!config.token_configured;
         tokenDot.className = 'state-dot ' + (configured ? 'ok' : 'error');
@@ -526,6 +675,7 @@
           document.getElementById('userAgent').value = config.user_agent || '';
           document.getElementById('accountId').value = config.chatgpt_account_id || '';
           document.getElementById('proxyUrl').value = config.proxy_url || '';
+          confirmedProxyValue = (config.proxy_url || '').trim();
           document.getElementById('cacheTTL').value = config.cache_ttl || '10m';
           document.getElementById('fedramp').checked = !!config.fedramp;
           setValue('clientBuildNumber', config.client_build_number);
@@ -537,6 +687,15 @@
           cookieInput.value = '';
           setCookieState(config);
           setTokenState(config);
+          if (confirmedProxyValue) {
+            setProxyState('已保存', 'ready');
+            setCredentialAccess(true);
+            setProxyStatus('已加载保存的代理，可继续配置账号凭证。', 'ok');
+          } else {
+            setProxyState('待确认', '');
+            setCredentialAccess(false);
+            setProxyStatus('当前为直连模式，请先测试并保存直连设置。');
+          }
           setStatus('配置已读取', 'ok');
         }).catch(function (error) { setStatus(error.message, 'error'); });
       }
@@ -549,6 +708,31 @@
         var visible = cookieInput.type === 'text';
         cookieInput.type = visible ? 'password' : 'text';
         toggleCookie.textContent = visible ? '显示' : '隐藏';
+      });
+      proxyInput.addEventListener('input', function () {
+        if (confirmedProxyValue !== null && proxyInput.value.trim() !== confirmedProxyValue) {
+          setProxyState('待验证', '');
+          setCredentialAccess(false);
+          setProxyStatus('代理地址已变更，请重新测试并保存。');
+        }
+      });
+      document.getElementById('clearProxy').addEventListener('click', function () {
+        proxyInput.value = '';
+        proxyInput.dispatchEvent(new Event('input'));
+        proxyInput.focus();
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-proxy-example]'), function (button) {
+        button.addEventListener('click', function () {
+          proxyInput.value = button.getAttribute('data-proxy-example') || '';
+          proxyInput.dispatchEvent(new Event('input'));
+          proxyInput.focus();
+        });
+      });
+      testProxyButton.addEventListener('click', function () { testProxy(false); });
+      confirmProxyButton.addEventListener('click', function () { testProxy(true); });
+      document.getElementById('goProxy').addEventListener('click', function () {
+        proxySection.scrollIntoView({ behavior:'smooth', block:'start' });
+        proxyInput.focus();
       });
       document.getElementById('parseCapture').addEventListener('click', parseCapture);
       document.getElementById('testConnection').addEventListener('click', function () {
@@ -567,6 +751,11 @@
       });
       form.addEventListener('submit', function (event) {
         event.preventDefault();
+        if (!proxyReady) {
+          setStatus('请先完成步骤 1：测试并保存代理，或确认使用直连。', 'error');
+          proxySection.scrollIntoView({ behavior:'smooth', block:'start' });
+          return;
+        }
         var body = collectConfigBody();
         setStatus('正在保存…');
         fetch('api/config', { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(body) })
@@ -576,6 +765,8 @@
             cookieInput.value = '';
             setTokenState(config);
             setCookieState(config);
+            confirmedProxyValue = proxyInput.value.trim();
+            setProxyState('已保存', 'ready');
             setStatus('已保存并立即生效', 'ok');
           }).catch(function (error) { setStatus(error.message, 'error'); });
       });

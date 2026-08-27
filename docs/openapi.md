@@ -75,6 +75,7 @@ Basic Auth 与管理密钥不要写进前端源码、查询参数、截图或日
 | GET | `/api/usage/analytics` | 日期范围统计，包含模型占比 |
 | GET | `/api/prediction` | 公共重置预测 |
 | GET | `/api/config` | 获取脱敏后的运行配置 |
+| POST | `/api/config/test-proxy` | 在填写账号凭证前测试代理或直连 |
 | POST | `/api/config/test` | 使用临时配置测试 OpenAI 额度连接，不保存配置 |
 | PUT | `/api/config` | 部分更新运行配置 |
 | GET | `/audio?kind=normal` | 获取内置提示音 |
@@ -183,6 +184,20 @@ curl -X POST \
   }' \
   'http://127.0.0.1:8123/api/config/test'
 ```
+
+### 先测试代理
+
+设置页面会先调用这个接口测试代理，再保存代理配置并解锁账号凭证区域。请求体只需要提供代理地址；留空表示测试直连。支持 `http://`、`https://`、`socks5://`，也兼容 `socket5://`。
+
+```bash
+curl -X POST \
+  -u '用户名:密码' \
+  -H 'Content-Type: application/json' \
+  -d '{"proxy_url":"http://127.0.0.1:7890"}' \
+  'http://127.0.0.1:8123/api/config/test-proxy'
+```
+
+测试成功后，设置页面再通过 `PUT /api/config` 保存 `proxy_url`，之后才进入账号凭证配置步骤。该测试不会写入配置文件。
 
 ### 获取提示音
 
