@@ -342,11 +342,11 @@
             </div>
             <input id="proxyUrl" class="config-hidden" type="hidden">
             <div class="proxy-form-actions">
-              <button id="clearProxy" class="small-button direct-button" type="button">使用直连</button>
               <span class="hint">端口默认 7890；支持 HTTP、HTTPS、SOCKS5，也兼容已有的 socket5:// 配置。</span>
             </div>
             <div class="proxy-actions">
               <button id="testProxy" class="secondary" type="button">只测试代理</button>
+              <button id="clearProxy" class="small-button direct-button" type="button">使用直连并保存</button>
               <button id="confirmProxy" class="primary" type="button">测试并保存，继续配置</button>
             </div>
             <div id="proxyStatus" class="proxy-status" role="status" aria-live="polite">等待配置代理。</div>
@@ -406,6 +406,7 @@
       var proxyStateBadge = document.getElementById('proxyStateBadge');
       var proxyStatus = document.getElementById('proxyStatus');
       var testProxyButton = document.getElementById('testProxy');
+      var directProxyButton = document.getElementById('clearProxy');
       var confirmProxyButton = document.getElementById('confirmProxy');
       var tabProxy = document.getElementById('tabProxy');
       var tabCredentials = document.getElementById('tabCredentials');
@@ -441,7 +442,7 @@
       function setProxyStatus(text, kind) { proxyStatus.textContent = text; proxyStatus.className = 'proxy-status ' + (kind || ''); }
       function showTab(name) {
         if (name === 'credentials' && !proxyReady) {
-          setStatus('请先完成步骤 1：测试并保存代理，或确认使用直连。', 'error');
+          setStatus('请先完成步骤 1：测试并保存代理，或使用直连并保存。', 'error');
           return;
         }
         activeTab = name === 'credentials' ? 'credentials' : 'proxy';
@@ -466,6 +467,7 @@
       }
       function setProxyButtonsDisabled(disabled) {
         testProxyButton.disabled = disabled;
+        directProxyButton.disabled = disabled;
         confirmProxyButton.disabled = disabled;
       }
       function proxyURLParts(raw) {
@@ -527,7 +529,7 @@
           return data;
         });
       }
-      function testProxy(saveAfterTest) {
+      function testProxy(saveAfterTest, directMode) {
         if (proxyBusy) return;
         var payload;
         try { payload = proxyPayload(); } catch (error) {
@@ -538,7 +540,7 @@
         proxyBusy = true;
         setProxyButtonsDisabled(true);
         setProxyState('测试中…', '');
-        setProxyStatus(saveAfterTest ? '正在测试代理，成功后自动保存…' : '正在测试代理连通性…');
+        setProxyStatus(saveAfterTest ? (directMode ? '正在测试直连，成功后自动保存…' : '正在测试代理，成功后自动保存…') : '正在测试代理连通性…');
         fetch('api/config/test-proxy', { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(payload) })
           .then(function (response) { return parseResponse(response, '代理测试失败'); })
           .then(function (result) {
@@ -553,8 +555,8 @@
                 confirmedProxyValue = payload.proxy_url;
                 setProxyState('已保存', 'ready');
                 setCredentialAccess(true);
-                setProxyStatus(result.message + '，代理配置已保存。', 'ok');
-                setStatus('代理已保存，请继续配置账号凭证', 'ok');
+                setProxyStatus(result.message + '，' + (directMode ? '直连配置已保存。' : '代理配置已保存。'), 'ok');
+                setStatus((directMode ? '直连已保存' : '代理已保存') + '，请继续配置账号凭证', 'ok');
                 showTab('credentials');
                 credentialsSection.scrollIntoView({ behavior:'smooth', block:'start' });
               });
@@ -733,12 +735,13 @@
       proxySchemeInput.addEventListener('change', markProxyDraft);
       proxyHostInput.addEventListener('input', markProxyDraft);
       proxyPortInput.addEventListener('input', markProxyDraft);
-      document.getElementById('clearProxy').addEventListener('click', function () {
+      directProxyButton.addEventListener('click', function () {
+        if (proxyBusy) return;
         proxyHostInput.value = '';
         proxyPortInput.value = '7890';
         proxySchemeInput.value = 'http';
         markProxyDraft();
-        proxyHostInput.focus();
+        testProxy(true, true);
       });
       testProxyButton.addEventListener('click', function () { testProxy(false); });
       confirmProxyButton.addEventListener('click', function () { testProxy(true); });
