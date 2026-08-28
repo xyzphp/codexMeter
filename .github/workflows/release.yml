@@ -24,6 +24,7 @@ jobs:
     outputs:
       version: ${{ steps.prepare.outputs.version }}
       commit_sha: ${{ steps.prepare.outputs.commit_sha }}
+      previous_version: ${{ steps.prepare.outputs.previous_version }}
     steps:
       - name: Checkout main branch
         uses: actions/checkout@v4
@@ -44,6 +45,7 @@ jobs:
             echo "版本标签 ${RELEASE_VERSION} 已存在"
             exit 1
           fi
+          previous_version="$(git tag --sort=-version:refname | head -n 1 || true)"
           sed -i -E "s|^(    image: ghcr.io/xyzphp/codexmeter:).*$|\1${RELEASE_VERSION}|" docker-compose.yml
           if ! git diff --quiet -- docker-compose.yml; then
             git config user.name "github-actions[bot]"
@@ -57,6 +59,7 @@ jobs:
           git push origin "${RELEASE_VERSION}"
           echo "version=${RELEASE_VERSION}" >> "${GITHUB_OUTPUT}"
           echo "commit_sha=${commit_sha}" >> "${GITHUB_OUTPUT}"
+          echo "previous_version=${previous_version}" >> "${GITHUB_OUTPUT}"
 
   test:
     name: Test
@@ -192,6 +195,11 @@ jobs:
     needs: [prepare-release, build, docker]
     runs-on: ubuntu-latest
     steps:
+      - name: 检出发布提交
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.commit_sha }}
+          fetch-depth: 0
       - name: 下载构建产物
         uses: actions/download-artifact@v4
         with:
@@ -203,9 +211,44 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
           RELEASE_COMMIT: ${{ needs.prepare-release.outputs.commit_sha }}
+          PREVIOUS_VERSION: ${{ needs.prepare-release.outputs.previous_version }}
         run: |
+          set -euo pipefail
+          repository_url="https://github.com/${GITHUB_REPOSITORY}"
+          notes="## 版本对比"$'\n\n'
+          release_args=()
+          if [[ -n "${PREVIOUS_VERSION}" ]]; then
+            commit_range="${PREVIOUS_VERSION}..${RELEASE_COMMIT}"
+            compare_url="${repository_url}/compare/${PREVIOUS_VERSION}...${RELEASE_VERSION}"
+            commit_count="$(git rev-list --count --no-merges "${commit_range}")"
+            changed_files="$(git diff --shortstat "${commit_range}" || true)"
+            notes+="本版本相较于 [${PREVIOUS_VERSION}](${repository_url}/releases/tag/${PREVIOUS_VERSION}) 的变更如下："$'\n\n'
+            notes+="- [查看完整差异](${compare_url})"$'\n'
+            notes+="- 变更提交：${commit_count}"$'\n'
+            notes+="- 文件变更：${changed_files:-无文件变更}"$'\n\n'
+
+            append_commits() {
+              local title="$1"
+              local pattern="$2"
+              local commits
+              commits="$(git log --no-merges --extended-regexp --grep="${pattern}" --pretty=format:'- %s (`%h`)' "${commit_range}" || true)"
+              if [[ -n "${commits}" ]]; then
+                notes+="### ${title}"$'\n\n'"${commits}"$'\n\n'
+              fi
+            }
+
+            append_commits "功能与改进" '^(feat|ui|refactor|perf|style)(\(.+\))?:'
+            append_commits "问题修复" '^(fix|revert)(\(.+\))?:'
+            append_commits "文档、测试与构建" '^(docs|test|build|ci|chore)(\(.+\))?:'
+            release_args+=(--notes-start-tag "${PREVIOUS_VERSION}")
+          else
+            notes+="这是首个带版本标签的发布。"$'\n\n'
+          fi
+
           gh release create "${RELEASE_VERSION}" release-files/* \
             --repo "${GITHUB_REPOSITORY}" \
             --target "${RELEASE_COMMIT}" \
             --title "Codex Meter ${RELEASE_VERSION}" \
-            --generate-notes
+            --notes "${notes}" \
+            --generate-notes \
+            "${release_args[@]}"
