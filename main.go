@@ -779,9 +779,10 @@ func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
 		}
 	}
 	if len(s.history) > 0 && sameUsageHistoryValue(s.history[len(s.history)-1], point) {
-		// Keep one point for a stable value, but move its timestamp forward so
-		// the chart still reaches the latest successful sample.
-		s.history[len(s.history)-1] = point
+		// Keep the first sample of a stable value run; later duplicates do not
+		// replace its timestamp or consume another chart point.
+		s.cacheMu.Unlock()
+		return
 	} else {
 		s.history = append(s.history, point)
 	}
@@ -851,7 +852,6 @@ func compactUsageHistory(points []HistoryPoint) []HistoryPoint {
 	compact := make([]HistoryPoint, 0, len(points))
 	for _, point := range points {
 		if len(compact) > 0 && sameUsageHistoryValue(compact[len(compact)-1], point) {
-			compact[len(compact)-1] = point
 			continue
 		}
 		compact = append(compact, point)

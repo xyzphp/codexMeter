@@ -214,6 +214,28 @@ func TestUsageHistoryDeduplicatesBeforeApplyingPointLimit(t *testing.T) {
 	}
 }
 
+func TestUsageHistoryDeduplicationKeepsFirstRecord(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
+	firstAt := time.Date(2026, time.August, 27, 12, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	secondAt := time.Date(2026, time.August, 27, 12, 5, 0, 0, time.UTC).Format(time.RFC3339)
+	for _, point := range []HistoryPoint{
+		{At: firstAt, UsedPercent: 12},
+		{At: secondAt, UsedPercent: 12},
+	} {
+		if err := appendUsageHistory(path, point); err != nil {
+			t.Fatalf("append repeated usage history: %v", err)
+		}
+	}
+
+	loaded, err := loadUsageHistory(path)
+	if err != nil {
+		t.Fatalf("load repeated usage history: %v", err)
+	}
+	if len(loaded) != 1 || loaded[0].At != firstAt {
+		t.Fatalf("deduplicated record = %#v, want first record at %s", loaded, firstAt)
+	}
+}
+
 func TestUsageHistoryLoadsFiveHourPercent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
 	fiveHour := 37.5
