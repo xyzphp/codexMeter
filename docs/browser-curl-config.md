@@ -10,6 +10,10 @@ https://chatgpt.com/backend-api/wham/usage
 
 ## 一、重新抓取当前请求
 
+配置页面中的操作示意：
+
+![账号凭证获取步骤：在 ChatGPT 使用分析页抓取 usage 请求](../web/assets/account-credentials-guide.png)
+
 1. 打开自己有权访问的 [ChatGPT 使用分析页](https://chatgpt.com/codex/cloud/settings/analytics) 并登录。
 2. 按 `F12` 打开开发者工具，切换到 **Network/网络**。
 3. 在过滤框输入 `usage`，刷新页面，找到状态码为 `200` 的：
