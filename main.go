@@ -778,17 +778,22 @@ func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
 			return
 		}
 	}
-	s.history = append(s.history, point)
-	if len(s.history) > maxUsageHistoryPoints {
-		s.history = s.history[len(s.history)-maxUsageHistoryPoints:]
+	if len(s.history) > 0 && sameUsageHistoryValue(s.history[len(s.history)-1], point) {
+		// Keep one point for a stable value, but move its timestamp forward so
+		// the chart still reaches the latest successful sample.
+		s.history[len(s.history)-1] = point
+	} else {
+		s.history = append(s.history, point)
 	}
+	s.history = compactUsageHistory(s.history)
+	history := append([]HistoryPoint(nil), s.history...)
 	if s.cached != nil {
-		s.cached.History = append([]HistoryPoint(nil), s.history...)
+		s.cached.History = append([]HistoryPoint(nil), history...)
 	}
 	s.cacheMu.Unlock()
 
 	if s.historyFile != "" {
-		if err := appendUsageHistory(s.historyFile, point); err != nil {
+		if err := writeUsageHistory(s.historyFile, history); err != nil {
 			slog.Warn("persist usage history failed", "error", err)
 		}
 	}
@@ -826,6 +831,37 @@ func usageHistoryPoint(usage *UsageResponse) (HistoryPoint, bool) {
 	return point, true
 }
 
+func sameUsageHistoryValue(left, right HistoryPoint) bool {
+	if left.UsedPercent != right.UsedPercent || left.Stale != right.Stale {
+		return false
+	}
+	if left.FiveHourUsedPercent == nil || right.FiveHourUsedPercent == nil {
+		return left.FiveHourUsedPercent == nil && right.FiveHourUsedPercent == nil
+	}
+	return *left.FiveHourUsedPercent == *right.FiveHourUsedPercent
+}
+
+// compactUsageHistory keeps one record for each consecutive value run and
+// retains the latest timestamp for that run. The limit is applied only after
+// compaction, so repeated samples do not consume the 48-point chart window.
+func compactUsageHistory(points []HistoryPoint) []HistoryPoint {
+	if len(points) == 0 {
+		return nil
+	}
+	compact := make([]HistoryPoint, 0, len(points))
+	for _, point := range points {
+		if len(compact) > 0 && sameUsageHistoryValue(compact[len(compact)-1], point) {
+			compact[len(compact)-1] = point
+			continue
+		}
+		compact = append(compact, point)
+	}
+	if len(compact) > maxUsageHistoryPoints {
+		compact = compact[len(compact)-maxUsageHistoryPoints:]
+	}
+	return compact
+}
+
 func loadUsageHistory(path string) ([]HistoryPoint, error) {
 	raw, err := os.Open(path)
 	if err != nil {
@@ -858,14 +894,43 @@ func loadUsageHistory(path string) ([]HistoryPoint, error) {
 			continue
 		}
 		history = append(history, point)
-		if len(history) > maxUsageHistoryPoints {
-			history = history[len(history)-maxUsageHistoryPoints:]
-		}
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	return history, nil
+	return compactUsageHistory(history), nil
+}
+
+func writeUsageHistory(path string, history []HistoryPoint) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return errors.New("usage history path is empty")
+	}
+	directory := filepath.Dir(path)
+	if err := os.MkdirAll(directory, 0o750); err != nil {
+		return err
+	}
+
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	if err := file.Chmod(0o600); err != nil {
+		file.Close()
+		return err
+	}
+	encoder := json.NewEncoder(file)
+	for _, point := range history {
+		if err := encoder.Encode(point); err != nil {
+			file.Close()
+			return err
+		}
+	}
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return err
+	}
+	return file.Close()
 }
 
 func appendUsageHistory(path string, point HistoryPoint) error {

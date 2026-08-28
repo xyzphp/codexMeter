@@ -525,6 +525,7 @@ components:
             - $ref: '#/components/schemas/Window'
         history:
           type: array
+          description: 按采样时间升序返回；连续相同采样已合并，最多保留 48 个变化点。
           items:
             $ref: '#/components/schemas/HistoryPoint'
 

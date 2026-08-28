@@ -190,6 +190,30 @@ func TestUsageHistoryPersistsAndKeepsMostRecentPoints(t *testing.T) {
 	}
 }
 
+func TestUsageHistoryDeduplicatesBeforeApplyingPointLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
+	for index := 0; index < maxUsageHistoryPoints+12; index++ {
+		if err := appendUsageHistory(path, HistoryPoint{
+			At:          time.Date(2026, time.August, 27, 12, index, 0, 0, time.UTC).Format(time.RFC3339),
+			UsedPercent: float64(index / 2),
+		}); err != nil {
+			t.Fatalf("append duplicate usage history: %v", err)
+		}
+	}
+
+	loaded, err := loadUsageHistory(path)
+	if err != nil {
+		t.Fatalf("load duplicate usage history: %v", err)
+	}
+	want := (maxUsageHistoryPoints + 12) / 2
+	if len(loaded) != want {
+		t.Fatalf("loaded %d deduplicated points, want %d", len(loaded), want)
+	}
+	if loaded[0].UsedPercent != 0 || loaded[len(loaded)-1].UsedPercent != float64(want-1) {
+		t.Fatalf("deduplicated history range = %v..%v, want 0..%d", loaded[0].UsedPercent, loaded[len(loaded)-1].UsedPercent, want-1)
+	}
+}
+
 func TestUsageHistoryLoadsFiveHourPercent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
 	fiveHour := 37.5
@@ -263,7 +287,7 @@ func TestScheduledUsageCollectionFallsBackToLastSuccessfulPoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load fallback history: %v", err)
 	}
-	if len(loaded) != 1 || !loaded[0].Stale || loaded[0].UsedPercent != lastPoint.UsedPercent || loaded[0].FiveHourUsedPercent == nil || *loaded[0].FiveHourUsedPercent != fiveHour {
+	if len(loaded) != 2 || !loaded[1].Stale || loaded[1].UsedPercent != lastPoint.UsedPercent || loaded[1].FiveHourUsedPercent == nil || *loaded[1].FiveHourUsedPercent != fiveHour {
 		t.Fatalf("fallback history = %#v, want stale copy of %#v", loaded, lastPoint)
 	}
 }
