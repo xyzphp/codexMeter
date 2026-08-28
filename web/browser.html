@@ -83,8 +83,6 @@
     .usage-history-panel { min-width:0; padding:16px 18px 14px; border:1px solid var(--border); border-radius:16px; background:var(--soft); }
     .usage-history-head { display:flex; align-items:baseline; justify-content:space-between; gap:16px; }
     .usage-history-title { color:var(--text); font-size:15px; font-weight:650; }
-    .usage-history-meta { margin-left:8px; color:var(--muted); font-size:12px; }
-    .usage-history-count { color:var(--muted); font-size:12px; white-space:nowrap; }
     .usage-history-stats { display:flex; flex-wrap:wrap; gap:8px 24px; margin-top:10px; color:var(--muted); font-size:13px; }
     .usage-history-stats strong { margin-left:5px; color:var(--text); font-size:15px; font-variant-numeric:tabular-nums; }
     .usage-history-chart { min-height:174px; margin-top:10px; }
@@ -247,8 +245,6 @@
       .usage-history-grid { gap:8px; margin-top:12px; }
       .usage-history-panel { padding:10px 9px 8px; border-radius:10px; }
       .usage-history-title { font-size:11px; }
-      .usage-history-meta, .usage-history-count { font-size:9px; }
-      .usage-history-meta { margin-left:4px; }
       .usage-history-stats { gap:5px 12px; margin-top:6px; font-size:9px; }
       .usage-history-stats strong { margin-left:3px; font-size:11px; }
       .usage-history-chart { min-height:118px; margin-top:6px; }
@@ -374,12 +370,12 @@
       </div>
       <div class="usage-history-grid" aria-label="额度变化历史">
         <article class="usage-history-panel">
-          <div class="usage-history-head"><div><span class="usage-history-title">5 小时额度变化</span><span class="usage-history-meta">中国时间</span></div><span id="fiveHourHistoryCount" class="usage-history-count">等待采样</span></div>
+          <div class="usage-history-head"><span class="usage-history-title">5 小时额度变化</span></div>
           <div class="usage-history-stats"><span>当前<strong id="fiveHourHistoryCurrent">—</strong></span><span>最高<strong id="fiveHourHistoryMax">—</strong></span><span>最低<strong id="fiveHourHistoryMin">—</strong></span></div>
           <div id="fiveHourHistoryChart" class="usage-history-chart"><div class="empty">刷新后生成额度变化</div></div>
         </article>
         <article class="usage-history-panel">
-          <div class="usage-history-head"><div><span class="usage-history-title">本周额度变化</span><span class="usage-history-meta">中国时间</span></div><span id="weeklyHistoryCount" class="usage-history-count">等待采样</span></div>
+          <div class="usage-history-head"><span class="usage-history-title">本周额度变化</span></div>
           <div class="usage-history-stats"><span>当前<strong id="weeklyHistoryCurrent">—</strong></span><span>最高<strong id="weeklyHistoryMax">—</strong></span><span>最低<strong id="weeklyHistoryMin">—</strong></span></div>
           <div id="weeklyHistoryChart" class="usage-history-chart"><div class="empty">刷新后生成额度变化</div></div>
         </article>
@@ -518,8 +514,8 @@
         renderWindow(weekly, 'weekly', 'weeklyReset');
         text('usageUpdated', usage && usage.fetched_at ? '更新 ' + date(usage.fetched_at) : '已连接');
         classes('statusDot', 'status-dot'); text('statusText', '已连接');
-        renderUsageHistory(usage && usage.history, {metric:'five_hour_used_percent', label:'5小时', emptyLabel:'5小时额度', chartId:'fiveHourHistoryChart', countId:'fiveHourHistoryCount', currentId:'fiveHourHistoryCurrent', maxId:'fiveHourHistoryMax', minId:'fiveHourHistoryMin'});
-        renderUsageHistory(usage && usage.history, {metric:'used_percent', label:'本周', emptyLabel:'本周额度', chartId:'weeklyHistoryChart', countId:'weeklyHistoryCount', currentId:'weeklyHistoryCurrent', maxId:'weeklyHistoryMax', minId:'weeklyHistoryMin'});
+        renderUsageHistory(usage && usage.history, {metric:'five_hour_used_percent', label:'5小时', emptyLabel:'5小时额度', chartId:'fiveHourHistoryChart', currentId:'fiveHourHistoryCurrent', maxId:'fiveHourHistoryMax', minId:'fiveHourHistoryMin'});
+        renderUsageHistory(usage && usage.history, {metric:'used_percent', label:'本周', emptyLabel:'本周额度', chartId:'weeklyHistoryChart', currentId:'weeklyHistoryCurrent', maxId:'weeklyHistoryMax', minId:'weeklyHistoryMin'});
       }
       function usageHistoryAxisLabel(value) {
         var parsed = new Date(value); if (isNaN(parsed.getTime())) return '—';
@@ -572,10 +568,10 @@
         var points = (Array.isArray(history) ? history : []).map(function (point) { var at = point && point.at ? timestamp(point.at) : 0; var used = number(point && point[options.metric]); return at > 0 && isFinite(used) ? {at:point.at, time:at, used:clamp(used, 0, 100), stale:Boolean(point && point.stale), changePoint:true} : null; }).filter(function (point) { return point !== null; });
         points.sort(function (left, right) { return left.time - right.time; });
         points.forEach(function (point, index) { point.position = index; });
-        if (!points.length) { text(options.countId, '等待采样'); text(options.currentId, '—'); text(options.maxId, '—'); text(options.minId, '—'); container.innerHTML = '<div class="empty">暂无' + escaped(options.emptyLabel || '额度') + '采样</div>'; return; }
-        var sampleCount = points.length; points = collapseUsageHistoryPoints(points); var displayedPointCount = points.filter(function (point) { return point.changePoint !== false; }).length; var values = points.map(function (point) { return point.used; }); var current = values[values.length - 1]; var maximum = Math.max.apply(Math, values); var minimum = Math.min.apply(Math, values); var resetIndexes = [];
+        if (!points.length) { text(options.currentId, '—'); text(options.maxId, '—'); text(options.minId, '—'); container.innerHTML = '<div class="empty">暂无' + escaped(options.emptyLabel || '额度') + '采样</div>'; return; }
+        var sampleCount = points.length; points = collapseUsageHistoryPoints(points); var values = points.map(function (point) { return point.used; }); var current = values[values.length - 1]; var maximum = Math.max.apply(Math, values); var minimum = Math.min.apply(Math, values); var resetIndexes = [];
         for (var resetIndex = 1; resetIndex < values.length; resetIndex += 1) if (values[resetIndex - 1] - values[resetIndex] >= 10) resetIndexes.push(resetIndex);
-        text(options.countId, '去重后 ' + displayedPointCount + ' 个变化点'); text(options.currentId, percent(current) + '%'); text(options.maxId, percent(maximum) + '%'); text(options.minId, percent(minimum) + '%');
+        text(options.currentId, percent(current) + '%'); text(options.maxId, percent(maximum) + '%'); text(options.minId, percent(minimum) + '%');
         var axisPadding = maximum === minimum ? 5 : Math.max((maximum - minimum) * .2, .5); var axisMin = Math.max(0, Math.floor((minimum - axisPadding) * 10) / 10); var axisMax = Math.min(100, Math.ceil((maximum + axisPadding) * 10) / 10); if (axisMax <= axisMin) { axisMin = Math.max(0, axisMax - 1); axisMax = Math.min(100, axisMin + 1); } var axisSpan = axisMax - axisMin || 1;
         var width = 760; var height = 190; var left = 38; var right = 12; var top = 12; var bottom = 30; var plotWidth = width - left - right; var plotHeight = height - top - bottom; var x = function (index) { var position = points[index].position; return left + (sampleCount === 1 ? plotWidth / 2 : position / (sampleCount - 1) * plotWidth); }; var y = function (value) { return top + (axisMax - value) / axisSpan * plotHeight; };
         var linePath = points.map(function (point, index) { return (index ? 'L' : 'M') + x(index).toFixed(2) + ' ' + y(point.used).toFixed(2); }).join(' '); var areaPath = linePath + ' L ' + x(points.length - 1).toFixed(2) + ' ' + (top + plotHeight).toFixed(2) + ' L ' + x(0).toFixed(2) + ' ' + (top + plotHeight).toFixed(2) + ' Z';
