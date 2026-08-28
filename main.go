@@ -33,7 +33,7 @@ const (
 	defaultCacheTTL             = 10 * time.Minute
 	defaultUsageHistoryFile     = "data/usage-history.jsonl"
 	maxUsageHistoryPoints       = 48
-	usageHistorySampleInterval  = 5 * time.Minute
+	usageHistorySampleInterval  = time.Hour
 	upstreamRequestTimeout      = 15 * time.Second
 	resetStatusEndpoint         = "https://codex-resets.com/api/v1/status"
 	resetHistoryEndpoint        = "https://codex-resets.com/api/resets"
@@ -733,21 +733,30 @@ func (s *UsageService) Get(ctx context.Context, force bool) (*UsageResponse, err
 // refreshes. The caller owns ctx and should cancel it during shutdown.
 func (s *UsageService) StartHistoryCollector(ctx context.Context) {
 	go func() {
-		s.collectUsageHistory(ctx)
-		ticker := time.NewTicker(usageHistorySampleInterval)
-		defer ticker.Stop()
 		for {
+			nextSampleAt := nextUsageHistorySampleAt(time.Now())
+			timer := time.NewTimer(time.Until(nextSampleAt))
 			select {
 			case <-ctx.Done():
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
 				return
-			case <-ticker.C:
-				s.collectUsageHistory(ctx)
+			case <-timer.C:
+				s.collectUsageHistoryAt(ctx, nextSampleAt)
 			}
 		}
 	}()
 }
 
 func (s *UsageService) collectUsageHistory(ctx context.Context) {
+	s.collectUsageHistoryAt(ctx, time.Time{})
+}
+
+func (s *UsageService) collectUsageHistoryAt(ctx context.Context, sampleAt time.Time) {
 	usage, err := s.Get(ctx, true)
 	if err != nil {
 		slog.Warn("scheduled usage collection failed", "error", err)
@@ -755,7 +764,7 @@ func (s *UsageService) collectUsageHistory(ctx context.Context) {
 		if !ok {
 			return
 		}
-		point.At = time.Now().UTC().Format(time.RFC3339)
+		point.At = usageHistorySampleTimestamp(sampleAt)
 		point.Stale = true
 		s.persistUsageHistoryPoint(point)
 		return
@@ -764,8 +773,24 @@ func (s *UsageService) collectUsageHistory(ctx context.Context) {
 	if !ok {
 		return
 	}
+	if !sampleAt.IsZero() {
+		point.At = usageHistorySampleTimestamp(sampleAt)
+	}
 
 	s.persistUsageHistoryPoint(point)
+}
+
+func nextUsageHistorySampleAt(now time.Time) time.Time {
+	localNow := now.In(now.Location())
+	year, month, day := localNow.Date()
+	return time.Date(year, month, day, localNow.Hour()+1, 0, 0, 0, localNow.Location())
+}
+
+func usageHistorySampleTimestamp(sampleAt time.Time) string {
+	if sampleAt.IsZero() {
+		return time.Now().UTC().Format(time.RFC3339)
+	}
+	return sampleAt.UTC().Format(time.RFC3339)
 }
 
 func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
