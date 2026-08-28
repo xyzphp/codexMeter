@@ -33,7 +33,7 @@ const (
 	defaultCacheTTL             = 10 * time.Minute
 	defaultUsageHistoryFile     = "data/usage-history.jsonl"
 	maxUsageHistoryPoints       = 48
-	usageHistorySampleInterval  = time.Hour
+	usageHistorySampleInterval  = 5 * time.Minute
 	upstreamRequestTimeout      = 15 * time.Second
 	resetStatusEndpoint         = "https://codex-resets.com/api/v1/status"
 	resetHistoryEndpoint        = "https://codex-resets.com/api/resets"
@@ -783,7 +783,8 @@ func (s *UsageService) collectUsageHistoryAt(ctx context.Context, sampleAt time.
 func nextUsageHistorySampleAt(now time.Time) time.Time {
 	localNow := now.In(now.Location())
 	year, month, day := localNow.Date()
-	return time.Date(year, month, day, localNow.Hour()+1, 0, 0, 0, localNow.Location())
+	nextMinute := ((localNow.Minute() / 5) + 1) * 5
+	return time.Date(year, month, day, localNow.Hour(), nextMinute, 0, 0, localNow.Location())
 }
 
 func usageHistorySampleTimestamp(sampleAt time.Time) string {

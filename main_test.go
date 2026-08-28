@@ -289,18 +289,18 @@ func TestUsageRefreshDoesNotPersistHistory(t *testing.T) {
 	}
 }
 
-func TestNextUsageHistorySampleAtReturnsNextLocalHour(t *testing.T) {
+func TestNextUsageHistorySampleAtReturnsNextFiveMinuteBoundary(t *testing.T) {
 	location := time.FixedZone("CST", 8*60*60)
 	now := time.Date(2026, 8, 28, 14, 37, 29, 0, location)
 
 	next := nextUsageHistorySampleAt(now)
-	want := time.Date(2026, 8, 28, 15, 0, 0, 0, location)
+	want := time.Date(2026, 8, 28, 14, 40, 0, 0, location)
 	if !next.Equal(want) {
 		t.Fatalf("nextUsageHistorySampleAt() = %s, want %s", next, want)
 	}
 }
 
-func TestNextUsageHistorySampleAtRollsOverToNextDay(t *testing.T) {
+func TestNextUsageHistorySampleAtRollsOverToNextHour(t *testing.T) {
 	location := time.FixedZone("CST", 8*60*60)
 	now := time.Date(2026, 8, 28, 23, 59, 59, 0, location)
 
