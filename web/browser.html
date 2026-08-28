@@ -543,15 +543,17 @@
       }
       function collapseUsageHistoryPoints(points) {
         if (points.length < 2) return points;
-        var collapsed = []; var start = 0;
-        var copyPoint = function (point, repeatCount) { return {at:point.at, time:point.time, used:point.used, stale:point.stale, position:point.position, repeatCount:repeatCount}; };
+        var collapsed = []; var start = 0; var lastRepeatCount = 0;
+        var copyPoint = function (point, repeatCount, changePoint) { return {at:point.at, time:point.time, used:point.used, stale:point.stale, position:point.position, repeatCount:repeatCount, changePoint:changePoint}; };
         for (var index = 1; index <= points.length; index += 1) {
           var same = index < points.length && points[index].used === points[start].used && points[index].stale === points[start].stale;
           if (same) continue;
           var repeatCount = index - start;
-          if (repeatCount === 1) collapsed.push(points[start]); else { collapsed.push(copyPoint(points[start], repeatCount)); collapsed.push(copyPoint(points[index - 1], repeatCount)); }
+          lastRepeatCount = repeatCount;
+          collapsed.push(copyPoint(points[start], repeatCount, true));
           start = index;
         }
+        if (collapsed.length && collapsed[collapsed.length - 1].position !== points[points.length - 1].position) collapsed.push(copyPoint(points[points.length - 1], lastRepeatCount, false));
         return collapsed;
       }
       function bindUsageHistoryTooltips(container) {
@@ -567,7 +569,7 @@
       function renderUsageHistory(history, options) {
         options = options || {};
         var container = byId(options.chartId); if (!container) return;
-        var points = (Array.isArray(history) ? history : []).map(function (point) { var at = point && point.at ? timestamp(point.at) : 0; var used = number(point && point[options.metric]); return at > 0 && isFinite(used) ? {at:point.at, time:at, used:clamp(used, 0, 100), stale:Boolean(point && point.stale)} : null; }).filter(function (point) { return point !== null; });
+        var points = (Array.isArray(history) ? history : []).map(function (point) { var at = point && point.at ? timestamp(point.at) : 0; var used = number(point && point[options.metric]); return at > 0 && isFinite(used) ? {at:point.at, time:at, used:clamp(used, 0, 100), stale:Boolean(point && point.stale), changePoint:true} : null; }).filter(function (point) { return point !== null; });
         points.sort(function (left, right) { return left.time - right.time; });
         points.forEach(function (point, index) { point.position = index; });
         if (!points.length) { text(options.countId, '等待采样'); text(options.currentId, '—'); text(options.maxId, '—'); text(options.minId, '—'); container.innerHTML = '<div class="empty">暂无' + escaped(options.emptyLabel || '额度') + '采样</div>'; return; }
@@ -579,7 +581,7 @@
         var linePath = points.map(function (point, index) { return (index ? 'L' : 'M') + x(index).toFixed(2) + ' ' + y(point.used).toFixed(2); }).join(' '); var areaPath = linePath + ' L ' + x(points.length - 1).toFixed(2) + ' ' + (top + plotHeight).toFixed(2) + ' L ' + x(0).toFixed(2) + ' ' + (top + plotHeight).toFixed(2) + ' Z';
         var grid = [0, 1, 2, 3, 4].map(function (step) { var level = axisMin + axisSpan * step / 4; var lineY = y(level).toFixed(2); return '<line class="usage-history-gridline" x1="' + left + '" y1="' + lineY + '" x2="' + (width - right) + '" y2="' + lineY + '"></line><text class="usage-history-axis usage-history-axis-end" x="' + (left - 8) + '" y="' + (Number(lineY) + 4) + '">' + percent(level) + '%</text>'; }).join('');
         var resetLines = resetIndexes.map(function (index) { return '<line class="usage-history-reset-line" x1="' + x(index).toFixed(2) + '" y1="' + top + '" x2="' + x(index).toFixed(2) + '" y2="' + (top + plotHeight) + '"></line>'; }).join('');
-        var circles = points.map(function (point, index) { var resetClass = resetIndexes.indexOf(index) >= 0 ? ' reset' : ''; var latestClass = index === points.length - 1 ? ' latest' : ''; var staleClass = point.stale ? ' stale' : ''; var label = usageHistoryTooltip(point, point.used, options.label); var cx = x(index).toFixed(2); var cy = y(point.used).toFixed(2); var radius = index === points.length - 1 ? '4' : '3'; return '<circle class="usage-history-point-hit" cx="' + cx + '" cy="' + cy + '" r="9" tabindex="0" data-tooltip="' + escaped(label) + '" aria-label="' + escaped(label) + '"></circle><circle class="usage-history-point' + resetClass + latestClass + staleClass + '" cx="' + cx + '" cy="' + cy + '" r="' + radius + '" aria-hidden="true"></circle>'; }).join('');
+        var circles = points.map(function (point, index) { var resetClass = resetIndexes.indexOf(index) >= 0 ? ' reset' : ''; var latestClass = index === points.length - 1 ? ' latest' : ''; var staleClass = point.stale ? ' stale' : ''; var label = usageHistoryTooltip(point, point.used, options.label); var cx = x(index).toFixed(2); var cy = y(point.used).toFixed(2); var radius = index === points.length - 1 ? '4' : '3'; var drawPoint = point.changePoint !== false || index === points.length - 1; return drawPoint ? '<circle class="usage-history-point-hit" cx="' + cx + '" cy="' + cy + '" r="9" tabindex="0" data-tooltip="' + escaped(label) + '" aria-label="' + escaped(label) + '"></circle><circle class="usage-history-point' + resetClass + latestClass + staleClass + '" cx="' + cx + '" cy="' + cy + '" r="' + radius + '" aria-hidden="true"></circle>' : ''; }).join('');
         var axisLabels = usageHistoryAxisTicks(points, sampleCount, plotWidth).map(function (tick, index, ticks) { var anchor = index === 0 ? 'start' : index === ticks.length - 1 ? 'end' : 'middle'; return '<text class="usage-history-axis" text-anchor="' + anchor + '" x="' + x(tick.index).toFixed(2) + '" y="' + (height - 8) + '">' + escaped(tick.label) + '</text>'; }).join(''); var legend = resetIndexes.length ? '<div class="usage-history-legend"><span class="usage-history-legend-item"><i class="usage-history-legend-color"></i>' + escaped(options.label) + '使用百分比</span><span class="usage-history-legend-item"><i class="usage-history-legend-color reset"></i>检测到额度重置</span></div>' : '<div class="usage-history-legend"><span class="usage-history-legend-item"><i class="usage-history-legend-color"></i>' + escaped(options.label) + '使用百分比</span></div>';
         container.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' + escaped(options.label) + '额度使用变化图">' + grid + resetLines + '<path class="usage-history-area" d="' + areaPath + '"></path><path class="usage-history-line" d="' + linePath + '"></path>' + circles + axisLabels + '</svg>' + legend;
         bindUsageHistoryTooltips(container);
