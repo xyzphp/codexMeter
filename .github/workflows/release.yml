@@ -215,40 +215,28 @@ jobs:
         run: |
           set -euo pipefail
           repository_url="https://github.com/${GITHUB_REPOSITORY}"
-          notes="## 版本对比"$'\n\n'
-          release_args=()
+          notes="## 版本摘要"$'\n\n'
           if [[ -n "${PREVIOUS_VERSION}" ]]; then
             commit_range="${PREVIOUS_VERSION}..${RELEASE_COMMIT}"
             compare_url="${repository_url}/compare/${PREVIOUS_VERSION}...${RELEASE_VERSION}"
             commit_count="$(git rev-list --count --no-merges "${commit_range}")"
             changed_files="$(git diff --shortstat "${commit_range}" || true)"
-            notes+="本版本相较于 [${PREVIOUS_VERSION}](${repository_url}/releases/tag/${PREVIOUS_VERSION}) 的变更如下："$'\n\n'
-            notes+="- [查看完整差异](${compare_url})"$'\n'
-            notes+="- 变更提交：${commit_count}"$'\n'
-            notes+="- 文件变更：${changed_files:-无文件变更}"$'\n\n'
-
-            append_commits() {
-              local title="$1"
-              local pattern="$2"
-              local commits
-              commits="$(git log --no-merges --extended-regexp --grep="${pattern}" --pretty=format:'- %s (`%h`)' "${commit_range}" || true)"
-              if [[ -n "${commits}" ]]; then
-                notes+="### ${title}"$'\n\n'"${commits}"$'\n\n'
-              fi
-            }
-
-            append_commits "功能与改进" '^(feat|ui|refactor|perf|style)(\(.+\))?:'
-            append_commits "问题修复" '^(fix|revert)(\(.+\))?:'
-            append_commits "文档、测试与构建" '^(docs|test|build|ci|chore)(\(.+\))?:'
-            release_args+=(--notes-start-tag "${PREVIOUS_VERSION}")
+            feature_count="$(git rev-list --count --no-merges --extended-regexp --grep='^(feat|ui|refactor|perf|style)(\(.+\))?:' "${commit_range}")"
+            fix_count="$(git rev-list --count --no-merges --extended-regexp --grep='^(fix|revert)(\(.+\))?:' "${commit_range}")"
+            docs_count="$(git rev-list --count --no-merges --extended-regexp --grep='^(docs|test|build|ci|chore)(\(.+\))?:' "${commit_range}")"
+            notes+="本版本相较于 [${PREVIOUS_VERSION}](${repository_url}/releases/tag/${PREVIOUS_VERSION})，共完成 ${commit_count} 项变更。"$'\n\n'
+            notes+="- 功能与界面改进：${feature_count} 项"$'\n'
+            notes+="- 问题修复：${fix_count} 项"$'\n'
+            notes+="- 文档、测试与构建：${docs_count} 项"$'\n'
+            notes+="- 文件变更：${changed_files:-无文件变更}"$'\n'
+            notes+="- [查看版本对比](${compare_url})"$'\n\n'
+            notes+="本次发布仅展示摘要，不展开逐条提交记录；完整变更可通过上方对比链接查看。"$'\n'
           else
-            notes+="这是首个带版本标签的发布。"$'\n\n'
+            notes+="这是首个带版本标签的发布。"$'\n'
           fi
 
           gh release create "${RELEASE_VERSION}" release-files/* \
             --repo "${GITHUB_REPOSITORY}" \
             --target "${RELEASE_COMMIT}" \
             --title "Codex Meter ${RELEASE_VERSION}" \
-            --notes "${notes}" \
-            --generate-notes \
-            "${release_args[@]}"
+            --notes "${notes}"
