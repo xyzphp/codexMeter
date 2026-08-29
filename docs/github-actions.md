@@ -43,6 +43,8 @@
 7. 创建 GitHub Release 并上传全部构建包。
 8. Release 创建成功后，构建并推送 `linux/amd64`、`linux/arm64` 多架构镜像到 `ghcr.io/xyzphp/codexmeter`，同时生成版本标签和 `latest` 标签。
 
+如果需要修复或重新发布已有版本的镜像，可在 Actions 页面运行 `Publish Docker image` 工作流并填写已有版本标签。该流程只重新构建并推送 Docker 镜像，不会创建新的 Release。
+
 ## 发布包内容
 
 每个平台的压缩包包含：
