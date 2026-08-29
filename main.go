@@ -613,8 +613,37 @@ type whamUsageResponse struct {
 	AdditionalRateLimits  []whamAdditionalRateLimit `json:"additional_rate_limits"`
 	Credits               *Credits                  `json:"credits"`
 	SpendControl          *SpendControl             `json:"spend_control"`
-	RateLimitReachedType  string                    `json:"rate_limit_reached_type"`
+	RateLimitReachedType  rateLimitReachedType      `json:"rate_limit_reached_type"`
 	RateLimitResetCredits *ResetCredits             `json:"rate_limit_reset_credits"`
+}
+
+// rateLimitReachedType accepts both the historical string form and the
+// object form returned after a five-hour limit is reached.
+type rateLimitReachedType string
+
+func (value *rateLimitReachedType) UnmarshalJSON(data []byte) error {
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" || trimmed == "null" {
+		*value = ""
+		return nil
+	}
+	if trimmed[0] != '{' {
+		var text string
+		if err := json.Unmarshal(data, &text); err != nil {
+			return err
+		}
+		*value = rateLimitReachedType(strings.TrimSpace(text))
+		return nil
+	}
+	var payload struct {
+		Type    string `json:"type"`
+		Details string `json:"details"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return err
+	}
+	*value = rateLimitReachedType(strings.TrimSpace(payload.Type))
+	return nil
 }
 
 type whamAdditionalRateLimit struct {
@@ -2094,7 +2123,7 @@ func (s *UsageService) queryWhamUsage(ctx context.Context, cfg Config) (*UsageRe
 		Email:                 upstream.Email,
 		RateLimitAllowed:      rateLimit.Allowed,
 		RateLimitReached:      rateLimit.LimitReached,
-		RateLimitReachedType:  upstream.RateLimitReachedType,
+		RateLimitReachedType:  string(upstream.RateLimitReachedType),
 		Credits:               upstream.Credits,
 		SpendControl:          upstream.SpendControl,
 		RateLimitResetCredits: upstream.RateLimitResetCredits,

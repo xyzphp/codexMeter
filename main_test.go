@@ -274,6 +274,32 @@ func TestAdditionalCodexRateLimitShapeDecodes(t *testing.T) {
 	}
 }
 
+func TestWhamRateLimitReachedTypeDecodesStringAndObject(t *testing.T) {
+	var stringForm whamUsageResponse
+	if err := json.Unmarshal([]byte(`{"rate_limit_reached_type":"default"}`), &stringForm); err != nil {
+		t.Fatalf("decode string rate limit type: %v", err)
+	}
+	if stringForm.RateLimitReachedType != "default" {
+		t.Fatalf("string rate limit type = %q, want default", stringForm.RateLimitReachedType)
+	}
+
+	var objectForm whamUsageResponse
+	if err := json.Unmarshal([]byte(`{"rate_limit_reached_type":{"type":"rate_limit_reached","details":"default"}}`), &objectForm); err != nil {
+		t.Fatalf("decode object rate limit type: %v", err)
+	}
+	if objectForm.RateLimitReachedType != "rate_limit_reached" {
+		t.Fatalf("object rate limit type = %q, want rate_limit_reached", objectForm.RateLimitReachedType)
+	}
+
+	var nullForm whamUsageResponse
+	if err := json.Unmarshal([]byte(`{"rate_limit_reached_type":null}`), &nullForm); err != nil {
+		t.Fatalf("decode null rate limit type: %v", err)
+	}
+	if nullForm.RateLimitReachedType != "" {
+		t.Fatalf("null rate limit type = %q, want empty", nullForm.RateLimitReachedType)
+	}
+}
+
 func TestUsageHistoryPersistsAndKeepsMostRecentPoints(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
 	points := make([]HistoryPoint, 0, maxUsageHistoryPoints+2)
