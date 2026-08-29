@@ -539,17 +539,22 @@
       }
       function collapseUsageHistoryPoints(points) {
         if (points.length < 2) return points;
-        var collapsed = []; var start = 0; var lastRepeatCount = 0;
-        var copyPoint = function (point, repeatCount, changePoint) { return {at:point.at, time:point.time, used:point.used, stale:point.stale, position:point.position, repeatCount:repeatCount, changePoint:changePoint}; };
+        var collapsed = []; var start = 0;
+        var copyPoint = function (point, repeatCount) { return {at:point.at, time:point.time, used:point.used, stale:point.stale, position:point.position, repeatCount:repeatCount, changePoint:true}; };
         for (var index = 1; index <= points.length; index += 1) {
-          var same = index < points.length && points[index].used === points[start].used && points[index].stale === points[start].stale;
+          // A stale fallback keeps the same quota value. It must not create a
+          // second point in a metric-specific chart; compare only the value
+          // selected by the current chart and keep the first record.
+          var same = index < points.length && points[index].used === points[start].used;
           if (same) continue;
           var repeatCount = index - start;
-          lastRepeatCount = repeatCount;
-          collapsed.push(copyPoint(points[start], repeatCount, true));
+          // Keep the first sample in each stable run. The history payload can
+          // contain extra records because the other quota window changed, so
+          // this compaction must be performed separately for each chart's
+          // selected metric.
+          collapsed.push(copyPoint(points[start], repeatCount));
           start = index;
         }
-        if (collapsed.length && collapsed[collapsed.length - 1].position !== points[points.length - 1].position) collapsed.push(copyPoint(points[points.length - 1], lastRepeatCount, false));
         return collapsed;
       }
       function bindUsageHistoryTooltips(container) {
