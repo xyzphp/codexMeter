@@ -12,14 +12,6 @@
 
 `docker-compose.yml` 是部署配置，只使用 GHCR 中的已发布镜像，不包含本地 `build` 配置。
 
-先在项目根目录复制配置模板：
-
-```bash
-cp config.example.json config.json
-```
-
-编辑 `config.json`，填写 `openai.access_token` 和 `openai.chatgpt_account_id`。如需从设备或公网访问，将 `bind_addr` 保持为 `0.0.0.0:8123`，并按需启用 Basic Auth。
-
 从 GitHub Container Registry 拉取 Compose 文件中锁定的版本镜像：
 
 ```bash
@@ -32,24 +24,13 @@ docker compose pull
 docker compose up -d
 ```
 
-如果忘记创建 `config.json`，服务不会因为缺少凭证而退出，访问首页会显示“配置引导”页面，可以从那里进入设置页完成配置。Docker 的文件 bind mount 在源文件不存在时可能会自动创建一个同名目录；看到 `read config.json: is a directory` 时，请先将这个目录改名保留备份，再复制模板文件并重新创建容器。
+首次启动不需要创建 `config.json`。Compose 会自动创建宿主机 `config/` 目录，并把它挂载到容器 `/app/config`；后端发现目录为空时会立即生成一份不含凭证的 `config/config.json`。此时访问首页会显示配置引导；进入后台配置页面后，先保存直连或代理设置，再粘贴账号请求即可。
 
-Windows PowerShell 示例：
+如果从旧版升级，且项目根目录已有文件形式的 `config.json`，请在启动新版 Compose 前复制到新目录：
 
 ```powershell
-docker compose down
-Move-Item config.json config.json.directory-backup
-Copy-Item config.example.json config.json
-docker compose up -d
-```
-
-Linux/macOS 示例：
-
-```bash
-docker compose down
-mv config.json config.json.directory-backup
-cp config.example.json config.json
-docker compose up -d
+New-Item -ItemType Directory -Force config
+Copy-Item config.json config/config.json
 ```
 
 查看容器日志：
@@ -78,7 +59,7 @@ docker compose down
 健康检查：http://127.0.0.1:8123/healthz
 ```
 
-配置文件不存在或尚未配置完整时，访问额度页面会先显示配置引导；完成设置并保存后重新打开首页即可进入额度面板。
+配置目录为空时，后端会先自动创建默认配置文件；账号凭证尚未配置完整时，访问额度页面会显示配置引导。后台支持分步保存，账号凭证测试成功后重新打开首页即可进入额度面板。
 
 ## 从当前源码本地构建
 
@@ -111,13 +92,13 @@ docker pull ghcr.io/xyzphp/codexmeter:latest
 PowerShell：
 
 ```powershell
-docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "${PWD}/config.json:/app/config.json" -v "${PWD}/data:/app/data" -e BIND_ADDR=0.0.0.0:8123 ghcr.io/xyzphp/codexmeter:latest
+docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "${PWD}/config:/app/config" -v "${PWD}/data:/app/data" -e BIND_ADDR=0.0.0.0:8123 -e CONFIG_FILE=/app/config/config.json ghcr.io/xyzphp/codexmeter:latest
 ```
 
 Linux 或 macOS：
 
 ```bash
-docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "$(pwd)/config.json:/app/config.json" -v "$(pwd)/data:/app/data" -e BIND_ADDR=0.0.0.0:8123 ghcr.io/xyzphp/codexmeter:latest
+docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "$(pwd)/config:/app/config" -v "$(pwd)/data:/app/data" -e BIND_ADDR=0.0.0.0:8123 -e CONFIG_FILE=/app/config/config.json ghcr.io/xyzphp/codexmeter:latest
 ```
 
 如果不使用本地 Compose，也可以手动从当前源码构建：
@@ -129,18 +110,18 @@ docker build -t codex-meter:local .
 PowerShell：
 
 ```powershell
-docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "${PWD}/config.json:/app/config.json" -v "${PWD}/data:/app/data" -e BIND_ADDR=0.0.0.0:8123 codex-meter:local
+docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "${PWD}/config:/app/config" -v "${PWD}/data:/app/data" -e BIND_ADDR=0.0.0.0:8123 -e CONFIG_FILE=/app/config/config.json codex-meter:local
 ```
 
 Linux 或 macOS：
 
 ```bash
-docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "$(pwd)/config.json:/app/config.json" -v "$(pwd)/data:/app/data" -e BIND_ADDR=0.0.0.0:8123 codex-meter:local
+docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "$(pwd)/config:/app/config" -v "$(pwd)/data:/app/data" -e BIND_ADDR=0.0.0.0:8123 -e CONFIG_FILE=/app/config/config.json codex-meter:local
 ```
 
 ## 配置和数据持久化
 
-Compose 会将宿主机的 `config.json` 挂载到容器的 `/app/config.json`，并将宿主机的 `data/` 挂载到容器的 `/app/data`。设置页面保存的配置和额度采样历史可以保留在宿主机文件中。停止或重新创建容器不会删除这些文件。建议在首次启动前显式创建 `config.json`，不要依赖 Docker 自动创建 bind mount 源路径。
+Compose 会将宿主机的 `config/` 挂载到容器的 `/app/config`，并将宿主机的 `data/` 挂载到容器的 `/app/data`。后端首次启动时自动创建 `config/config.json`，配置页面会继续更新该文件；设置和额度采样历史都会保留在宿主机，停止或重新创建容器不会删除这些文件。
 
 额度采样历史保存在：
 
@@ -152,7 +133,7 @@ data/usage-history.jsonl
 
 额度历史由后端独立定时采集，后台每 5 分钟按时钟整点采集一次，例如 `00、05、10、15` 分钟，并将记录时间标记为对应的 5 分钟时点；服务启动后不会立即补采集。前端手动刷新和自动刷新不会额外写入采样记录。手动刷新仍可请求最新上游数据，但历史记录只由后台采集任务写入。上游异常时，后台会按最近一次成功采集的值记录对应时点的降级状态，并标记 `stale: true`；连续相同的成功或降级采样会合并，不重复占用变化点。即使前端在 00:00–08:00 暂停自动刷新，后端采集任务仍会继续运行。
 
-`config.json` 包含 OAuth 凭证，已被 `.gitignore` 和 `.dockerignore` 排除，不要提交到 Git，也不要在 Dockerfile 中复制真实配置。配置项、认证和代理的详细说明见[配置接入文档](openai-config.md)。
+`config/config.json` 包含 OAuth 凭证，整个 `config/` 目录已被 `.gitignore` 和 `.dockerignore` 排除，不要提交到 Git，也不要在 Dockerfile 中复制真实配置。配置项、认证和代理的详细说明见[配置接入文档](openai-config.md)。
 
 ## 反向代理部署
 

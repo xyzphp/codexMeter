@@ -141,14 +141,27 @@ func loadConfigFile(configPath string, requireComplete bool) (Config, error) {
 		ConfigPath: resolvedConfigPath,
 	}
 
+	configFileMissing := false
 	if raw, err := os.ReadFile(resolvedConfigPath); err == nil {
 		var stored fileConfig
 		if err := json.Unmarshal(raw, &stored); err != nil {
 			return Config{}, fmt.Errorf("parse %s: %w", resolvedConfigPath, err)
 		}
 		applyFileConfig(&cfg, stored)
-	} else if !os.IsNotExist(err) {
-		return Config{}, fmt.Errorf("read %s: %w", resolvedConfigPath, err)
+	} else {
+		if !os.IsNotExist(err) {
+			return Config{}, fmt.Errorf("read %s: %w", resolvedConfigPath, err)
+		}
+		configFileMissing = true
+	}
+
+	// First-run containers mount an empty configuration directory. Create a
+	// credential-free file immediately so the settings page can update it in
+	// place and the host bind mount always contains a real file.
+	if configFileMissing && !requireComplete {
+		if err := persistConfig(cfg); err != nil {
+			return Config{}, fmt.Errorf("initialize %s: %w", resolvedConfigPath, err)
+		}
 	}
 
 	if err := applyEnvironmentConfig(&cfg); err != nil {
@@ -176,10 +189,9 @@ func loadConfigFile(configPath string, requireComplete bool) (Config, error) {
 	return cfg, nil
 }
 
-// resolveConfigPath keeps the service usable when Docker created the bind
-// mount target as a directory because the host-side config.json did not exist.
-// In that case the nested file becomes the writable configuration location;
-// users can still create the intended host-side file from the setup guide.
+// resolveConfigPath accepts either a direct file path or a mounted configuration
+// directory. Directory mounts use a nested config.json that is created during
+// first-run startup and then updated by the settings page.
 func resolveConfigPath(configPath string) (string, error) {
 	configPath = strings.TrimSpace(configPath)
 	if configPath == "" {
@@ -1554,7 +1566,7 @@ func (s *UsageService) ConfigView() ConfigView {
 
 func (s *UsageService) UpdateConfig(update ConfigUpdate) (ConfigView, error) {
 	old := s.currentConfig()
-	next, err := applyConfigUpdate(old, update)
+	next, err := applyConfigUpdateForSave(old, update)
 	if err != nil {
 		return ConfigView{}, err
 	}
@@ -1601,6 +1613,14 @@ func (s *UsageService) activateConfig(old, next Config) error {
 }
 
 func applyConfigUpdate(old Config, update ConfigUpdate) (Config, error) {
+	return applyConfigUpdateWithMode(old, update, false)
+}
+
+func applyConfigUpdateForSave(old Config, update ConfigUpdate) (Config, error) {
+	return applyConfigUpdateWithMode(old, update, old.SetupRequired)
+}
+
+func applyConfigUpdateWithMode(old Config, update ConfigUpdate, allowIncomplete bool) (Config, error) {
 	next := old
 	if update.AppAPIKey != nil {
 		next.AppAPIKey = strings.TrimSpace(*update.AppAPIKey)
@@ -1660,16 +1680,16 @@ func applyConfigUpdate(old Config, update ConfigUpdate) (Config, error) {
 	if update.BasicAuthPassword != nil {
 		next.BasicAuthPassword = *update.BasicAuthPassword
 	}
-	if next.AccessToken == "" {
+	if next.AccessToken == "" && !allowIncomplete {
 		return Config{}, errors.New("access_token cannot be empty")
 	}
-	if next.ChatGPTAccountID == "" {
+	if next.ChatGPTAccountID == "" && !allowIncomplete {
 		return Config{}, errors.New("chatgpt_account_id cannot be empty")
 	}
 	if next.BasicAuthEnabled && (next.BasicAuthUsername == "" || next.BasicAuthPassword == "") {
 		return Config{}, errors.New("basic_auth_username and basic_auth_password are required when Basic Auth is enabled")
 	}
-	next.SetupRequired = false
+	next.SetupRequired = next.AccessToken == "" || next.ChatGPTAccountID == ""
 	return next, nil
 }
 
@@ -2170,6 +2190,10 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 			response.Header().Set("Access-Control-Allow-Headers", "Authorization, X-App-API-Key, Content-Type")
 			response.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
 		}
+		if s.isHealthPath(request.URL.Path) {
+			next.ServeHTTP(response, request)
+			return
+		}
 		if middlewareConfig.BasicAuthEnabled && !authorizedBasic(request, middlewareConfig.BasicAuthUsername, middlewareConfig.BasicAuthPassword) {
 			response.Header().Set("WWW-Authenticate", `Basic realm="Codex Usage"`)
 			response.WriteHeader(http.StatusUnauthorized)
@@ -2190,6 +2214,13 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(response, request)
 	})
+}
+
+func (s *Server) isHealthPath(requestPath string) bool {
+	if requestPath == "/healthz" {
+		return true
+	}
+	return s.basePath != "" && requestPath == s.basePath+"/healthz"
 }
 
 func (s *Server) isAPIPath(requestPath string) bool {

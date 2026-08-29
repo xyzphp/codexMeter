@@ -59,6 +59,9 @@ func TestMissingConfigEntersSetupMode(t *testing.T) {
 	if cfg.ConfigPath != configPath {
 		t.Fatalf("config path = %q, want %q", cfg.ConfigPath, configPath)
 	}
+	if _, err := os.Stat(configPath); err != nil {
+		t.Fatalf("missing config was not created automatically: %v", err)
+	}
 }
 
 func TestDirectoryConfigPathUsesNestedConfigFile(t *testing.T) {
@@ -99,6 +102,54 @@ func TestSetupPageIsServedWhenConfigIsMissing(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), "打开配置页面") {
 		t.Fatalf("setup page does not link to settings")
+	}
+}
+
+func TestSetupModeUpdateCreatesConfigFileBeforeCredentials(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config", "config.json")
+	service := &UsageService{cfg: Config{
+		ConfigPath:    configPath,
+		CacheTTL:      time.Minute,
+		UserAgent:     defaultUserAgent,
+		SetupRequired: true,
+	}}
+	proxyURL := "http://127.0.0.1:7890"
+
+	view, err := service.UpdateConfig(ConfigUpdate{ProxyURL: &proxyURL})
+	if err != nil {
+		t.Fatalf("save setup proxy config: %v", err)
+	}
+	if !view.SetupRequired {
+		t.Fatal("setup should remain required before account credentials are saved")
+	}
+	if _, err := os.Stat(configPath); err != nil {
+		t.Fatalf("config file was not created: %v", err)
+	}
+}
+
+func TestSetupModeUpdateCompletesAfterCredentials(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config", "config.json")
+	service := &UsageService{cfg: Config{
+		ConfigPath:    configPath,
+		CacheTTL:      time.Minute,
+		UserAgent:     defaultUserAgent,
+		SetupRequired: true,
+	}}
+	token := "access-token"
+	accountID := "account-id"
+
+	view, err := service.UpdateConfig(ConfigUpdate{
+		AccessToken:      &token,
+		ChatGPTAccountID: &accountID,
+	})
+	if err != nil {
+		t.Fatalf("save setup credentials: %v", err)
+	}
+	if view.SetupRequired {
+		t.Fatal("setup should be complete after account credentials are saved")
+	}
+	if _, err := os.Stat(configPath); err != nil {
+		t.Fatalf("config file was not created: %v", err)
 	}
 }
 
@@ -862,6 +913,23 @@ func TestBasicAuth(t *testing.T) {
 	}
 	if authorizedBasic(request, "xyz", "wrong-password") {
 		t.Fatal("invalid Basic Auth password was accepted")
+	}
+}
+
+func TestHealthCheckDoesNotRequireBasicAuth(t *testing.T) {
+	cfg := Config{
+		BasicAuthEnabled:  true,
+		BasicAuthUsername: "xyz",
+		BasicAuthPassword: "test-password",
+	}
+	server := NewServer(cfg, &UsageService{cfg: cfg})
+	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	recorder := httptest.NewRecorder()
+
+	server.handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("health status = %d, want %d without Basic Auth", recorder.Code, http.StatusOK)
 	}
 }
 

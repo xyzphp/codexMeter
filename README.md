@@ -76,10 +76,6 @@ go run .
 Docker 构建、Compose 启停、配置挂载和反向代理说明见 [Docker 运行文档](docs/docker.md)。快速启动：
 
 ```bash
-cp config.example.json config.json
-```
-
-```bash
 docker compose pull
 ```
 
@@ -87,9 +83,9 @@ docker compose pull
 docker compose up -d
 ```
 
-如果尚未创建 `config.json`，服务仍会启动，并在首页显示“配置引导”页面；点击其中的配置入口即可继续设置。对于 Docker 部署，建议仍先复制配置模板，避免 Docker 将不存在的宿主机文件自动创建为同名目录。
+首次启动不需要手动创建配置文件。Compose 会自动创建宿主机 `config/` 目录，后端启动时立即生成不含凭证的 `config/config.json`；访问首页后进入后台配置页面，依次保存网络与账号凭证即可。
 
-默认访问端口为 `8123`。创建新发布版本时，GitHub Actions 会先将 Compose 文件更新为对应版本号，再执行构建和发布；手动使用时也可以拉取 `ghcr.io/xyzphp/codexmeter:latest`。配置文件通过卷挂载到容器中，设置页面保存的配置会保留在宿主机的 `config.json`。
+默认访问端口为 `8123`。创建新发布版本时，GitHub Actions 会先将 Compose 文件更新为对应版本号，再执行构建和发布；手动使用时也可以拉取 `ghcr.io/xyzphp/codexmeter:latest`。配置目录通过卷挂载到容器中，设置页面保存的配置会保留在宿主机的 `config/config.json`。
 
 `docker-compose.yml` 用于部署已发布的 GHCR 镜像；`docker-compose.local.yml` 用于从当前源码构建和启动本地镜像。
 

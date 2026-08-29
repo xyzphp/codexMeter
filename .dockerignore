@@ -3,6 +3,7 @@
 .chrome-diagnostic
 .chrome-diagnostic-logs
 config.json
+config/
 *.exe
 *.out
 *.test

@@ -102,7 +102,7 @@ go run .
 
 ### 本地 Docker
 
-编辑挂载到容器的 `config.json` 后重建并启动：
+通过设置页更新凭证后直接生效；Docker 配置保存在宿主机的 `config/config.json`。如需重建本地镜像：
 
 ```powershell
 docker compose -f docker-compose.local.yml up -d --build

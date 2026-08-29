@@ -157,12 +157,12 @@
       <header class="hero">
         <div class="eyebrow">首次启动配置</div>
         <h1>配置引导</h1>
-        <p class="lead">服务已经启动，但还没有找到有效的 <strong>config.json</strong>。完成账号凭证配置后，额度面板和使用分析就可以正常工作。</p>
+        <p class="lead">服务已经启动，并已自动生成 <strong>config/config.json</strong>。完成后台配置后，额度面板和使用分析就可以正常工作。</p>
       </header>
       <div class="content">
         <div class="notice">
           <div class="notice-icon">⚠</div>
-          <div>如果你使用 Docker，请确认宿主机上的配置文件已经创建。宿主机文件不存在时，Docker 可能会把 <strong>config.json</strong> 自动创建成目录。</div>
+          <div>Docker 会挂载宿主机的 <strong>config/</strong> 目录。目录为空也可以正常启动，后端会自动创建配置文件，后台每一步保存时继续更新它。</div>
         </div>
         <div class="steps">
           <div class="step">
@@ -183,9 +183,9 @@
           <button type="button" id="reload">重新检查配置</button>
         </div>
         <details>
-          <summary>Docker 未创建配置文件？先在宿主机创建模板</summary>
-          <pre>cp config.example.json config.json&#10;docker compose up -d</pre>
-          <p class="footnote">Windows PowerShell 可使用：<code>Copy-Item config.example.json config.json</code>。创建文件后重新创建容器，配置页面保存的内容会保留在宿主机。</p>
+          <summary>配置文件保存在哪里？</summary>
+          <pre>宿主机：config/config.json&#10;容器内：/app/config/config.json</pre>
+          <p class="footnote">首次启动会自动创建文件；容器重建后仍会读取同一份宿主机配置。</p>
         </details>
       </div>
     </section>
