@@ -1,6 +1,6 @@
 # GitHub Actions 自动发布
 
-仓库使用 GitHub Actions 自动完成测试、静态检查、跨平台构建、Docker 镜像构建、GHCR 发布和 GitHub Release 发布，工作流文件位于 [.github/workflows/release.yml](../.github/workflows/release.yml)。
+仓库使用 GitHub Actions 自动完成测试、静态检查、跨平台构建、多架构 Docker 镜像构建、GHCR 发布和 GitHub Release 发布，工作流文件位于 [.github/workflows/release.yml](../.github/workflows/release.yml)。
 
 ## 创建发布版本
 
@@ -41,7 +41,7 @@
 5. 将各平台文件打包为 ZIP 或 tar.gz。
 6. 构建 `codex-meter:ci` Docker 镜像，验证 Dockerfile 和容器构建流程。
 7. 创建 GitHub Release 并上传全部构建包。
-8. Release 创建成功后，将镜像推送到 `ghcr.io/xyzphp/codexmeter`，同时生成版本标签和 `latest` 标签。
+8. Release 创建成功后，构建并推送 `linux/amd64`、`linux/arm64` 多架构镜像到 `ghcr.io/xyzphp/codexmeter`，同时生成版本标签和 `latest` 标签。
 
 ## 发布包内容
 

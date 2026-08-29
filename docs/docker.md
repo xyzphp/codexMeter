@@ -1,6 +1,6 @@
 # Docker 运行说明
 
-本项目提供多阶段 Dockerfile 和 Docker Compose 配置，适合在 Linux 服务器、Docker Desktop 或其他支持 Docker Compose 的环境中运行。
+本项目提供多阶段 Dockerfile 和 Docker Compose 配置，适合在 Linux 服务器、Docker Desktop 或其他支持 Docker Compose 的环境中运行。GHCR 发布镜像包含 `linux/amd64` 和 `linux/arm64` 两种架构，Docker 会根据宿主机自动选择对应镜像。
 
 ## 前置条件
 
@@ -163,8 +163,10 @@ docker login ghcr.io
 
 Dockerfile 使用两阶段构建：第一阶段按 Docker 的目标平台编译无 CGO 二进制，第二阶段只保留运行所需的二进制、CA 证书、时区数据和配置模板。HTML 页面通过 Go 的 `//go:embed` 编译进二进制，不需要额外挂载 `web/` 目录。
 
-默认构建当前主机平台，也可以使用 Buildx 构建 amd64 和 arm64 镜像：
+默认构建当前主机平台，也可以使用 Buildx 验证多架构构建：
 
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 --tag codex-meter:local .
 ```
+
+多架构镜像需要推送到镜像仓库后，才能被不同架构的 Docker 主机按需拉取；GitHub Actions 发布流程会自动完成这一步。
