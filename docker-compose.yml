@@ -1,6 +1,6 @@
 services:
   codex-meter:
-    image: ghcr.io/xyzphp/codexmeter:v1.0.4
+    image: ghcr.io/xyzphp/codexmeter:v1.0.5
     container_name: codex-meter
     restart: unless-stopped
     ports:
