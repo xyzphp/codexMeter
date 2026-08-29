@@ -6,4 +6,4 @@ config/
 .env
 .chrome-diagnostic/
 .chrome-diagnostic-logs/
-data/*.jsonl
+data/*.jsonl*

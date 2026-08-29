@@ -367,6 +367,65 @@ func TestUsageHistoryLoadsFiveHourPercent(t *testing.T) {
 	}
 }
 
+func TestWriteUsageHistoryKeepsPreviousSnapshotAsBackup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
+	initial := []HistoryPoint{
+		{At: "2026-08-28T01:00:00Z", UsedPercent: 10},
+		{At: "2026-08-28T01:05:00Z", UsedPercent: 11},
+	}
+	updated := append(append([]HistoryPoint(nil), initial...), HistoryPoint{
+		At: "2026-08-28T01:10:00Z", UsedPercent: 12,
+	})
+
+	if err := writeUsageHistory(path, initial); err != nil {
+		t.Fatalf("write initial usage history: %v", err)
+	}
+	if err := writeUsageHistory(path, updated); err != nil {
+		t.Fatalf("write updated usage history: %v", err)
+	}
+
+	current, err := loadUsageHistory(path)
+	if err != nil {
+		t.Fatalf("load current usage history: %v", err)
+	}
+	backup, _, invalid, err := readUsageHistoryFile(usageHistoryBackupPath(path))
+	if err != nil {
+		t.Fatalf("load usage history backup: %v", err)
+	}
+	if invalid || len(current) != len(updated) || len(backup) != len(initial) {
+		t.Fatalf("history snapshots current=%#v backup=%#v invalid=%v", current, backup, invalid)
+	}
+}
+
+func TestLoadUsageHistoryFallsBackToBackup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
+	initial := []HistoryPoint{
+		{At: "2026-08-28T01:00:00Z", UsedPercent: 10},
+		{At: "2026-08-28T01:05:00Z", UsedPercent: 11},
+	}
+	updated := append(append([]HistoryPoint(nil), initial...), HistoryPoint{
+		At: "2026-08-28T01:10:00Z", UsedPercent: 12,
+	})
+
+	if err := writeUsageHistory(path, initial); err != nil {
+		t.Fatalf("write initial usage history: %v", err)
+	}
+	if err := writeUsageHistory(path, updated); err != nil {
+		t.Fatalf("write updated usage history: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("{not-json\n"), 0o600); err != nil {
+		t.Fatalf("corrupt current usage history: %v", err)
+	}
+
+	loaded, err := loadUsageHistory(path)
+	if err != nil {
+		t.Fatalf("load fallback usage history: %v", err)
+	}
+	if len(loaded) != len(initial) || loaded[0].At != initial[0].At || loaded[1].At != initial[1].At {
+		t.Fatalf("fallback usage history = %#v, want %#v", loaded, initial)
+	}
+}
+
 func TestUsageRefreshDoesNotPersistHistory(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
 	service := &UsageService{

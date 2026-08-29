@@ -4,6 +4,7 @@
 .chrome-diagnostic-logs
 config.json
 config/
+data/
 *.exe
 *.out
 *.test

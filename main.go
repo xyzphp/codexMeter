@@ -665,6 +665,7 @@ func NewUsageService(cfg Config) (*UsageService, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load usage history: %w", err)
 	}
+	slog.Info("usage history loaded", "path", defaultUsageHistoryFile, "points", len(history))
 	return &UsageService{
 		cfg:         cfg,
 		client:      client,
@@ -928,9 +929,9 @@ func sameUsageHistoryValue(left, right HistoryPoint) bool {
 	return *left.FiveHourUsedPercent == *right.FiveHourUsedPercent
 }
 
-// compactUsageHistory keeps one record for each consecutive value run and
-// retains the latest timestamp for that run. The limit is applied only after
-// compaction, so repeated samples do not consume the 48-point chart window.
+// compactUsageHistory keeps the first record for each consecutive value run.
+// The limit is applied only after compaction, so repeated samples do not
+// consume the 48-point chart window.
 func compactUsageHistory(points []HistoryPoint) []HistoryPoint {
 	if len(points) == 0 {
 		return nil
@@ -949,16 +950,38 @@ func compactUsageHistory(points []HistoryPoint) []HistoryPoint {
 }
 
 func loadUsageHistory(path string) ([]HistoryPoint, error) {
+	history, exists, invalid, err := readUsageHistoryFile(path)
+	if err == nil && exists && !invalid && len(history) > 0 {
+		return history, nil
+	}
+
+	backupPath := usageHistoryBackupPath(path)
+	backup, backupExists, backupInvalid, backupErr := readUsageHistoryFile(backupPath)
+	if backupErr == nil && backupExists && !backupInvalid && len(backup) > 0 {
+		slog.Warn("usage history restored from backup", "path", path, "backup", backupPath, "points", len(backup))
+		return backup, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if backupErr != nil {
+		slog.Warn("usage history backup could not be read", "path", backupPath, "error", backupErr)
+	}
+	return history, nil
+}
+
+func readUsageHistoryFile(path string) ([]HistoryPoint, bool, bool, error) {
 	raw, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, false, false, nil
 		}
-		return nil, err
+		return nil, false, false, err
 	}
 	defer raw.Close()
 
 	history := make([]HistoryPoint, 0, maxUsageHistoryPoints)
+	invalid := false
 	scanner := bufio.NewScanner(raw)
 	scanner.Buffer(make([]byte, 1024), 1024*1024)
 	for scanner.Scan() {
@@ -968,23 +991,31 @@ func loadUsageHistory(path string) ([]HistoryPoint, error) {
 		}
 		var point HistoryPoint
 		if err := json.Unmarshal(line, &point); err != nil {
+			invalid = true
 			continue
 		}
 		if strings.TrimSpace(point.At) == "" || point.UsedPercent < 0 || point.UsedPercent > 100 {
+			invalid = true
 			continue
 		}
 		if point.FiveHourUsedPercent != nil && (*point.FiveHourUsedPercent < 0 || *point.FiveHourUsedPercent > 100) {
+			invalid = true
 			continue
 		}
 		if _, err := time.Parse(time.RFC3339, point.At); err != nil {
+			invalid = true
 			continue
 		}
 		history = append(history, point)
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return nil, true, invalid, err
 	}
-	return compactUsageHistory(history), nil
+	return compactUsageHistory(history), true, invalid, nil
+}
+
+func usageHistoryBackupPath(path string) string {
+	return path + ".bak"
 }
 
 func writeUsageHistory(path string, history []HistoryPoint) error {
@@ -997,26 +1028,71 @@ func writeUsageHistory(path string, history []HistoryPoint) error {
 		return err
 	}
 
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	payload, err := encodeUsageHistory(history)
 	if err != nil {
 		return err
 	}
-	if err := file.Chmod(0o600); err != nil {
-		file.Close()
-		return err
+
+	current, exists, invalid, readErr := readUsageHistoryFile(path)
+	if readErr != nil {
+		return fmt.Errorf("read existing usage history: %w", readErr)
 	}
-	encoder := json.NewEncoder(file)
-	for _, point := range history {
-		if err := encoder.Encode(point); err != nil {
-			file.Close()
-			return err
+	if exists && !invalid && len(current) > 0 {
+		backupPayload, encodeErr := encodeUsageHistory(current)
+		if encodeErr != nil {
+			return encodeErr
+		}
+		if err := writeUsageHistoryFileAtomic(usageHistoryBackupPath(path), backupPayload); err != nil {
+			return fmt.Errorf("write usage history backup: %w", err)
 		}
 	}
-	if err := file.Sync(); err != nil {
-		file.Close()
+
+	if err := writeUsageHistoryFileAtomic(path, payload); err != nil {
+		return fmt.Errorf("replace usage history: %w", err)
+	}
+	return nil
+}
+
+func encodeUsageHistory(history []HistoryPoint) ([]byte, error) {
+	var payload bytes.Buffer
+	encoder := json.NewEncoder(&payload)
+	for _, point := range history {
+		if err := encoder.Encode(point); err != nil {
+			return nil, err
+		}
+	}
+	return payload.Bytes(), nil
+}
+
+func writeUsageHistoryFileAtomic(path string, payload []byte) error {
+	directory := filepath.Dir(path)
+	temporary, err := os.CreateTemp(directory, "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
 		return err
 	}
-	return file.Close()
+	temporaryPath := temporary.Name()
+	closed := false
+	defer func() {
+		if !closed {
+			_ = temporary.Close()
+		}
+		_ = os.Remove(temporaryPath)
+	}()
+
+	if err := temporary.Chmod(0o600); err != nil {
+		return err
+	}
+	if _, err := temporary.Write(payload); err != nil {
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	closed = true
+	return os.Rename(temporaryPath, path)
 }
 
 func appendUsageHistory(path string, point HistoryPoint) error {
