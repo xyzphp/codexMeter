@@ -57,6 +57,9 @@ var settingsHTML []byte
 //go:embed web/api-docs.html
 var apiDocsHTML []byte
 
+//go:embed web/setup.html
+var setupHTML []byte
+
 //go:embed openapi.yaml
 var openAPISpec []byte
 
@@ -84,6 +87,7 @@ type Config struct {
 	CacheTTL          time.Duration
 	CORSOrigin        string
 	ConfigPath        string
+	SetupRequired     bool
 	FedRAMP           bool
 }
 
@@ -122,25 +126,29 @@ func loadConfig() (Config, error) {
 	if configPath == "" {
 		configPath = "config.json"
 	}
-	return loadConfigFile(configPath, configPathFromEnv != "")
+	return loadConfigFile(configPath, false)
 }
 
-func loadConfigFile(configPath string, configPathRequired bool) (Config, error) {
+func loadConfigFile(configPath string, requireComplete bool) (Config, error) {
+	resolvedConfigPath, err := resolveConfigPath(configPath)
+	if err != nil {
+		return Config{}, fmt.Errorf("inspect %s: %w", configPath, err)
+	}
 	cfg := Config{
 		BindAddr:   defaultBindAddr,
 		UserAgent:  defaultUserAgent,
 		CacheTTL:   defaultCacheTTL,
-		ConfigPath: configPath,
+		ConfigPath: resolvedConfigPath,
 	}
 
-	if raw, err := os.ReadFile(configPath); err == nil {
+	if raw, err := os.ReadFile(resolvedConfigPath); err == nil {
 		var stored fileConfig
 		if err := json.Unmarshal(raw, &stored); err != nil {
-			return Config{}, fmt.Errorf("parse %s: %w", configPath, err)
+			return Config{}, fmt.Errorf("parse %s: %w", resolvedConfigPath, err)
 		}
 		applyFileConfig(&cfg, stored)
-	} else if !os.IsNotExist(err) || configPathRequired {
-		return Config{}, fmt.Errorf("read %s: %w", configPath, err)
+	} else if !os.IsNotExist(err) {
+		return Config{}, fmt.Errorf("read %s: %w", resolvedConfigPath, err)
 	}
 
 	if err := applyEnvironmentConfig(&cfg); err != nil {
@@ -152,16 +160,54 @@ func loadConfigFile(configPath string, configPathRequired bool) (Config, error) 
 	}
 	cfg.BasePath = basePath
 
-	if cfg.AccessToken == "" {
-		return Config{}, errors.New("OPENAI_ACCESS_TOKEN is required")
-	}
-	if cfg.ChatGPTAccountID == "" {
-		return Config{}, errors.New("CHATGPT_ACCOUNT_ID is required")
+	if cfg.AccessToken == "" || cfg.ChatGPTAccountID == "" {
+		if requireComplete {
+			if cfg.AccessToken == "" {
+				return Config{}, errors.New("OPENAI_ACCESS_TOKEN is required")
+			}
+			return Config{}, errors.New("CHATGPT_ACCOUNT_ID is required")
+		}
+		cfg.SetupRequired = true
+		return cfg, nil
 	}
 	if cfg.BasicAuthEnabled && (cfg.BasicAuthUsername == "" || cfg.BasicAuthPassword == "") {
 		return Config{}, errors.New("BASIC_AUTH_USER and BASIC_AUTH_PASSWORD are required when Basic Auth is enabled")
 	}
 	return cfg, nil
+}
+
+// resolveConfigPath keeps the service usable when Docker created the bind
+// mount target as a directory because the host-side config.json did not exist.
+// In that case the nested file becomes the writable configuration location;
+// users can still create the intended host-side file from the setup guide.
+func resolveConfigPath(configPath string) (string, error) {
+	configPath = strings.TrimSpace(configPath)
+	if configPath == "" {
+		return "", errors.New("config path is empty")
+	}
+	info, err := os.Stat(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return configPath, nil
+		}
+		return "", err
+	}
+	if !info.IsDir() {
+		return configPath, nil
+	}
+
+	nestedPath := filepath.Join(configPath, "config.json")
+	nestedInfo, err := os.Stat(nestedPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nestedPath, nil
+		}
+		return "", err
+	}
+	if nestedInfo.IsDir() {
+		return "", fmt.Errorf("%s is a directory", nestedPath)
+	}
+	return nestedPath, nil
 }
 
 func applyFileConfig(cfg *Config, stored fileConfig) {
@@ -746,7 +792,9 @@ func (s *UsageService) StartHistoryCollector(ctx context.Context) {
 				}
 				return
 			case <-timer.C:
-				s.collectUsageHistoryAt(ctx, nextSampleAt)
+				if !s.currentConfig().SetupRequired {
+					s.collectUsageHistoryAt(ctx, nextSampleAt)
+				}
 			}
 		}
 	}()
@@ -1401,6 +1449,7 @@ type ConfigView struct {
 	ProxyURL                    string `json:"proxy_url,omitempty"`
 	CacheTTL                    string `json:"cache_ttl"`
 	ConfigFile                  string `json:"config_file"`
+	SetupRequired               bool   `json:"setup_required"`
 }
 
 const maxConfigFileSize = 256 << 10
@@ -1499,6 +1548,7 @@ func (s *UsageService) ConfigView() ConfigView {
 		ProxyURL:                    cfg.UpstreamProxy,
 		CacheTTL:                    cfg.CacheTTL.String(),
 		ConfigFile:                  cfg.ConfigPath,
+		SetupRequired:               cfg.SetupRequired,
 	}
 }
 
@@ -1619,6 +1669,7 @@ func applyConfigUpdate(old Config, update ConfigUpdate) (Config, error) {
 	if next.BasicAuthEnabled && (next.BasicAuthUsername == "" || next.BasicAuthPassword == "") {
 		return Config{}, errors.New("basic_auth_username and basic_auth_password are required when Basic Auth is enabled")
 	}
+	next.SetupRequired = false
 	return next, nil
 }
 
@@ -1746,10 +1797,18 @@ func persistConfig(cfg Config) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(cfg.ConfigPath, raw, 0o600); err != nil {
+	if err := writeConfigFile(cfg.ConfigPath, raw); err != nil {
 		return fmt.Errorf("write config: %w", err)
 	}
 	return nil
+}
+
+func writeConfigFile(path string, content []byte) error {
+	directory := filepath.Dir(path)
+	if err := os.MkdirAll(directory, 0o750); err != nil {
+		return err
+	}
+	return os.WriteFile(path, content, 0o600)
 }
 
 func (s *UsageService) ReadConfigFile() (ConfigFileView, error) {
@@ -1804,7 +1863,7 @@ func (s *UsageService) UpdateConfigFile(content string) (ConfigFileView, error) 
 	if _, err := buildProxyFunc(next.UpstreamProxy); err != nil {
 		return ConfigFileView{}, err
 	}
-	if err := os.WriteFile(current.ConfigPath, []byte(content+"\n"), 0o600); err != nil {
+	if err := writeConfigFile(current.ConfigPath, []byte(content+"\n")); err != nil {
 		return ConfigFileView{}, fmt.Errorf("write config: %w", err)
 	}
 	if err := s.activateConfig(current, next); err != nil {
@@ -2181,6 +2240,14 @@ func (s *Server) handleIndex(response http.ResponseWriter, request *http.Request
 	response.Header().Set("Content-Type", "text/html; charset=utf-8")
 	response.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 	response.WriteHeader(http.StatusOK)
+	config := s.cfg
+	if s.usage != nil {
+		config = s.usage.currentConfig()
+	}
+	if config.SetupRequired {
+		_, _ = response.Write(setupHTML)
+		return
+	}
 	page := indexHTML
 	if !isDeviceWebViewRequest(request) {
 		page = browserHTML

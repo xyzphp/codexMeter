@@ -726,6 +726,7 @@ components:
         - cookie_configured
         - cache_ttl
         - config_file
+        - setup_required
       properties:
         app_api_key_configured:
           type: boolean
@@ -774,6 +775,9 @@ components:
           example: 5m0s
         config_file:
           type: string
+        setup_required:
+          type: boolean
+          description: 配置文件缺失或账号凭证未完成时为 true；此时首页显示配置引导页。
 
     AppAPIKeyView:
       type: object

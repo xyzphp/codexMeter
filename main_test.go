@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,6 +40,65 @@ func TestDeviceWebViewDetection(t *testing.T) {
 				t.Fatalf("isDeviceWebViewRequest() = %v, want %v", got, test.want)
 			}
 		})
+	}
+}
+
+func TestMissingConfigEntersSetupMode(t *testing.T) {
+	t.Setenv("OPENAI_ACCESS_TOKEN", "")
+	t.Setenv("CHATGPT_ACCOUNT_ID", "")
+	t.Setenv("BASIC_AUTH_ENABLED", "false")
+	configPath := filepath.Join(t.TempDir(), "config.json")
+
+	cfg, err := loadConfigFile(configPath, false)
+	if err != nil {
+		t.Fatalf("load missing config: %v", err)
+	}
+	if !cfg.SetupRequired {
+		t.Fatalf("SetupRequired = false, want true")
+	}
+	if cfg.ConfigPath != configPath {
+		t.Fatalf("config path = %q, want %q", cfg.ConfigPath, configPath)
+	}
+}
+
+func TestDirectoryConfigPathUsesNestedConfigFile(t *testing.T) {
+	t.Setenv("OPENAI_ACCESS_TOKEN", "")
+	t.Setenv("CHATGPT_ACCOUNT_ID", "")
+	t.Setenv("BASIC_AUTH_ENABLED", "false")
+	configDirectory := filepath.Join(t.TempDir(), "config.json")
+	if err := os.Mkdir(configDirectory, 0o750); err != nil {
+		t.Fatalf("create config directory: %v", err)
+	}
+
+	cfg, err := loadConfigFile(configDirectory, false)
+	if err != nil {
+		t.Fatalf("load directory config path: %v", err)
+	}
+	wantPath := filepath.Join(configDirectory, "config.json")
+	if cfg.ConfigPath != wantPath {
+		t.Fatalf("resolved config path = %q, want %q", cfg.ConfigPath, wantPath)
+	}
+	if !cfg.SetupRequired {
+		t.Fatalf("SetupRequired = false, want true")
+	}
+}
+
+func TestSetupPageIsServedWhenConfigIsMissing(t *testing.T) {
+	cfg := Config{SetupRequired: true}
+	service := &UsageService{cfg: cfg}
+	server := NewServer(cfg, service)
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	recorder := httptest.NewRecorder()
+	server.handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("setup page status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if !strings.Contains(recorder.Body.String(), "配置引导") {
+		t.Fatalf("setup page does not contain the setup guide")
+	}
+	if !strings.Contains(recorder.Body.String(), "打开配置页面") {
+		t.Fatalf("setup page does not link to settings")
 	}
 }
 

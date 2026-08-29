@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f7f8">
+  <title>ChatGPT &amp; Codex 配置引导</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f7f7f8;
+      --card: #fff;
+      --soft: #f1f1f2;
+      --text: #202123;
+      --muted: #5b5f72;
+      --border: #e4e4e7;
+      --accent: #10a37f;
+      --warning: #9a6700;
+      --warning-soft: #fff8df;
+      --shadow: 0 18px 42px rgba(32, 33, 35, .09);
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; margin: 0; }
+    body {
+      display: grid;
+      place-items: center;
+      padding: 28px 16px;
+      background: var(--page);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      font-size: 15px;
+    }
+    .shell { width: min(760px, 100%); }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 18px 4px;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -.4px;
+    }
+    .brand-mark {
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      border: 2px solid var(--text);
+      border-radius: 50%;
+      font-size: 17px;
+      font-weight: 800;
+    }
+    .card {
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: var(--card);
+      box-shadow: var(--shadow);
+    }
+    .hero { padding: 30px 32px 24px; border-bottom: 1px solid var(--border); }
+    .eyebrow { color: var(--accent); font-size: 13px; font-weight: 700; }
+    h1 { margin: 7px 0 10px; font-size: 31px; line-height: 1.15; letter-spacing: -.8px; }
+    .lead { max-width: 620px; margin: 0; color: var(--muted); line-height: 1.7; }
+    .content { padding: 24px 32px 30px; }
+    .notice {
+      display: flex;
+      gap: 12px;
+      padding: 15px 16px;
+      border: 1px solid #ead9a5;
+      border-radius: 13px;
+      background: var(--warning-soft);
+      color: var(--warning);
+      line-height: 1.6;
+    }
+    .notice-icon { flex: 0 0 auto; font-size: 19px; }
+    .steps { display: grid; gap: 12px; margin: 24px 0; }
+    .step {
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      background: var(--soft);
+    }
+    .step-number {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 750;
+    }
+    .step strong { display: block; margin: 2px 0 4px; }
+    .step p { margin: 0; color: var(--muted); line-height: 1.55; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+    a, button {
+      display: inline-flex;
+      min-height: 42px;
+      align-items: center;
+      justify-content: center;
+      padding: 0 17px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--card);
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 650;
+      text-decoration: none;
+    }
+    a.primary { border-color: var(--accent); background: var(--accent); color: #fff; }
+    a:hover, button:hover { background: var(--soft); }
+    a.primary:hover { background: #0d8f6f; }
+    details { margin-top: 24px; border-top: 1px solid var(--border); padding-top: 18px; }
+    summary { color: var(--muted); cursor: pointer; font-weight: 650; }
+    pre {
+      overflow-x: auto;
+      margin: 12px 0 0;
+      padding: 13px 15px;
+      border-radius: 10px;
+      background: #202123;
+      color: #f4f4f5;
+      font: 13px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+      white-space: pre-wrap;
+    }
+    .footnote { margin: 20px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    code { padding: 2px 5px; border-radius: 5px; background: var(--soft); color: var(--text); }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --page: #171717; --card: #242424; --soft: #303030;
+        --text: #f4f4f5; --muted: #c2c4cc; --border: #3f3f46;
+        --accent: #34d399; --warning: #f4c86b; --warning-soft: #3a321e;
+        --shadow: 0 18px 42px rgba(0, 0, 0, .26);
+      }
+    }
+    @media (max-width: 560px) {
+      body { display: block; padding: 16px 10px; }
+      .brand { margin: 0 0 14px 2px; font-size: 18px; }
+      .brand-mark { width: 32px; height: 32px; font-size: 14px; }
+      .hero { padding: 23px 20px 20px; }
+      h1 { font-size: 27px; }
+      .content { padding: 18px 20px 22px; }
+      .actions > * { flex: 1 1 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="brand"><span class="brand-mark">✦</span><span>ChatGPT &amp; Codex 使用面板</span></div>
+    <section class="card">
+      <header class="hero">
+        <div class="eyebrow">首次启动配置</div>
+        <h1>配置引导</h1>
+        <p class="lead">服务已经启动，但还没有找到有效的 <strong>config.json</strong>。完成账号凭证配置后，额度面板和使用分析就可以正常工作。</p>
+      </header>
+      <div class="content">
+        <div class="notice">
+          <div class="notice-icon">⚠</div>
+          <div>如果你使用 Docker，请确认宿主机上的配置文件已经创建。宿主机文件不存在时，Docker 可能会把 <strong>config.json</strong> 自动创建成目录。</div>
+        </div>
+        <div class="steps">
+          <div class="step">
+            <div class="step-number">1</div>
+            <div><strong>打开配置页面</strong><p>先配置网络代理（如不需要代理可选择直连），再粘贴浏览器中成功的 Fetch / cURL 请求。</p></div>
+          </div>
+          <div class="step">
+            <div class="step-number">2</div>
+            <div><strong>识别并保存账号凭证</strong><p>系统会从请求中识别 Authorization、Cookie 和账号信息，测试成功后保存到配置文件。</p></div>
+          </div>
+          <div class="step">
+            <div class="step-number">3</div>
+            <div><strong>返回面板</strong><p>保存完成后重新打开首页，服务会开始显示额度、重置时间和使用统计。</p></div>
+          </div>
+        </div>
+        <div class="actions">
+          <a class="primary" href="settings">打开配置页面</a>
+          <button type="button" id="reload">重新检查配置</button>
+        </div>
+        <details>
+          <summary>Docker 未创建配置文件？先在宿主机创建模板</summary>
+          <pre>cp config.example.json config.json&#10;docker compose up -d</pre>
+          <p class="footnote">Windows PowerShell 可使用：<code>Copy-Item config.example.json config.json</code>。创建文件后重新创建容器，配置页面保存的内容会保留在宿主机。</p>
+        </details>
+      </div>
+    </section>
+  </main>
+  <script>
+    document.getElementById('reload').addEventListener('click', function () { window.location.reload(); });
+  </script>
+</body>
+</html>

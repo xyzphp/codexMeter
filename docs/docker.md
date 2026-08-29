@@ -32,6 +32,26 @@ docker compose pull
 docker compose up -d
 ```
 
+如果忘记创建 `config.json`，服务不会因为缺少凭证而退出，访问首页会显示“配置引导”页面，可以从那里进入设置页完成配置。Docker 的文件 bind mount 在源文件不存在时可能会自动创建一个同名目录；看到 `read config.json: is a directory` 时，请先将这个目录改名保留备份，再复制模板文件并重新创建容器。
+
+Windows PowerShell 示例：
+
+```powershell
+docker compose down
+Move-Item config.json config.json.directory-backup
+Copy-Item config.example.json config.json
+docker compose up -d
+```
+
+Linux/macOS 示例：
+
+```bash
+docker compose down
+mv config.json config.json.directory-backup
+cp config.example.json config.json
+docker compose up -d
+```
+
 查看容器日志：
 
 ```bash
@@ -57,6 +77,8 @@ docker compose down
 配置页面：http://127.0.0.1:8123/settings
 健康检查：http://127.0.0.1:8123/healthz
 ```
+
+配置文件不存在或尚未配置完整时，访问额度页面会先显示配置引导；完成设置并保存后重新打开首页即可进入额度面板。
 
 ## 从当前源码本地构建
 
@@ -118,7 +140,7 @@ docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "$(pwd
 
 ## 配置和数据持久化
 
-Compose 会将宿主机的 `config.json` 挂载到容器的 `/app/config.json`，并将宿主机的 `data/` 挂载到容器的 `/app/data`。设置页面保存的配置和额度采样历史可以保留在宿主机文件中。停止或重新创建容器不会删除这些文件。
+Compose 会将宿主机的 `config.json` 挂载到容器的 `/app/config.json`，并将宿主机的 `data/` 挂载到容器的 `/app/data`。设置页面保存的配置和额度采样历史可以保留在宿主机文件中。停止或重新创建容器不会删除这些文件。建议在首次启动前显式创建 `config.json`，不要依赖 Docker 自动创建 bind mount 源路径。
 
 额度采样历史保存在：
 

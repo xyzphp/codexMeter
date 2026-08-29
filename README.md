@@ -87,6 +87,8 @@ docker compose pull
 docker compose up -d
 ```
 
+如果尚未创建 `config.json`，服务仍会启动，并在首页显示“配置引导”页面；点击其中的配置入口即可继续设置。对于 Docker 部署，建议仍先复制配置模板，避免 Docker 将不存在的宿主机文件自动创建为同名目录。
+
 默认访问端口为 `8123`。创建新发布版本时，GitHub Actions 会先将 Compose 文件更新为对应版本号，再执行构建和发布；手动使用时也可以拉取 `ghcr.io/xyzphp/codexmeter:latest`。配置文件通过卷挂载到容器中，设置页面保存的配置会保留在宿主机的 `config.json`。
 
 `docker-compose.yml` 用于部署已发布的 GHCR 镜像；`docker-compose.local.yml` 用于从当前源码构建和启动本地镜像。

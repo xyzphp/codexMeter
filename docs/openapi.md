@@ -93,7 +93,7 @@ GET /openapi.yaml
 | GET | `/api/usage` | 当前额度和重置时间 |
 | GET | `/api/usage/analytics` | 日期范围统计，包含模型占比 |
 | GET | `/api/prediction` | 公共重置预测 |
-| GET | `/api/config` | 获取脱敏后的运行配置 |
+| GET | `/api/config` | 获取脱敏后的运行配置；`setup_required` 表示是否需要首次配置 |
 | GET | `/api/config/app-key` | 在已认证时读取当前管理密钥，供接口调试页使用 |
 | POST | `/api/config/test-proxy` | 在填写账号凭证前测试代理或直连 |
 | POST | `/api/config/test` | 使用临时配置测试 OpenAI 额度连接，不保存配置 |
@@ -149,6 +149,8 @@ curl -u '用户名:密码' \
 
 `start_date` 和 `end_date` 可自定义统计范围，格式为 `YYYY-MM-DD`，最多 367 天，结束日期不能晚于当前日期。
 两者都省略时兼容返回最近七个已完成日期（不包含当天）。每一天包含 token、额度、用户/线程/对话统计；`models` 包含当天各模型的 `usage_percent`，适合绘制折线图、柱状图和饼图。浏览器页面默认请求最近 30 个完整日期。
+
+如果 `GET /api/config` 返回 `setup_required: true`，说明配置文件缺失或账号凭证尚未完成；首页会显示配置引导页，配置页面仍可用于完成首次设置。
 
 ### 获取预测数据
 
