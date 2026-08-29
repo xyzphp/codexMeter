@@ -630,10 +630,16 @@
       function headers() {
         var key = keyInput.value.trim();
         if (key) {
-          try { sessionStorage.setItem('codex-admin-key', key); } catch (_) {}
+          rememberAdminKey(key);
           return { 'X-App-API-Key': key };
         }
         return {};
+      }
+      function rememberAdminKey(key) {
+        keyInput.value = (key || '').trim();
+        if (keyInput.value) {
+          try { sessionStorage.setItem('codex-admin-key', keyInput.value); } catch (_) {}
+        }
       }
       function setStatus(text, kind) { status.textContent = text; status.className = 'status ' + (kind || ''); }
       function setWizardStatus(text, kind) { wizardStatus.textContent = text; wizardStatus.className = 'wizard-status ' + (kind || ''); }
@@ -770,7 +776,12 @@
       }
       function parseResponse(response, fallback) {
         return response.json().then(function (data) {
-          if (!response.ok || data.ok === false) throw new Error(data.error || fallback);
+          if (!response.ok || data.ok === false) {
+            if (data.error === 'config file access requires Basic Auth or App API Key') {
+              throw new Error('读取配置文件前，请先到“页面访问”启用 Basic Auth 或配置 App API Key。');
+            }
+            throw new Error(data.error || fallback);
+          }
           return data;
         });
       }
@@ -1036,6 +1047,7 @@
             basicAuthPasswordInput.value = '';
             renderPageAccess(config);
             if (savedAppAPIKey) {
+              rememberAdminKey(savedAppAPIKey);
               appAPIKeyInput.value = savedAppAPIKey;
               appAPIKeyHint.textContent = '已保存，可查看或复制；密钥已立即生效。';
             }
