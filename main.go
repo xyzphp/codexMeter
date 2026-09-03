@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,6 +38,7 @@ const (
 	upstreamRequestTimeout      = 15 * time.Second
 	resetStatusEndpoint         = "https://codex-resets.com/api/v1/status"
 	resetHistoryEndpoint        = "https://codex-resets.com/api/resets"
+	resetHomepageEndpoint       = "https://codex-resets.com/"
 	dailyTokenUsageEndpoint     = "https://chatgpt.com/backend-api/wham/usage/daily-token-usage-breakdown"
 	dailyWorkspaceUsageEndpoint = "https://chatgpt.com/backend-api/wham/analytics/daily-workspace-usage-counts"
 )
@@ -532,13 +534,14 @@ type dailyWorkspaceUsageTotals struct {
 }
 
 type ResetPrediction struct {
-	Source      string       `json:"source"`
-	FetchedAt   string       `json:"fetched_at"`
-	FromCache   bool         `json:"from_cache"`
-	LatestReset *ResetEvent  `json:"latest_reset,omitempty"`
-	ActiveWatch *ResetWatch  `json:"active_watch,omitempty"`
-	History     []ResetEvent `json:"history,omitempty"`
-	Stats       ResetStats   `json:"stats"`
+	Source        string       `json:"source"`
+	FetchedAt     string       `json:"fetched_at"`
+	FromCache     bool         `json:"from_cache"`
+	LatestReset   *ResetEvent  `json:"latest_reset,omitempty"`
+	ActiveWatch   *ResetWatch  `json:"active_watch,omitempty"`
+	CommunityPoll *ResetPoll   `json:"community_poll,omitempty"`
+	History       []ResetEvent `json:"history,omitempty"`
+	Stats         ResetStats   `json:"stats"`
 }
 
 type ResetEvent struct {
@@ -561,6 +564,13 @@ type ResetWatch struct {
 	ObservedAt         string  `json:"observed_at"`
 	ExpiresAt          string  `json:"expires_at"`
 	Level              string  `json:"level"`
+}
+
+type ResetPoll struct {
+	YesVotes   int     `json:"yes_votes"`
+	NoVotes    int     `json:"no_votes"`
+	TotalVotes int     `json:"total_votes"`
+	YesPercent float64 `json:"yes_percent"`
 }
 
 type ResetStats struct {
@@ -594,6 +604,12 @@ type resetHistoryEvent struct {
 	ResetType   string `json:"reset_type"`
 	Source      string `json:"source"`
 }
+
+var (
+	resetPollTagPattern = regexp.MustCompile(`(?is)<[^>]*\bdata-role\s*=\s*["']watch-poll["'][^>]*>`)
+	resetPollYesPattern = regexp.MustCompile(`(?i)\bdata-yes\s*=\s*["']([0-9]+)["']`)
+	resetPollNoPattern  = regexp.MustCompile(`(?i)\bdata-no\s*=\s*["']([0-9]+)["']`)
+)
 
 type rawWindow struct {
 	UsedPercent       *float64
@@ -1477,13 +1493,22 @@ func (s *UsageService) queryResetPrediction(ctx context.Context) (*ResetPredicti
 	if stats.Total == 0 && len(history) > 0 {
 		stats.Total = len(history)
 	}
+	var communityPoll *ResetPoll
+	if homepage, err := s.queryPublicResetPage(ctx); err != nil {
+		// The community poll is supplementary. Keep the forecast available if
+		// the public homepage is temporarily unavailable or changes shape.
+		slog.Warn("reset poll request failed", "error", err)
+	} else {
+		communityPoll = parseResetPoll(homepage)
+	}
 	return &ResetPrediction{
-		Source:      "codex_resets_status",
-		FetchedAt:   fetchedAt,
-		LatestReset: latest,
-		ActiveWatch: envelope.Data.ActiveWatch,
-		History:     history,
-		Stats:       stats,
+		Source:        "codex_resets_status",
+		FetchedAt:     fetchedAt,
+		LatestReset:   latest,
+		ActiveWatch:   envelope.Data.ActiveWatch,
+		CommunityPoll: communityPoll,
+		History:       history,
+		Stats:         stats,
 	}, nil
 }
 
@@ -1509,6 +1534,60 @@ func (s *UsageService) queryPublicResetJSON(ctx context.Context, endpoint string
 		return fmt.Errorf("decode response: %w", err)
 	}
 	return nil
+}
+
+func (s *UsageService) queryPublicResetPage(ctx context.Context) ([]byte, error) {
+	requestCtx, cancel := context.WithTimeout(ctx, upstreamRequestTimeout)
+	defer cancel()
+	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, resetHomepageEndpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create public reset homepage request: %w", err)
+	}
+	request.Header.Set("Accept", "text/html")
+	request.Header.Set("Cache-Control", "no-cache")
+	request.Header.Set("Pragma", "no-cache")
+	request.Header.Set("User-Agent", "codex-usage-dashboard/1.0")
+
+	response, err := s.currentClient().Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("upstream returned HTTP %d", response.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, 8<<20))
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+	return body, nil
+}
+
+func parseResetPoll(page []byte) *ResetPoll {
+	tag := resetPollTagPattern.Find(page)
+	if tag == nil {
+		return nil
+	}
+	yesMatch := resetPollYesPattern.FindSubmatch(tag)
+	noMatch := resetPollNoPattern.FindSubmatch(tag)
+	if len(yesMatch) != 2 || len(noMatch) != 2 {
+		return nil
+	}
+	yesVotes, yesErr := strconv.Atoi(string(yesMatch[1]))
+	noVotes, noErr := strconv.Atoi(string(noMatch[1]))
+	if yesErr != nil || noErr != nil || yesVotes < 0 || noVotes < 0 {
+		return nil
+	}
+	totalVotes := yesVotes + noVotes
+	if totalVotes == 0 {
+		return nil
+	}
+	return &ResetPoll{
+		YesVotes:   yesVotes,
+		NoVotes:    noVotes,
+		TotalVotes: totalVotes,
+		YesPercent: float64(yesVotes) * 100 / float64(totalVotes),
+	}
 }
 
 func normalizeResetHistory(events []resetHistoryEvent) []ResetEvent {
@@ -2060,6 +2139,10 @@ func cloneResetPrediction(input *ResetPrediction) *ResetPrediction {
 	if input.ActiveWatch != nil {
 		watch := *input.ActiveWatch
 		output.ActiveWatch = &watch
+	}
+	if input.CommunityPoll != nil {
+		poll := *input.CommunityPoll
+		output.CommunityPoll = &poll
 	}
 	if input.History != nil {
 		output.History = make([]ResetEvent, len(input.History))

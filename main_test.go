@@ -938,7 +938,7 @@ func TestResetStatusResponseDecodesPrediction(t *testing.T) {
 	}
 }
 
-func TestResetPredictionRequestUsesPublicStatusEndpoint(t *testing.T) {
+func TestResetPredictionRequestUsesPublicEndpoints(t *testing.T) {
 	var captured []*http.Request
 	service := &UsageService{
 		cfg: Config{CacheTTL: time.Minute},
@@ -948,6 +948,9 @@ func TestResetPredictionRequestUsesPublicStatusEndpoint(t *testing.T) {
 			if request.URL.String() == resetHistoryEndpoint {
 				body = `{"events":[{"tweet_id":"2090","tweet_url":"https://x.com/thsottiaux/status/2090","text":"Reset complete","announced_at":"2026-08-21T23:40:12Z","reset_type":"regular","source":"webhook"}]}`
 			}
+			if request.URL.String() == resetHomepageEndpoint {
+				body = `<div data-role="watch-poll" data-no="100" data-yes="1042"></div>`
+			}
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(body)),
@@ -956,11 +959,15 @@ func TestResetPredictionRequestUsesPublicStatusEndpoint(t *testing.T) {
 		})},
 	}
 
-	if _, err := service.queryResetPrediction(context.Background()); err != nil {
+	prediction, err := service.queryResetPrediction(context.Background())
+	if err != nil {
 		t.Fatalf("query reset prediction: %v", err)
 	}
-	if len(captured) != 2 {
-		t.Fatalf("captured %d requests, want status and history", len(captured))
+	if prediction.CommunityPoll == nil || prediction.CommunityPoll.YesVotes != 1042 || prediction.CommunityPoll.NoVotes != 100 {
+		t.Fatalf("community poll = %#v", prediction.CommunityPoll)
+	}
+	if len(captured) != 3 {
+		t.Fatalf("captured %d requests, want status, history and homepage", len(captured))
 	}
 	if captured[0].Method != http.MethodGet || captured[0].URL.String() != resetStatusEndpoint {
 		t.Fatalf("status request = %s %s, want GET %s", captured[0].Method, captured[0].URL, resetStatusEndpoint)
@@ -968,8 +975,32 @@ func TestResetPredictionRequestUsesPublicStatusEndpoint(t *testing.T) {
 	if captured[1].Method != http.MethodGet || captured[1].URL.String() != resetHistoryEndpoint {
 		t.Fatalf("history request = %s %s, want GET %s", captured[1].Method, captured[1].URL, resetHistoryEndpoint)
 	}
+	if captured[2].Method != http.MethodGet || captured[2].URL.String() != resetHomepageEndpoint {
+		t.Fatalf("homepage request = %s %s, want GET %s", captured[2].Method, captured[2].URL, resetHomepageEndpoint)
+	}
 	if got := captured[0].Header.Get("User-Agent"); got != "codex-usage-dashboard/1.0" {
 		t.Fatalf("User-Agent = %q, want dashboard user agent", got)
+	}
+}
+
+func TestParseResetPoll(t *testing.T) {
+	poll := parseResetPoll([]byte(`<section data-role="watch-poll" data-episode-id="manual" data-yes="1042" data-no="100"></section>`))
+	if poll == nil {
+		t.Fatal("parseResetPoll returned nil")
+	}
+	if poll.YesVotes != 1042 || poll.NoVotes != 100 || poll.TotalVotes != 1142 {
+		t.Fatalf("poll counts = %#v", poll)
+	}
+	wantPercent := 1042.0 * 100 / 1142.0
+	if poll.YesPercent != wantPercent {
+		t.Fatalf("yes percent = %v, want %v", poll.YesPercent, wantPercent)
+	}
+
+	if got := parseResetPoll([]byte(`<div data-role="watch-poll" data-yes="0" data-no="0"></div>`)); got != nil {
+		t.Fatalf("zero-vote poll = %#v, want nil", got)
+	}
+	if got := parseResetPoll([]byte(`<div data-role="other" data-yes="10" data-no="2"></div>`)); got != nil {
+		t.Fatalf("non-poll data = %#v, want nil", got)
 	}
 }
 
