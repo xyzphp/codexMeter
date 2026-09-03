@@ -138,7 +138,12 @@
     .prediction-bar { width:0; height:100%; background:var(--accent); border-radius:inherit; transition:width .25s ease,background .25s ease; }
     .prediction-bar.high { background:var(--warning); }
     .prediction-bar.error { background:var(--danger); }
-    .prediction-poll { margin-top:7px; color:var(--muted); font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .prediction-poll { margin-top:7px; color:var(--muted); font-size:10px; }
+    .prediction-poll-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; }
+    .prediction-poll-head strong { color:var(--text); font-size:11px; font-weight:680; }
+    .prediction-poll-track { width:100%; height:5px; overflow:hidden; background:var(--track); border-radius:999px; }
+    .prediction-poll-bar { width:0; height:100%; background:var(--accent); border-radius:inherit; transition:width .25s ease; }
+    .prediction-poll-meta { margin-top:4px; color:var(--muted); font-size:9px; }
     .prediction-grid { margin-top:10px; gap:8px; }
     .prediction-grid .metric { flex:0 0 calc(50% - 3px); width:calc(50% - 3px); }
     .prediction-grid .metric { padding:7px 10px; min-height:42px; }
@@ -546,7 +551,11 @@
             <div class="prediction-probability-head"><span>模型预测概率</span><strong id="predictionChance">—</strong></div>
             <div class="prediction-track"><div id="predictionChanceBar" class="prediction-bar"></div></div>
           </div>
-          <div id="predictionPoll" class="prediction-poll">社区投票：—</div>
+          <div class="prediction-poll">
+            <div class="prediction-poll-head"><span>社区投票（赞成）</span><strong id="predictionPollValue">—</strong></div>
+            <div class="prediction-poll-track"><div id="predictionPollBar" class="prediction-poll-bar"></div></div>
+            <div id="predictionPollMeta" class="prediction-poll-meta">—</div>
+          </div>
         </div>
         <div class="metric-grid prediction-grid">
           <div class="metric"><div class="metric-label">信号级别</div><div id="predictionLevel" class="metric-value">—</div></div>
@@ -714,12 +723,20 @@
         if (value === null || value === undefined || isNaN(Number(value))) return '—';
         return String(Math.round(Number(value) * 10) / 10).replace('.0', '');
       }
-      function formatCommunityPoll(poll) {
+      function renderCommunityPoll(poll) {
         var yes = Number(poll && poll.yes_votes); var no = Number(poll && poll.no_votes);
-        if (!isFinite(yes) || !isFinite(no) || yes < 0 || no < 0 || yes + no <= 0) return '社区投票：暂无数据';
+        if (!isFinite(yes) || !isFinite(no) || yes < 0 || no < 0 || yes + no <= 0) {
+          setText('predictionPollValue', '—');
+          setText('predictionPollMeta', '暂无数据');
+          setStyle('predictionPollBar', 'width', '0%');
+          return;
+        }
         var yesPercent = Number(poll && poll.yes_percent);
         if (!isFinite(yesPercent)) yesPercent = yes * 100 / (yes + no);
-        return '社区投票：' + formatPercent(yesPercent) + '% 赞成（' + Math.round(yes) + ' 赞成 / ' + Math.round(no) + ' 反对）';
+        yesPercent = clamp(yesPercent, 0, 100);
+        setText('predictionPollValue', formatPercent(yesPercent) + '%');
+        setText('predictionPollMeta', '赞成 ' + Math.round(yes) + ' / 反对 ' + Math.round(no));
+        setStyle('predictionPollBar', 'width', yesPercent + '%');
       }
       function formatDate(value) {
         if (!value) return '—';
@@ -1160,7 +1177,7 @@
           setText('predictionLevel', '无预警');
           setText('predictionWindow', '—');
         }
-        setText('predictionPoll', formatCommunityPoll(data && data.community_poll));
+        renderCommunityPoll(data && data.community_poll);
         setText('predictionTotal', data && data.stats ? String(data.stats.total || 0) + ' 条' : '—');
         setText('predictionAverage', data && data.stats ? formatDays(data.stats.avg_interval_days) : '—');
         setText('predictionUpdated', data && data.fetched_at ? '更新 ' + formatDate(data.fetched_at) : '公共信号');
@@ -1173,7 +1190,7 @@
         setText('predictionChance', '—');
         setStyle('predictionChanceBar', 'width', '0%');
         setClass('predictionChanceBar', 'prediction-bar error');
-        setText('predictionPoll', '社区投票：暂无数据');
+        renderCommunityPoll(null);
         setText('predictionState', '预测数据获取失败');
         setClass('predictionState', 'prediction-state danger');
         setText('predictionHint', error && error.message ? error.message : '请稍后重试');

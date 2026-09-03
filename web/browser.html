@@ -175,6 +175,11 @@
     .prediction-bar.high { background:var(--warning); }
     .prediction-bar.error { background:var(--danger); }
     .prediction-poll { margin-top:10px; color:var(--muted); font-size:13px; }
+    .prediction-poll-head { display:flex; justify-content:space-between; gap:12px; margin-bottom:6px; }
+    .prediction-poll-head strong { color:var(--text); font-size:14px; font-weight:650; }
+    .prediction-poll-track { height:6px; overflow:hidden; background:var(--track); border-radius:999px; }
+    .prediction-poll-bar { width:0; height:100%; background:var(--accent); border-radius:inherit; transition:width .35s ease; }
+    .prediction-poll-meta { margin-top:5px; color:var(--muted); font-size:11px; }
     .prediction-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-top:16px; }
     .prediction-metric { min-width:0; padding:14px 16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
     .prediction-metric-label { color:var(--muted); font-size:13px; }
@@ -305,6 +310,10 @@
       .prediction-probability-head strong { font-size:11px; }
       .prediction-track { height:6px; }
       .prediction-poll { margin-top:7px; font-size:10px; }
+      .prediction-poll-head { margin-bottom:4px; }
+      .prediction-poll-head strong { font-size:11px; }
+      .prediction-poll-track { height:5px; }
+      .prediction-poll-meta { margin-top:4px; font-size:9px; }
       .prediction-metric { padding:8px 9px; border-radius:10px; }
       .prediction-metric-value { margin-top:3px; font-size:15px; }
       .prediction-list { margin-top:9px; border-radius:10px; }
@@ -418,7 +427,11 @@
         <div id="predictionState" class="prediction-state">读取中…</div>
         <div id="predictionHint" class="prediction-hint">正在获取公共重置信号</div>
         <div class="prediction-probability"><div class="prediction-probability-head"><span>模型预测概率</span><strong id="predictionChance">—</strong></div><div class="progress-track prediction-track"><div id="predictionChanceBar" class="prediction-bar"></div></div></div>
-        <div id="predictionPoll" class="prediction-poll">社区投票：—</div>
+        <div class="prediction-poll">
+          <div class="prediction-poll-head"><span>社区投票（赞成）</span><strong id="predictionPollValue">—</strong></div>
+          <div class="prediction-poll-track"><div id="predictionPollBar" class="prediction-poll-bar"></div></div>
+          <div id="predictionPollMeta" class="prediction-poll-meta">—</div>
+        </div>
       </div>
       <div class="prediction-grid">
         <div class="prediction-metric"><div class="prediction-metric-label">信号级别</div><div id="predictionLevel" class="prediction-metric-value">—</div></div>
@@ -461,12 +474,20 @@
       function percent(value) { var parsed = number(value); return isFinite(parsed) ? String(Math.round(parsed * 10) / 10).replace('.0', '') : '—'; }
       function token(value) { var parsed = number(value); return isFinite(parsed) ? percent(parsed / 1000000) + 'M' : '—'; }
       function compact(value) { var parsed = number(value); if (!isFinite(parsed)) return '—'; if (Math.abs(parsed) >= 1000000) return percent(parsed / 1000000) + 'M'; if (Math.abs(parsed) >= 1000) return percent(parsed / 1000) + 'K'; return String(Math.round(parsed)); }
-      function formatCommunityPoll(poll) {
+      function renderCommunityPoll(poll) {
         var yes = number(poll && poll.yes_votes); var no = number(poll && poll.no_votes);
-        if (!isFinite(yes) || !isFinite(no) || yes < 0 || no < 0 || yes + no <= 0) return '社区投票：暂无数据';
+        if (!isFinite(yes) || !isFinite(no) || yes < 0 || no < 0 || yes + no <= 0) {
+          text('predictionPollValue', '—');
+          text('predictionPollMeta', '暂无数据');
+          style('predictionPollBar', 'width', '0%');
+          return;
+        }
         var yesPercent = number(poll && poll.yes_percent);
         if (!isFinite(yesPercent)) yesPercent = yes * 100 / (yes + no);
-        return '社区投票：' + percent(yesPercent) + '% 赞成（' + Math.round(yes) + ' 赞成 / ' + Math.round(no) + ' 反对）';
+        yesPercent = clamp(yesPercent, 0, 100);
+        text('predictionPollValue', percent(yesPercent) + '%');
+        text('predictionPollMeta', '赞成 ' + Math.round(yes) + ' / 反对 ' + Math.round(no));
+        style('predictionPollBar', 'width', yesPercent + '%');
       }
       function date(value) { if (!value) return '—'; var parsed = new Date(value); if (isNaN(parsed.getTime())) return '—'; var pad = function (v) { return String(v).padStart(2, '0'); }; return parsed.getFullYear() + '-' + pad(parsed.getMonth() + 1) + '-' + pad(parsed.getDate()) + ' ' + pad(parsed.getHours()) + ':' + pad(parsed.getMinutes()) + ':' + pad(parsed.getSeconds()); }
       function formatUTCDate(value) { var pad = function (v) { return String(v).padStart(2, '0'); }; return value.getUTCFullYear() + '-' + pad(value.getUTCMonth() + 1) + '-' + pad(value.getUTCDate()) + ' ' + pad(value.getUTCHours()) + ':' + pad(value.getUTCMinutes()) + ':' + pad(value.getUTCSeconds()); }
@@ -710,7 +731,7 @@
         positionPrediction(Boolean(watch));
         if (watch) { text('predictionState', '检测到重置信号'); classes('predictionState', 'prediction-state'); text('predictionHint', translateForecastWindow(watch.forecast_window)); text('predictionChance', percent(chance) + '%'); style('predictionChanceBar', 'width', chance + '%'); classes('predictionChanceBar', 'prediction-bar ' + (chance >= 70 ? 'high' : '')); text('predictionLevel', translateSignalLevel(watch.level)); text('predictionWindow', translateForecastWindow(watch.forecast_window)); }
         else { text('predictionState', '当前无重置信号'); classes('predictionState', 'prediction-state'); text('predictionHint', '公共监测处于空闲状态'); text('predictionChance', '—'); style('predictionChanceBar', 'width', '0%'); classes('predictionChanceBar', 'prediction-bar'); text('predictionLevel', '无预警'); text('predictionWindow', '—'); }
-        text('predictionPoll', formatCommunityPoll(data && data.community_poll));
+        renderCommunityPoll(data && data.community_poll);
         text('predictionTotal', data && data.stats ? String(data.stats.total || 0) + ' 条' : '—'); text('predictionAverage', data && data.stats && isFinite(number(data.stats.avg_interval_days)) ? percent(data.stats.avg_interval_days) + ' 天' : '—'); text('predictionUpdated', data && data.fetched_at ? '更新 ' + date(data.fetched_at) : '公共信号'); text('predictionLatestType', latest ? translateResetType(latest.reset_type) : '—'); text('predictionLatestAt', latest ? formatAnnouncementTime(latest.announced_at) : '—'); text('predictionLatestText', latest ? latest.text : '—');
         renderPredictionHistory(data && data.history);
       }
