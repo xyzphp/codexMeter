@@ -571,7 +571,7 @@
       function collapseUsageHistoryPoints(points) {
         if (points.length < 2) return points;
         var collapsed = []; var start = 0;
-        var copyPoint = function (point, repeatCount) { return {at:point.at, time:point.time, used:point.used, stale:point.stale, position:point.position, repeatCount:repeatCount, changePoint:true}; };
+        var copyPoint = function (point, repeatCount, changePoint) { return {at:point.at, time:point.time, used:point.used, stale:point.stale, position:point.position, repeatCount:repeatCount, changePoint:changePoint !== false}; };
         for (var index = 1; index <= points.length; index += 1) {
           // A stale fallback keeps the same quota value. It must not create a
           // second point in a metric-specific chart; compare only the value
@@ -583,7 +583,12 @@
           // contain extra records because the other quota window changed, so
           // this compaction must be performed separately for each chart's
           // selected metric.
-          collapsed.push(copyPoint(points[start], repeatCount));
+          collapsed.push(copyPoint(points[start], repeatCount, true));
+          // Keep a marker only for the first point in a stable run, while an
+          // invisible tail point lets the line and time axis reach the most
+          // recent sample. Without it, a value such as 83% that stays stable
+          // while the other quota window changes appears to stop too early.
+          if (repeatCount > 1) collapsed.push(copyPoint(points[index - 1], repeatCount, false));
           start = index;
         }
         return collapsed;
