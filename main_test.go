@@ -466,6 +466,51 @@ func TestUsageHistoryKeepsCompleteRawArchiveBeforeWeeklyLimit(t *testing.T) {
 	}
 }
 
+func TestSQLiteUsageHistoryStorePersistsAllSamples(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data", "codex-meter.db")
+	store, err := OpenUsageHistoryStore(path)
+	if err != nil {
+		t.Fatalf("open sqlite usage history: %v", err)
+	}
+	baseTime := time.Date(2026, time.August, 27, 12, 0, 0, 0, time.UTC)
+	for index := 0; index < maxUsageHistoryPoints+12; index++ {
+		point := HistoryPoint{
+			At:          baseTime.Add(time.Duration(index) * usageHistorySampleInterval).Format(time.RFC3339),
+			UsedPercent: float64(index % 20),
+			Stale:       index == 3,
+		}
+		if err := store.Insert(context.Background(), point); err != nil {
+			t.Fatalf("insert sqlite usage history: %v", err)
+		}
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close sqlite usage history: %v", err)
+	}
+
+	store, err = OpenUsageHistoryStore(path)
+	if err != nil {
+		t.Fatalf("reopen sqlite usage history: %v", err)
+	}
+	defer store.Close()
+	loaded, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatalf("load sqlite usage history: %v", err)
+	}
+	if len(loaded) != maxUsageHistoryPoints+12 {
+		t.Fatalf("sqlite history contains %d samples, want %d raw samples", len(loaded), maxUsageHistoryPoints+12)
+	}
+	if loaded[0].At != baseTime.Format(time.RFC3339) || loaded[len(loaded)-1].UsedPercent != float64((maxUsageHistoryPoints+11)%20) {
+		t.Fatalf("sqlite history order/range = %#v..%#v", loaded[0], loaded[len(loaded)-1])
+	}
+	if !loaded[3].Stale {
+		t.Fatalf("sqlite history did not preserve stale marker: %#v", loaded[3])
+	}
+	weekly := compactUsageHistoryMetric(loaded, usageHistoryMetricWeekly)
+	if len(weekly) != 20 || len(weekly) > maxUsageHistoryPoints {
+		t.Fatalf("sqlite source was compacted before weekly derivation: %d points", len(weekly))
+	}
+}
+
 func TestUsageHistoryRetainsIndependentMetricWindows(t *testing.T) {
 	points := make([]HistoryPoint, 0, maxUsageHistoryPoints*2+24)
 	for index := 0; index < maxUsageHistoryPoints*2+24; index++ {

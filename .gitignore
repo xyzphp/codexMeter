@@ -7,3 +7,4 @@ config/
 .chrome-diagnostic/
 .chrome-diagnostic-logs/
 data/*.jsonl*
+data/*.db*

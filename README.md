@@ -1,6 +1,6 @@
 # ChatGPT & Codex 使用额度面板
 
-这是一个使用 Go 编写的单文件后端应用，内嵌 HTML 前端页面，适用于 LX04 Android WebView 额度面板。
+这是一个使用 Go 编写的模块化单体服务，内嵌 HTML 前端页面，使用 SQLite 保存额度采样，适用于 LX04 Android WebView 额度面板。
 
 默认显示 ChatGPT 的只读额度和统计数据。
 
@@ -47,6 +47,7 @@
 - 对接公开的 Codex Reset 预测接口
 - 支持自动刷新、额度区间提示音、HTTP Basic Auth、API Key 和代理
 - LX04 设备页面和浏览器工作台均内嵌到 Go 二进制文件中，并按 User-Agent 自动分流
+- 使用 SQLite `quota_history` 表保留完整定时采样，周额度按自身使用值去重后返回最近最多 48 个点
 
 ## 运行
 
@@ -110,6 +111,8 @@ docker compose -f docker-compose.local.yml down
 ```
 
 本地构建使用 `Dockerfile` 生成 `codex-meter:local` 镜像，不会推送到 GHCR；部署已发布版本时，请使用上面的 `docker-compose.yml`。
+
+额度采样数据库、JSONL 迁移和 Go 文件职责划分见 [存储与工程结构文档](docs/storage.md)。
 
 所有页面顶部都会显示当前版本和短 Git 提交；完整构建标识也可以通过 `GET /healthz` 或 `X-Codex-Meter-*` 响应头核对。本地注入版本、提交和构建时间的 PowerShell 示例见 [Docker 运行文档](docs/docker.md)。
 
