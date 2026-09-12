@@ -569,27 +569,21 @@
         return ticks;
       }
       function usageHistoryTooltip(point, value, label) {
-        return '中国时间 ' + date(point.at) + '\n' + label + '已使用 ' + percent(value) + '%' + (point.repeatCount > 1 ? '\n连续 ' + point.repeatCount + ' 次采样值相同' : '') + (point.stale ? '\n采集状态：沿用上次成功数据' : '');
+        return '中国时间 ' + date(point.at) + '\n' + label + '已使用 ' + percent(value) + '%' + (point.stale ? '\n采集状态：沿用上次成功数据' : '');
       }
-      function collapseUsageHistoryPoints(points) {
+      function deduplicateUsageHistoryPoints(points) {
         if (points.length < 2) return points;
-        var collapsed = []; var start = 0;
-        var copyPoint = function (point, repeatCount) { return {at:point.at, time:point.time, used:point.used, stale:point.stale, position:0, repeatCount:repeatCount, changePoint:true}; };
-        for (var index = 1; index <= points.length; index += 1) {
-          // A stale fallback keeps the same quota value. It must not create a
-          // second point in a metric-specific chart; compare only the value
-          // selected by the current chart and keep the first record.
-          var same = index < points.length && points[index].used === points[start].used;
-          if (same) continue;
-          var repeatCount = index - start;
-          // Keep the first sample in each stable run. The history payload can
-          // contain extra records because the other quota window changed, so
-          // this compaction must be performed separately for each chart's
-          // selected metric.
-          collapsed.push(copyPoint(points[start], repeatCount));
-          start = index;
-        }
-        return collapsed;
+        var deduplicated = []; var seen = Object.create(null);
+        points.forEach(function (point) {
+          // The chart point is identified by its timestamp and selected
+          // metric value. Equal values at different times are valid samples
+          // and must remain before the 48-point limit is applied.
+          var key = String(point.time) + '|' + String(point.used);
+          if (Object.prototype.hasOwnProperty.call(seen, key)) return;
+          seen[key] = true;
+          deduplicated.push(point);
+        });
+        return deduplicated;
       }
       var usageHistoryMaxPoints = 48;
       function bindUsageHistoryTooltips(container) {
@@ -608,10 +602,10 @@
         var points = (Array.isArray(history) ? history : []).map(function (point) { var at = point && point.at ? timestamp(point.at) : 0; var used = number(point && point[options.metric]); return at > 0 && isFinite(used) ? {at:point.at, time:at, used:clamp(used, 0, 100), stale:Boolean(point && point.stale), changePoint:true} : null; }).filter(function (point) { return point !== null; });
         points.sort(function (left, right) { return left.time - right.time; });
         if (!points.length) { text(options.currentId, '—'); text(options.maxId, '—'); text(options.minId, '—'); container.innerHTML = '<div class="empty">暂无' + escaped(options.emptyLabel || '额度') + '采样</div>'; return; }
-        // Compact each selected metric independently. The legacy combined
-        // payload may contain rows caused by the other quota window, while
-        // repeated values in either timeline should still render once.
-        points = collapseUsageHistoryPoints(points);
+        // Remove identical coordinates from the selected metric first. Equal
+        // values at different timestamps are real timeline samples and must
+        // count toward the 48-point window.
+        points = deduplicateUsageHistoryPoints(points);
         if (points.length > usageHistoryMaxPoints) points = points.slice(points.length - usageHistoryMaxPoints);
         points.forEach(function (point, index) { point.position = index; });
         var sampleCount = points.length; var values = points.map(function (point) { return point.used; }); var current = values[values.length - 1]; var maximum = Math.max.apply(Math, values); var minimum = Math.min.apply(Math, values); var resetIndexes = []; var resetDropThreshold = options.metric === 'five_hour_used_percent' ? 1 : 10;

@@ -952,10 +952,10 @@ func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
 			return
 		}
 	}
-	// Every scheduled sample is evaluated for the weekly timeline. Consecutive
-	// equal values are compacted independently, and the five-hour timeline
-	// follows the same rule when that window is present; neither timeline is
-	// driven by the other one's value changes.
+	// Every scheduled sample is evaluated for the weekly timeline. Identical
+	// points are deduplicated independently, and the five-hour timeline follows
+	// the same rule when that window is present; neither timeline is driven by
+	// the other one's value changes.
 	s.weeklyHistory = compactUsageHistoryMetric(append(s.weeklyHistory, point), usageHistoryMetricWeekly)
 	if point.FiveHourUsedPercent != nil {
 		s.fiveHourHistory = compactUsageHistoryMetric(append(s.fiveHourHistory, point), usageHistoryMetricFiveHour)
@@ -1025,7 +1025,7 @@ func usageHistoryPoint(usage *UsageResponse) (HistoryPoint, bool) {
 }
 
 func sameUsageHistoryValue(left, right HistoryPoint) bool {
-	return sameUsageHistoryMetricValue(left, right, usageHistoryMetricWeekly) && sameUsageHistoryMetricValue(left, right, usageHistoryMetricFiveHour)
+	return left.At == right.At && sameUsageHistoryMetricValue(left, right, usageHistoryMetricWeekly) && sameUsageHistoryMetricValue(left, right, usageHistoryMetricFiveHour)
 }
 
 func sameUsageHistoryMetricValue(left, right HistoryPoint, metric usageHistoryMetric) bool {
@@ -1041,24 +1041,38 @@ func sameUsageHistoryMetricValue(left, right HistoryPoint, metric usageHistoryMe
 	return *left.FiveHourUsedPercent == *right.FiveHourUsedPercent
 }
 
-// deduplicateUsageHistoryMetric keeps the first record of each consecutive
-// value run for one metric and collection state. A stale-state transition is
-// retained so the history still records when a fallback sample was used.
+// deduplicateUsageHistoryMetric keeps the first record of each identical point
+// for one metric. The timestamp is part of the point identity, so equal values
+// sampled at different times remain separate timeline points. A stale-state
+// transition is also retained so the history records fallback samples.
 func deduplicateUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric) []HistoryPoint {
 	if len(points) == 0 {
 		return nil
 	}
 	compact := make([]HistoryPoint, 0, len(points))
+	seen := make(map[string]struct{}, len(points))
 	for _, point := range points {
 		if metric == usageHistoryMetricFiveHour && point.FiveHourUsedPercent == nil {
 			continue
 		}
-		if len(compact) > 0 && sameUsageHistoryMetricValue(compact[len(compact)-1], point, metric) {
+		key := usageHistoryMetricPointKey(point, metric)
+		if _, exists := seen[key]; exists {
 			continue
 		}
+		seen[key] = struct{}{}
 		compact = append(compact, point)
 	}
 	return compact
+}
+
+func usageHistoryMetricPointKey(point HistoryPoint, metric usageHistoryMetric) string {
+	value := "nil"
+	if metric == usageHistoryMetricWeekly {
+		value = strconv.FormatFloat(point.UsedPercent, 'g', -1, 64)
+	} else if point.FiveHourUsedPercent != nil {
+		value = strconv.FormatFloat(*point.FiveHourUsedPercent, 'g', -1, 64)
+	}
+	return point.At + "\x00" + strconv.FormatBool(point.Stale) + "\x00" + value
 }
 
 // limitUsageHistoryPoints retains the latest points after metric-specific
@@ -1070,9 +1084,9 @@ func limitUsageHistoryPoints(points []HistoryPoint) []HistoryPoint {
 	return points
 }
 
-// compactUsageHistoryMetric first removes consecutive duplicate values for one
-// metric, then retains the latest 48 independent changes. The other quota
-// window cannot consume this metric's limit.
+// compactUsageHistoryMetric first removes identical points for one metric, then
+// retains the latest 48 samples. The other quota window cannot consume this
+// metric's limit.
 func compactUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric) []HistoryPoint {
 	return limitUsageHistoryPoints(deduplicateUsageHistoryMetric(points, metric))
 }

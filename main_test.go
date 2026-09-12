@@ -329,12 +329,16 @@ func TestUsageHistoryPersistsAndKeepsMostRecentPoints(t *testing.T) {
 
 func TestUsageHistoryDeduplicatesBeforeApplyingPointLimit(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
-	for index := 0; index < maxUsageHistoryPoints+12; index++ {
-		if err := appendUsageHistory(path, HistoryPoint{
+	const sourcePointCount = maxUsageHistoryPoints + 12
+	for index := 0; index < sourcePointCount; index++ {
+		point := HistoryPoint{
 			At:          time.Date(2026, time.August, 27, 12, index, 0, 0, time.UTC).Format(time.RFC3339),
-			UsedPercent: float64(index / 2),
-		}); err != nil {
-			t.Fatalf("append duplicate usage history: %v", err)
+			UsedPercent: float64(index),
+		}
+		for duplicate := 0; duplicate < 2; duplicate++ {
+			if err := appendUsageHistory(path, point); err != nil {
+				t.Fatalf("append duplicate usage history: %v", err)
+			}
 		}
 	}
 
@@ -342,12 +346,12 @@ func TestUsageHistoryDeduplicatesBeforeApplyingPointLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load duplicate usage history: %v", err)
 	}
-	want := (maxUsageHistoryPoints + 12) / 2
+	want := maxUsageHistoryPoints
 	if len(loaded) != want {
 		t.Fatalf("loaded %d deduplicated points, want %d", len(loaded), want)
 	}
-	if loaded[0].UsedPercent != 0 || loaded[len(loaded)-1].UsedPercent != float64(want-1) {
-		t.Fatalf("deduplicated history range = %v..%v, want 0..%d", loaded[0].UsedPercent, loaded[len(loaded)-1].UsedPercent, want-1)
+	if loaded[0].UsedPercent != 12 || loaded[len(loaded)-1].UsedPercent != float64(sourcePointCount-1) {
+		t.Fatalf("deduplicated history range = %v..%v, want 12..%d", loaded[0].UsedPercent, loaded[len(loaded)-1].UsedPercent, sourcePointCount-1)
 	}
 }
 
@@ -367,34 +371,26 @@ func TestUsageHistoryRetainsIndependentMetricWindows(t *testing.T) {
 	if len(weekly) != maxUsageHistoryPoints || len(fiveHour) != maxUsageHistoryPoints {
 		t.Fatalf("independent history lengths = weekly %d, five-hour %d; want %d each", len(weekly), len(fiveHour), maxUsageHistoryPoints)
 	}
-	if weekly[0].UsedPercent != 12 || weekly[1].UsedPercent != 13 || weekly[len(weekly)-1].UsedPercent != 59 {
-		t.Fatalf("weekly history range = %v..%v, want 12..59", weekly[0].UsedPercent, weekly[len(weekly)-1].UsedPercent)
+	if weekly[0].UsedPercent != 36 || weekly[1].UsedPercent != 36 || weekly[len(weekly)-1].UsedPercent != 59 {
+		t.Fatalf("weekly history range = %v..%v, want 36..59", weekly[0].UsedPercent, weekly[len(weekly)-1].UsedPercent)
 	}
-	for index := 1; index < len(weekly); index++ {
-		if weekly[index].UsedPercent == weekly[index-1].UsedPercent {
-			t.Fatalf("weekly history contains adjacent duplicate at index %d: %#v", index, weekly[index])
-		}
+	if weekly[0].At == weekly[1].At {
+		t.Fatalf("weekly history collapsed distinct timestamps: %#v", weekly[:2])
 	}
 	if fiveHour[0].FiveHourUsedPercent == nil || *fiveHour[0].FiveHourUsedPercent != 72 {
 		t.Fatalf("five-hour history starts at %v, want 72", fiveHour[0].FiveHourUsedPercent)
 	}
-	for index := 1; index < len(fiveHour); index++ {
-		if fiveHour[index].FiveHourUsedPercent == nil || fiveHour[index-1].FiveHourUsedPercent == nil {
-			t.Fatalf("five-hour history has missing value at index %d", index)
-		}
-		if *fiveHour[index].FiveHourUsedPercent == *fiveHour[index-1].FiveHourUsedPercent {
-			t.Fatalf("five-hour history contains adjacent duplicate at index %d: %#v", index, fiveHour[index])
-		}
+	if fiveHour[0].At == fiveHour[1].At {
+		t.Fatalf("five-hour history collapsed distinct timestamps: %#v", fiveHour[:2])
 	}
 }
 
 func TestUsageHistoryDeduplicationKeepsFirstRecord(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
 	firstAt := time.Date(2026, time.August, 27, 12, 0, 0, 0, time.UTC).Format(time.RFC3339)
-	secondAt := time.Date(2026, time.August, 27, 12, 5, 0, 0, time.UTC).Format(time.RFC3339)
 	for _, point := range []HistoryPoint{
 		{At: firstAt, UsedPercent: 12},
-		{At: secondAt, UsedPercent: 12},
+		{At: firstAt, UsedPercent: 12},
 	} {
 		if err := appendUsageHistory(path, point); err != nil {
 			t.Fatalf("append repeated usage history: %v", err)
