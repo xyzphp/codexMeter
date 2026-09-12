@@ -9,6 +9,9 @@ info:
 
     这不是 OpenAI 官方 API，也不是聊天请求代理；它只提供额度、统计、预测、
     配置和提示音资源。
+
+    所有 HTTP 响应都会通过 X-Codex-Meter-Version、X-Codex-Meter-Commit
+    和 X-Codex-Meter-Build-Time 响应头提供当前构建标识。
 servers:
   - url: http://127.0.0.1:8123
     description: 本地服务示例
@@ -31,9 +34,8 @@ paths:
       tags: [service]
       operationId: healthCheck
       summary: 健康检查
-      description: 返回服务是否正常运行。
-      security:
-        - basicAuth: []
+      description: 返回服务状态、版本、Git 提交和构建时间，用于确认实例是否已经更新。
+      security: []
       responses:
         '200':
           description: 服务正常
@@ -43,8 +45,9 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
               example:
                 status: ok
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+                version: v1.0.7
+                commit: abcdef1234567890
+                build_time: '2026-09-12T06:45:00Z'
 
   /api/usage:
     get:
@@ -403,11 +406,23 @@ components:
 
     HealthResponse:
       type: object
-      required: [status]
+      required: [status, version, commit, build_time]
       properties:
         status:
           type: string
           example: ok
+        version:
+          type: string
+          description: 构建时注入的服务版本；未注入时为 dev。
+          example: v1.0.7
+        commit:
+          type: string
+          description: 构建对应的完整 Git 提交；无法识别时为 unknown。
+          example: abcdef1234567890
+        build_time:
+          type: string
+          description: UTC 构建时间；未注入时为 unknown。
+          example: '2026-09-12T06:45:00Z'
 
     Window:
       type: object

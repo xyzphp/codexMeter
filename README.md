@@ -111,6 +111,8 @@ docker compose -f docker-compose.local.yml down
 
 本地构建使用 `Dockerfile` 生成 `codex-meter:local` 镜像，不会推送到 GHCR；部署已发布版本时，请使用上面的 `docker-compose.yml`。
 
+所有页面顶部都会显示当前版本和短 Git 提交；完整构建标识也可以通过 `GET /healthz` 或 `X-Codex-Meter-*` 响应头核对。本地注入版本、提交和构建时间的 PowerShell 示例见 [Docker 运行文档](docs/docker.md)。
+
 ## 前端与 UI 文档
 
 前端页面结构、Go 内嵌构建方式、Android WebView 设置和 UI 适配验收规范见 [docs/frontend-ui.md](docs/frontend-ui.md)。

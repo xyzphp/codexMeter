@@ -24,6 +24,7 @@ jobs:
     outputs:
       version: ${{ steps.prepare.outputs.version }}
       commit_sha: ${{ steps.prepare.outputs.commit_sha }}
+      build_time: ${{ steps.prepare.outputs.build_time }}
       previous_version: ${{ steps.prepare.outputs.previous_version }}
     steps:
       - name: Checkout main branch
@@ -55,10 +56,12 @@ jobs:
             git push origin HEAD:main
           fi
           commit_sha="$(git rev-parse HEAD)"
+          build_time="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           git tag "${RELEASE_VERSION}" "${commit_sha}"
           git push origin "${RELEASE_VERSION}"
           echo "version=${RELEASE_VERSION}" >> "${GITHUB_OUTPUT}"
           echo "commit_sha=${commit_sha}" >> "${GITHUB_OUTPUT}"
+          echo "build_time=${build_time}" >> "${GITHUB_OUTPUT}"
           echo "previous_version=${previous_version}" >> "${GITHUB_OUTPUT}"
 
   test:
@@ -118,12 +121,17 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: '0'
+          APP_VERSION: ${{ needs.prepare-release.outputs.version }}
+          APP_COMMIT: ${{ needs.prepare-release.outputs.commit_sha }}
+          APP_BUILD_TIME: ${{ needs.prepare-release.outputs.build_time }}
         run: |
           set -euo pipefail
           package_name="codex-meter-${{ matrix.name }}"
           package_dir="package/${package_name}"
           mkdir -p "dist" "${package_dir}"
-          go build -trimpath -ldflags="-s -w" -o "${package_dir}/codex-meter${{ matrix.extension }}" .
+          go build -trimpath \
+            -ldflags="-s -w -X main.appVersion=${APP_VERSION} -X main.appCommit=${APP_COMMIT} -X main.appBuildTime=${APP_BUILD_TIME}" \
+            -o "${package_dir}/codex-meter${{ matrix.extension }}" .
           cp README.md config.example.json openapi.yaml docker-compose.yml docker-compose.local.yml "${package_dir}/"
           mkdir -p "${package_dir}/docs"
           cp docs/openapi.md docs/openai-config.md docs/frontend-ui.md docs/github-actions.md docs/docker.md "${package_dir}/docs/"
@@ -154,7 +162,13 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Build Docker image
-        run: docker buildx build --pull --platform linux/amd64,linux/arm64 --tag codex-meter:ci .
+        run: |
+          docker buildx build --pull \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg APP_VERSION=${{ needs.prepare-release.outputs.version }} \
+            --build-arg APP_COMMIT=${{ needs.prepare-release.outputs.commit_sha }} \
+            --build-arg APP_BUILD_TIME=${{ needs.prepare-release.outputs.build_time }} \
+            --tag codex-meter:ci .
 
   docker-publish:
     name: Publish Docker image
@@ -194,6 +208,10 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ needs.prepare-release.outputs.version }}
+            APP_COMMIT=${{ needs.prepare-release.outputs.commit_sha }}
+            APP_BUILD_TIME=${{ needs.prepare-release.outputs.build_time }}
 
   release:
     name: Create GitHub Release

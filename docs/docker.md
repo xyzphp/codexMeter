@@ -65,9 +65,14 @@ docker compose down
 
 `docker-compose.local.yml` 用于本地源码构建，包含 `build` 配置：
 
-```bash
+```powershell
+$env:CODEX_METER_VERSION = "v1.0.7+local"
+$env:CODEX_METER_COMMIT = (git rev-parse HEAD).Trim()
+$env:CODEX_METER_BUILD_TIME = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
 docker compose -f docker-compose.local.yml up -d --build
 ```
+
+这三个构建参数会显示在所有页面顶部，并通过 `/healthz` 和 `X-Codex-Meter-*` 响应头暴露。直接执行 Compose 而不设置参数也可以构建，此时版本和提交分别显示为 `dev`、`unknown`，构建时间仍由 Dockerfile 自动生成。
 
 查看本地构建容器日志：
 
@@ -166,7 +171,7 @@ docker login ghcr.io
 
 ## 镜像构建方式
 
-Dockerfile 使用两阶段构建：第一阶段按 Docker 的目标平台编译无 CGO 二进制，第二阶段只保留运行所需的二进制、CA 证书、时区数据和配置模板。HTML 页面通过 Go 的 `//go:embed` 编译进二进制，不需要额外挂载 `web/` 目录。
+Dockerfile 使用两阶段构建：第一阶段按 Docker 的目标平台编译无 CGO 二进制，并通过链接参数写入版本号、Git 提交和 UTC 构建时间；第二阶段只保留运行所需的二进制、CA 证书、时区数据和配置模板。HTML 页面通过 Go 的 `//go:embed` 编译进二进制，不需要额外挂载 `web/` 目录。
 
 默认构建当前主机平台，也可以使用 Buildx 验证多架构构建：
 

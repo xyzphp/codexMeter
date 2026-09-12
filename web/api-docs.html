@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f7f8">
+  <meta name="application-version" content="{{CODEX_METER_VERSION}}">
+  <meta name="application-commit" content="{{CODEX_METER_COMMIT}}">
   <title>接口文档 · ChatGPT &amp; Codex 使用面板</title>
   <style>
     :root {
@@ -32,6 +34,7 @@
     .brand-mark { width:42px; height:42px; flex:0 0 42px; display:block; fill:currentColor; }
     .brand-title { margin-left:16px; font-size:25px; font-weight:680; letter-spacing:-.3px; white-space:nowrap; }
     .header-actions { display:flex; align-items:center; gap:10px; }
+    .build-badge { display:inline-flex; align-items:center; min-height:28px; padding:0 9px; border:1px solid var(--border); border-radius:999px; background:var(--soft); color:var(--muted); font:600 11px/1 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:nowrap; }
     .action { display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:0 15px; border:1px solid var(--border); border-radius:11px; background:var(--card); color:var(--muted); text-decoration:none; font-size:14px; line-height:1; white-space:nowrap; appearance:none; transition:background .18s ease,transform .1s ease; }
     .action:hover { background:var(--soft); }
     .action:active { transform:translateY(1px); }
@@ -117,8 +120,8 @@
       .section-title { font-size:16px; }
     }
     @media (max-width:600px) {
-      .page-header { align-items:flex-start; }
-      .header-actions { flex-wrap:wrap; justify-content:flex-end; }
+      .page-header { align-items:flex-start; flex-wrap:wrap; }
+      .header-actions { width:100%; flex-wrap:wrap; justify-content:flex-end; }
       .brand-title { max-width:180px; overflow:hidden; text-overflow:ellipsis; }
       .card-head { align-items:flex-start; flex-direction:column; gap:3px; }
       .debug-path-row { grid-template-columns:1fr; }
@@ -135,6 +138,7 @@
         <span class="brand-title">ChatGPT &amp; Codex 接口文档</span>
       </a>
       <div class="header-actions">
+        <span class="build-badge" title="版本 {{CODEX_METER_VERSION}} · 完整提交 {{CODEX_METER_COMMIT}} · 构建时间 {{CODEX_METER_BUILD_TIME}}">版本 {{CODEX_METER_VERSION}} · {{CODEX_METER_COMMIT_SHORT}}</span>
         <a class="action" href="./">返回面板</a>
         <a class="action" href="settings">设置</a>
         <a class="action" href="openapi.yaml" target="_blank" rel="noopener">OpenAPI 原文</a>
@@ -143,7 +147,7 @@
     </header>
 
     <section class="card intro-card">
-      <div class="card-head"><div class="card-title">接口文档与在线调试</div><div class="card-meta">服务版本 1.0.0</div></div>
+      <div class="card-head"><div class="card-title">接口文档与在线调试</div><div class="card-meta">服务版本 {{CODEX_METER_VERSION}} · 提交 {{CODEX_METER_COMMIT_SHORT}}</div></div>
       <p class="intro-copy">下面列出当前服务提供的额度、统计、预测、配置和资源接口。调试器只请求当前页面所在的服务地址，适合检查反向代理路径、认证和返回数据。</p>
       <div class="security-note">认证规则：启用 Basic Auth 时由浏览器自动携带用户名密码；配置了 App API Key 时，调试器会使用 <code>X-App-API-Key</code> 请求头。OAuth Token 只保留在服务端，不会被本页面读取。</div>
     </section>
@@ -194,7 +198,7 @@
     (function () {
       'use strict';
       var apiCatalog = [
-        {method:'GET', path:'/healthz', title:'健康检查', auth:'Basic Auth / App API Key', description:'返回服务是否正常运行。', params:[], body:'', response:'{"status":"ok"}'},
+        {method:'GET', path:'/healthz', title:'健康检查与构建标识', auth:'无需认证', description:'返回服务状态、版本、Git 提交和构建时间，可用于确认本地或线上实例是否已经更新。', params:[], body:'', response:'{"status":"ok","version":"v1.0.7","commit":"abcdef1234567890","build_time":"2026-09-12T06:45:00Z"}'},
         {method:'GET', path:'/api/usage?force=true', title:'获取当前额度', auth:'Basic Auth / App API Key', description:'获取五小时和七天额度窗口、重置时间及缓存状态。weekly_history 与 five_hour_history 分别先去除同一时间、同一额度值的重复点，再保留最新最多 48 个采样点，不会互相占用窗口；不同时间的相同百分比仍保留；history 为兼容用的合并结果。force=true 会绕过缓存。', params:['force=true'], body:'', response:'{"source":"wham_usage","five_hour":{},"seven_day":{},"weekly_history":[],"five_hour_history":[]}'},
         {method:'GET', path:'/api/usage/analytics?start_date=2026-08-01&end_date=2026-08-27&force=true', title:'获取日期范围使用统计', auth:'Basic Auth / App API Key', description:'获取日期范围内的 Token、额度、对话轮次和模型使用统计。最多支持 367 天。', params:['start_date=YYYY-MM-DD','end_date=YYYY-MM-DD','force=true'], body:'', response:'{"summary":{},"days":[]}'},
         {method:'GET', path:'/api/prediction?force=true', title:'获取重置预测', auth:'Basic Auth / App API Key', description:'获取 codex-resets.com 提供的公共重置信号、社区投票、历史统计和 Reset 历史记录。', params:['force=true'], body:'', response:'{"active_watch":null,"community_poll":{"yes_votes":1042,"no_votes":100,"total_votes":1142,"yes_percent":91.2434},"latest_reset":null,"history":[]}'},

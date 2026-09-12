@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#f7f7f8">
+  <meta name="application-version" content="{{CODEX_METER_VERSION}}">
+  <meta name="application-commit" content="{{CODEX_METER_COMMIT}}">
   <title>ChatGPT &amp; Codex</title>
   <style>
     :root {
@@ -41,6 +43,7 @@
     .brand-button { display:inline-flex; align-items:center; border:0; background:transparent; padding:0; cursor:pointer; text-align:left; }
     .brand-mark { width:24px; height:24px; display:block; flex:0 0 auto; color:var(--text); fill:currentColor; }
     .brand-title { display:block; margin-left:14px; font-size:16px; font-weight:650; letter-spacing:-.2px; }
+    .build-badge { display:inline-flex; align-items:center; min-height:22px; margin-left:auto; padding:0 7px; border:1px solid var(--border); border-radius:999px; background:var(--card-muted); color:var(--muted); font:600 8px/1 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:nowrap; }
     .connection { display:none; }
     .dot { width:7px; height:7px; border-radius:50%; background:var(--accent); }
     .dot.error { background:var(--danger); }
@@ -463,6 +466,7 @@
             </svg>
             <span class="brand-title">ChatGPT &amp; Codex</span>
           </button>
+          <span class="build-badge" title="版本 {{CODEX_METER_VERSION}} · 完整提交 {{CODEX_METER_COMMIT}} · 构建时间 {{CODEX_METER_BUILD_TIME}}">版本 {{CODEX_METER_VERSION}} · {{CODEX_METER_COMMIT_SHORT}}</span>
           <div class="connection"><i id="statusDot" class="dot"></i><span id="statusText">已连接</span></div>
         </header>
         <div class="hero quota-hero">

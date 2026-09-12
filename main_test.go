@@ -201,6 +201,70 @@ func TestAPIDocsAndOpenAPISpecAreServed(t *testing.T) {
 	}
 }
 
+func TestBuildMetadataIsRenderedAndExposed(t *testing.T) {
+	metadata := BuildMetadata{
+		Version:     "v9.8.7",
+		Commit:      "abcdef1234567890",
+		ShortCommit: "abcdef123456",
+		BuildTime:   "2026-09-12T06:45:00Z",
+	}
+	server := NewServer(Config{}, &UsageService{})
+	server.build = metadata
+
+	pageRequest := httptest.NewRequest(http.MethodGet, "/", nil)
+	pageRecorder := httptest.NewRecorder()
+	server.handler.ServeHTTP(pageRecorder, pageRequest)
+
+	if pageRecorder.Code != http.StatusOK {
+		t.Fatalf("page status = %d, want %d", pageRecorder.Code, http.StatusOK)
+	}
+	pageBody := pageRecorder.Body.String()
+	if !strings.Contains(pageBody, "版本 v9.8.7 · abcdef123456") {
+		t.Fatalf("page does not contain the rendered build badge")
+	}
+	if strings.Contains(pageBody, "{{CODEX_METER_") {
+		t.Fatalf("page still contains an unresolved build metadata placeholder")
+	}
+	if got := pageRecorder.Header().Get("X-Codex-Meter-Version"); got != metadata.Version {
+		t.Fatalf("version header = %q, want %q", got, metadata.Version)
+	}
+	if got := pageRecorder.Header().Get("X-Codex-Meter-Commit"); got != metadata.Commit {
+		t.Fatalf("commit header = %q, want %q", got, metadata.Commit)
+	}
+	if got := pageRecorder.Header().Get("X-Codex-Meter-Build-Time"); got != metadata.BuildTime {
+		t.Fatalf("build time header = %q, want %q", got, metadata.BuildTime)
+	}
+
+	healthRequest := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	healthRecorder := httptest.NewRecorder()
+	server.handler.ServeHTTP(healthRecorder, healthRequest)
+
+	if healthRecorder.Code != http.StatusOK {
+		t.Fatalf("health status = %d, want %d", healthRecorder.Code, http.StatusOK)
+	}
+	var health HealthResponse
+	if err := json.NewDecoder(healthRecorder.Body).Decode(&health); err != nil {
+		t.Fatalf("decode health response: %v", err)
+	}
+	if health.Status != "ok" || health.Version != metadata.Version || health.Commit != metadata.Commit || health.BuildTime != metadata.BuildTime {
+		t.Fatalf("health response = %#v, want metadata %#v", health, metadata)
+	}
+}
+
+func TestRenderHTMLBuildMetadataEscapesValues(t *testing.T) {
+	rendered := string(renderHTMLBuildMetadata([]byte(`<span title="{{CODEX_METER_COMMIT}}">{{CODEX_METER_VERSION}}</span>`), BuildMetadata{
+		Version: `<script>alert("version")</script>`,
+		Commit:  `"><script>alert("commit")</script>`,
+	}))
+
+	if strings.Contains(rendered, "<script>") {
+		t.Fatalf("rendered metadata was not HTML escaped: %s", rendered)
+	}
+	if !strings.Contains(rendered, "&lt;script&gt;") || !strings.Contains(rendered, "&#34;&gt;") {
+		t.Fatalf("rendered metadata does not contain escaped values: %s", rendered)
+	}
+}
+
 func TestAppAPIKeyEndpointReturnsConfiguredKeyAfterAuthentication(t *testing.T) {
 	const appAPIKey = "test-app-key"
 	cfg := Config{AppAPIKey: appAPIKey}

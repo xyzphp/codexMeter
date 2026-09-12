@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f7f8">
+  <meta name="application-version" content="{{CODEX_METER_VERSION}}">
+  <meta name="application-commit" content="{{CODEX_METER_COMMIT}}">
   <title>ChatGPT &amp; Codex 使用面板</title>
   <style>
     :root {
@@ -31,6 +33,7 @@
     .brand-mark { width:42px; height:42px; flex:0 0 42px; display:block; fill:currentColor; }
     .brand-title { margin-left:16px; font-size:25px; font-weight:680; letter-spacing:-.3px; }
     .header-actions { display:flex; align-items:center; gap:10px; }
+    .build-badge { display:inline-flex; align-items:center; min-height:28px; padding:0 9px; border:1px solid var(--border); border-radius:999px; background:var(--soft); color:var(--muted); font:600 11px/1 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:nowrap; }
     .status { display:flex; align-items:center; gap:8px; margin-right:10px; color:var(--muted); font-size:14px; white-space:nowrap; }
     .status-dot { width:9px; height:9px; flex:0 0 9px; border-radius:50%; background:var(--accent); }
     .status-dot.error { background:var(--danger); }
@@ -336,6 +339,8 @@
       .footnote { margin-top:8px; font-size:9px; }
     }
     @media (max-width:600px) {
+      .page-header { align-items:flex-start; flex-wrap:wrap; }
+      .header-actions { width:100%; flex-wrap:wrap; justify-content:flex-end; }
       .quota-grid, .reset-grid, .charts-grid, .usage-history-grid { grid-template-columns:1fr; }
       .quota-window + .quota-window { padding:12px 2px 0; border-top:1px solid var(--border); border-left:0; }
       .chart-panel.wide { grid-column:auto; }
@@ -351,6 +356,7 @@
         <span class="brand-title">ChatGPT &amp; Codex 使用面板</span>
       </a>
       <div class="header-actions">
+        <span class="build-badge" title="版本 {{CODEX_METER_VERSION}} · 完整提交 {{CODEX_METER_COMMIT}} · 构建时间 {{CODEX_METER_BUILD_TIME}}">版本 {{CODEX_METER_VERSION}} · {{CODEX_METER_COMMIT_SHORT}}</span>
         <div class="status"><i id="statusDot" class="status-dot"></i><span id="statusText">读取中</span></div>
         <button id="refreshButton" class="action primary" type="button">刷新数据</button>
         <a class="action" href="api-docs">接口文档</a>

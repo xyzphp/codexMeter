@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f7f8">
+  <meta name="application-version" content="{{CODEX_METER_VERSION}}">
+  <meta name="application-commit" content="{{CODEX_METER_COMMIT}}">
   <title>ChatGPT &amp; Codex 配置引导</title>
   <style>
     :root {
@@ -49,6 +51,19 @@
       border-radius: 50%;
       font-size: 17px;
       font-weight: 800;
+    }
+    .build-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      margin-left: auto;
+      padding: 0 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--soft);
+      color: var(--muted);
+      font: 600 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+      white-space: nowrap;
     }
     .card {
       overflow: hidden;
@@ -141,8 +156,9 @@
     }
     @media (max-width: 560px) {
       body { display: block; padding: 16px 10px; }
-      .brand { margin: 0 0 14px 2px; font-size: 18px; }
+      .brand { flex-wrap: wrap; margin: 0 0 14px 2px; font-size: 18px; }
       .brand-mark { width: 32px; height: 32px; font-size: 14px; }
+      .build-badge { margin-left: 44px; }
       .hero { padding: 23px 20px 20px; }
       h1 { font-size: 27px; }
       .content { padding: 18px 20px 22px; }
@@ -152,7 +168,7 @@
 </head>
 <body>
   <main class="shell">
-    <div class="brand"><span class="brand-mark">✦</span><span>ChatGPT &amp; Codex 使用面板</span></div>
+    <div class="brand"><span class="brand-mark">✦</span><span>ChatGPT &amp; Codex 使用面板</span><span class="build-badge" title="版本 {{CODEX_METER_VERSION}} · 完整提交 {{CODEX_METER_COMMIT}} · 构建时间 {{CODEX_METER_BUILD_TIME}}">版本 {{CODEX_METER_VERSION}} · {{CODEX_METER_COMMIT_SHORT}}</span></div>
     <section class="card">
       <header class="hero">
         <div class="eyebrow">首次启动配置</div>

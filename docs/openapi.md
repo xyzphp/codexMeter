@@ -40,7 +40,7 @@ openapi.yaml
 
 ### Basic Auth
 
-启用 Basic Auth 时，所有页面和接口都需要用户名密码。例如：
+启用 Basic Auth 时，除用于容器探活的 `/healthz` 外，所有页面和接口都需要用户名密码。例如：
 
 ```bash
 curl -u '用户名:密码' \
@@ -99,6 +99,8 @@ GET /openapi.yaml
 | POST | `/api/config/test` | 使用临时配置测试 OpenAI 额度连接，不保存配置 |
 | PUT | `/api/config` | 部分更新运行配置 |
 | GET | `/audio?kind=normal` | 获取内置提示音 |
+
+`GET /healthz` 无需认证，除了 `status` 还会返回当前构建的 `version`、完整 `commit` 和 UTC `build_time`。所有 HTTP 响应也包含 `X-Codex-Meter-Version`、`X-Codex-Meter-Commit` 与 `X-Codex-Meter-Build-Time` 响应头，便于确认浏览器、反向代理和容器当前实际运行的代码版本。
 
 额度、统计和预测接口支持：
 
@@ -256,7 +258,7 @@ curl -u '用户名:密码' \
 
 ## 7. Basic Auth 与 Nginx
 
-启用 Basic Auth 后，额度页面、配置页面、健康检查和 API 都需要输入配置的用户名和密码。使用 Nginx 反向代理时，需要透传 `Authorization` 请求头：
+启用 Basic Auth 后，额度页面、配置页面和业务 API 都需要输入配置的用户名和密码；`/healthz` 继续保持无需认证，供 Docker 探活使用。使用 Nginx 反向代理时，需要透传 `Authorization` 请求头：
 
 ```nginx
 location /codex/ {

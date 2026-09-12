@@ -22,6 +22,13 @@ jobs:
         with:
           ref: ${{ inputs.version }}
 
+      - name: 生成构建标识
+        id: build
+        shell: bash
+        run: |
+          echo "commit=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+          echo "build_time=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "${GITHUB_OUTPUT}"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -44,3 +51,7 @@ jobs:
           tags: |
             ghcr.io/xyzphp/codexmeter:${{ inputs.version }}
             ghcr.io/xyzphp/codexmeter:latest
+          build-args: |
+            APP_VERSION=${{ inputs.version }}
+            APP_COMMIT=${{ steps.build.outputs.commit }}
+            APP_BUILD_TIME=${{ steps.build.outputs.build_time }}

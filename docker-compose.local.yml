@@ -4,6 +4,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        APP_VERSION: ${CODEX_METER_VERSION:-dev}
+        APP_COMMIT: ${CODEX_METER_COMMIT:-unknown}
+        APP_BUILD_TIME: ${CODEX_METER_BUILD_TIME:-}
     container_name: codex-meter-local
     restart: unless-stopped
     ports:

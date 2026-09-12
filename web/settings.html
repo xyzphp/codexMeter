@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#f7f7f8">
+  <meta name="application-version" content="{{CODEX_METER_VERSION}}">
+  <meta name="application-commit" content="{{CODEX_METER_COMMIT}}">
   <title>ChatGPT &amp; Codex 设置</title>
   <style>
     :root {
@@ -118,6 +120,7 @@
     .brand-mark { width:42px; height:42px; flex-basis:42px; color:var(--text); }
     .brand-title { margin-left:16px; font-size:25px; font-weight:680; letter-spacing:-.3px; }
     .header-actions { display:flex; align-items:center; gap:10px; }
+    .build-badge { display:inline-flex; align-items:center; min-height:28px; padding:0 9px; border:1px solid var(--border); border-radius:999px; background:var(--soft); color:var(--muted); font:600 11px/1 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:nowrap; }
     .action { display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:0 15px; border:1px solid var(--border); border-radius:11px; background:var(--card); color:var(--muted); text-decoration:none; font-size:14px; line-height:1; white-space:nowrap; appearance:none; transition:background .18s ease,transform .1s ease; }
     .action:hover { background:var(--soft); }
     .action:active { transform:translateY(1px); }
@@ -311,6 +314,8 @@
       .status { font-size:11px; }
     }
     @media (max-width:600px) {
+      .page-header { align-items:flex-start; flex-wrap:wrap; }
+      .header-actions { width:100%; flex-wrap:wrap; justify-content:flex-end; }
       .field-grid { grid-template-columns:1fr; }
       .basic-auth-fields { grid-template-columns:1fr; gap:10px; }
       .proxy-form-grid { grid-template-columns:1fr 1fr; }
@@ -340,6 +345,7 @@
         <span class="brand-title">ChatGPT &amp; Codex 使用面板</span>
       </a>
       <div class="header-actions">
+        <span class="build-badge" title="版本 {{CODEX_METER_VERSION}} · 完整提交 {{CODEX_METER_COMMIT}} · 构建时间 {{CODEX_METER_BUILD_TIME}}">版本 {{CODEX_METER_VERSION}} · {{CODEX_METER_COMMIT_SHORT}}</span>
         <a class="action" href="./">返回面板</a>
         <a class="action" href="api-docs">接口文档</a>
         <button id="themeButton" class="action" type="button">切换主题</button>

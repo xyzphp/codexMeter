@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	htmlstd "html"
 	"io"
 	"log/slog"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -43,6 +45,95 @@ const (
 	dailyTokenUsageEndpoint       = "https://chatgpt.com/backend-api/wham/usage/daily-token-usage-breakdown"
 	dailyWorkspaceUsageEndpoint   = "https://chatgpt.com/backend-api/wham/analytics/daily-workspace-usage-counts"
 )
+
+var (
+	appVersion   = "dev"
+	appCommit    string
+	appBuildTime string
+)
+
+type BuildMetadata struct {
+	Version     string `json:"version"`
+	Commit      string `json:"commit"`
+	ShortCommit string `json:"-"`
+	BuildTime   string `json:"build_time"`
+}
+
+type HealthResponse struct {
+	Status    string `json:"status"`
+	Version   string `json:"version"`
+	Commit    string `json:"commit"`
+	BuildTime string `json:"build_time"`
+}
+
+func currentBuildMetadata() BuildMetadata {
+	version := cleanBuildMetadataValue(appVersion)
+	commit := cleanBuildMetadataValue(appCommit)
+	buildTime := cleanBuildMetadataValue(appBuildTime)
+	commitInjected := commit != ""
+	modified := false
+
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if (version == "" || version == "dev") && info.Main.Version != "" && info.Main.Version != "(devel)" {
+			version = cleanBuildMetadataValue(info.Main.Version)
+		}
+		for _, setting := range info.Settings {
+			switch setting.Key {
+			case "vcs.revision":
+				if commit == "" {
+					commit = cleanBuildMetadataValue(setting.Value)
+				}
+			case "vcs.modified":
+				modified = !commitInjected && setting.Value == "true"
+			}
+		}
+	}
+
+	if version == "" {
+		version = "dev"
+	}
+	if commit == "" {
+		commit = "unknown"
+	}
+	if buildTime == "" {
+		buildTime = "unknown"
+	}
+	shortCommit := commit
+	if len(shortCommit) > 12 {
+		shortCommit = shortCommit[:12]
+	}
+	if modified && shortCommit != "unknown" {
+		shortCommit += "-dirty"
+		commit += "-dirty"
+	}
+
+	return BuildMetadata{
+		Version:     version,
+		Commit:      commit,
+		ShortCommit: shortCommit,
+		BuildTime:   buildTime,
+	}
+}
+
+func cleanBuildMetadataValue(value string) string {
+	value = strings.TrimSpace(value)
+	return strings.Map(func(character rune) rune {
+		if character == '\r' || character == '\n' || character == 0 {
+			return -1
+		}
+		return character
+	}, value)
+}
+
+func renderHTMLBuildMetadata(page []byte, metadata BuildMetadata) []byte {
+	replacer := strings.NewReplacer(
+		"{{CODEX_METER_VERSION}}", htmlstd.EscapeString(metadata.Version),
+		"{{CODEX_METER_COMMIT}}", htmlstd.EscapeString(metadata.Commit),
+		"{{CODEX_METER_COMMIT_SHORT}}", htmlstd.EscapeString(metadata.ShortCommit),
+		"{{CODEX_METER_BUILD_TIME}}", htmlstd.EscapeString(metadata.BuildTime),
+	)
+	return []byte(replacer.Replace(string(page)))
+}
 
 // The two embedded pages intentionally have different layouts: indexHTML is
 // the compact LX04 WebView page, while browserHTML is the browser workbench.
@@ -2566,11 +2657,12 @@ type Server struct {
 	cfg      Config
 	usage    *UsageService
 	basePath string
+	build    BuildMetadata
 	handler  http.Handler
 }
 
 func NewServer(cfg Config, usage *UsageService) *Server {
-	server := &Server{cfg: cfg, usage: usage, basePath: cfg.BasePath}
+	server := &Server{cfg: cfg, usage: usage, basePath: cfg.BasePath, build: currentBuildMetadata()}
 	mux := http.NewServeMux()
 	server.registerRoutes(mux, cfg.BasePath)
 	if cfg.BasePath != "" {
@@ -2623,6 +2715,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux, prefix string) {
 
 func (s *Server) withMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		build := s.buildMetadata()
+		response.Header().Set("X-Codex-Meter-Version", build.Version)
+		response.Header().Set("X-Codex-Meter-Commit", build.Commit)
+		response.Header().Set("X-Codex-Meter-Build-Time", build.BuildTime)
 		middlewareConfig := s.cfg
 		if s.usage != nil {
 			middlewareConfig = s.usage.currentConfig()
@@ -2632,6 +2728,7 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 			response.Header().Set("Vary", "Origin")
 			response.Header().Set("Access-Control-Allow-Headers", "Authorization, X-App-API-Key, Content-Type")
 			response.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+			response.Header().Set("Access-Control-Expose-Headers", "X-Codex-Meter-Version, X-Codex-Meter-Commit, X-Codex-Meter-Build-Time")
 		}
 		if s.isHealthPath(request.URL.Path) {
 			next.ServeHTTP(response, request)
@@ -2707,26 +2804,29 @@ func authorizedBasic(request *http.Request, expectedUser, expectedPassword strin
 }
 
 func (s *Server) handleHealth(response http.ResponseWriter, _ *http.Request) {
-	writeJSON(response, http.StatusOK, map[string]string{"status": "ok"})
+	build := s.buildMetadata()
+	writeJSON(response, http.StatusOK, HealthResponse{
+		Status:    "ok",
+		Version:   build.Version,
+		Commit:    build.Commit,
+		BuildTime: build.BuildTime,
+	})
 }
 
 func (s *Server) handleIndex(response http.ResponseWriter, request *http.Request) {
-	response.Header().Set("Content-Type", "text/html; charset=utf-8")
-	response.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
-	response.WriteHeader(http.StatusOK)
 	config := s.cfg
 	if s.usage != nil {
 		config = s.usage.currentConfig()
 	}
 	if config.SetupRequired {
-		_, _ = response.Write(setupHTML)
+		s.writeHTML(response, setupHTML)
 		return
 	}
 	page := indexHTML
 	if !isDeviceWebViewRequest(request) {
 		page = browserHTML
 	}
-	_, _ = response.Write(page)
+	s.writeHTML(response, page)
 }
 
 func isDeviceWebViewRequest(request *http.Request) bool {
@@ -2744,17 +2844,25 @@ func isDeviceWebViewRequest(request *http.Request) bool {
 }
 
 func (s *Server) handleSettings(response http.ResponseWriter, _ *http.Request) {
-	response.Header().Set("Content-Type", "text/html; charset=utf-8")
-	response.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
-	response.WriteHeader(http.StatusOK)
-	_, _ = response.Write(settingsHTML)
+	s.writeHTML(response, settingsHTML)
 }
 
 func (s *Server) handleAPIDocs(response http.ResponseWriter, _ *http.Request) {
+	s.writeHTML(response, apiDocsHTML)
+}
+
+func (s *Server) buildMetadata() BuildMetadata {
+	if s != nil && s.build.Version != "" {
+		return s.build
+	}
+	return currentBuildMetadata()
+}
+
+func (s *Server) writeHTML(response http.ResponseWriter, page []byte) {
 	response.Header().Set("Content-Type", "text/html; charset=utf-8")
 	response.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 	response.WriteHeader(http.StatusOK)
-	_, _ = response.Write(apiDocsHTML)
+	_, _ = response.Write(renderHTMLBuildMetadata(page, s.buildMetadata()))
 }
 
 func (s *Server) handleOpenAPISpec(response http.ResponseWriter, _ *http.Request) {
@@ -2995,9 +3103,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	application := NewServer(cfg, usage)
 	server := &http.Server{
 		Addr:              cfg.BindAddr,
-		Handler:           NewServer(cfg, usage).handler,
+		Handler:           application.handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
@@ -3007,7 +3116,8 @@ func main() {
 	usage.StartHistoryCollector(stopContext)
 
 	go func() {
-		slog.Info("server started", "address", cfg.BindAddr, "cache_ttl", cfg.CacheTTL.String(), "history_interval", usageHistorySampleInterval.String())
+		build := application.buildMetadata()
+		slog.Info("server started", "address", cfg.BindAddr, "version", build.Version, "commit", build.ShortCommit, "build_time", build.BuildTime, "cache_ttl", cfg.CacheTTL.String(), "history_interval", usageHistorySampleInterval.String())
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("server stopped unexpectedly", "error", err)
 			stop()
