@@ -726,20 +726,19 @@ func NewUsageService(cfg Config) (*UsageService, error) {
 	}
 	weeklyHistoryFile := usageHistoryMetricPath(defaultUsageHistoryFile, usageHistoryMetricWeekly)
 	fiveHourHistoryFile := usageHistoryMetricPath(defaultUsageHistoryFile, usageHistoryMetricFiveHour)
-	weeklyHistory, weeklyFound, err := loadUsageHistoryMetric(weeklyHistoryFile, usageHistoryMetricWeekly)
+	weeklyHistory, _, err := loadUsageHistoryMetric(weeklyHistoryFile, usageHistoryMetricWeekly)
 	if err != nil {
 		return nil, fmt.Errorf("load weekly usage history: %w", err)
 	}
-	if !weeklyFound {
-		weeklyHistory = compactUsageHistoryMetric(legacyHistory, usageHistoryMetricWeekly)
-	}
-	fiveHourHistory, fiveHourFound, err := loadUsageHistoryMetric(fiveHourHistoryFile, usageHistoryMetricFiveHour)
+	fiveHourHistory, _, err := loadUsageHistoryMetric(fiveHourHistoryFile, usageHistoryMetricFiveHour)
 	if err != nil {
 		return nil, fmt.Errorf("load five-hour usage history: %w", err)
 	}
-	if !fiveHourFound {
-		fiveHourHistory = compactUsageHistoryMetric(legacyHistory, usageHistoryMetricFiveHour)
-	}
+	// Merge the legacy combined snapshot with the metric files before applying
+	// each metric's sample limit. This also upgrades an existing installation
+	// whose weekly file only contains the old change-point records.
+	weeklyHistory = compactUsageHistoryMetric(mergeUsageHistorySamples(legacyHistory, weeklyHistory), usageHistoryMetricWeekly)
+	fiveHourHistory = compactUsageHistoryMetric(mergeUsageHistorySamples(legacyHistory, fiveHourHistory), usageHistoryMetricFiveHour)
 	history := mergeUsageHistories(weeklyHistory, fiveHourHistory)
 	slog.Info("usage history loaded", "path", defaultUsageHistoryFile, "points", len(history), "weekly_points", len(weeklyHistory), "five_hour_points", len(fiveHourHistory))
 	return &UsageService{
@@ -953,18 +952,12 @@ func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
 			return
 		}
 	}
-	weeklyChanged := usageHistoryMetricChanged(s.weeklyHistory, point, usageHistoryMetricWeekly)
-	fiveHourChanged := usageHistoryMetricChanged(s.fiveHourHistory, point, usageHistoryMetricFiveHour)
-	if !weeklyChanged && !fiveHourChanged {
-		// Keep the first sample of a stable value run in each timeline; later
-		// duplicates do not replace its timestamp or consume another point.
-		s.cacheMu.Unlock()
-		return
-	}
-	if weeklyChanged {
-		s.weeklyHistory = compactUsageHistoryMetric(append(s.weeklyHistory, point), usageHistoryMetricWeekly)
-	}
-	if fiveHourChanged {
+	// Every scheduled sample belongs to the weekly timeline, even when the
+	// weekly percentage stays unchanged. The five-hour timeline follows the
+	// same rule when that window is present; neither timeline is driven by the
+	// other one's value changes.
+	s.weeklyHistory = compactUsageHistoryMetric(append(s.weeklyHistory, point), usageHistoryMetricWeekly)
+	if point.FiveHourUsedPercent != nil {
 		s.fiveHourHistory = compactUsageHistoryMetric(append(s.fiveHourHistory, point), usageHistoryMetricFiveHour)
 	}
 	s.history = mergeUsageHistories(s.weeklyHistory, s.fiveHourHistory)
@@ -1048,16 +1041,9 @@ func sameUsageHistoryMetricValue(left, right HistoryPoint, metric usageHistoryMe
 	return *left.FiveHourUsedPercent == *right.FiveHourUsedPercent
 }
 
-func usageHistoryMetricChanged(history []HistoryPoint, point HistoryPoint, metric usageHistoryMetric) bool {
-	if metric == usageHistoryMetricFiveHour && point.FiveHourUsedPercent == nil {
-		return false
-	}
-	if len(history) == 0 {
-		return true
-	}
-	return !sameUsageHistoryMetricValue(history[len(history)-1], point, metric)
-}
-
+// compactUsageHistoryMetric retains the most recent samples for one metric.
+// Repeated values are intentionally kept: the chart is a timeline of the
+// latest 48 independent samples, not just a list of value changes.
 func compactUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric) []HistoryPoint {
 	if len(points) == 0 {
 		return nil
@@ -1067,15 +1053,49 @@ func compactUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric)
 		if metric == usageHistoryMetricFiveHour && point.FiveHourUsedPercent == nil {
 			continue
 		}
-		if len(compact) > 0 && sameUsageHistoryMetricValue(compact[len(compact)-1], point, metric) {
-			continue
-		}
 		compact = append(compact, point)
 	}
 	if len(compact) > maxUsageHistoryPoints {
 		compact = compact[len(compact)-maxUsageHistoryPoints:]
 	}
 	return compact
+}
+
+func mergeUsageHistorySamples(histories ...[]HistoryPoint) []HistoryPoint {
+	total := 0
+	for _, history := range histories {
+		total += len(history)
+	}
+	if total == 0 {
+		return nil
+	}
+	merged := make([]HistoryPoint, 0, total)
+	indexes := make(map[string]int, total)
+	for _, history := range histories {
+		for _, point := range history {
+			point = cloneHistoryPoint(point)
+			if index, ok := indexes[point.At]; ok {
+				merged[index].UsedPercent = point.UsedPercent
+				merged[index].Stale = point.Stale
+				if point.FiveHourUsedPercent != nil {
+					fiveHourUsedPercent := *point.FiveHourUsedPercent
+					merged[index].FiveHourUsedPercent = &fiveHourUsedPercent
+				}
+				continue
+			}
+			indexes[point.At] = len(merged)
+			merged = append(merged, point)
+		}
+	}
+	sort.SliceStable(merged, func(left, right int) bool {
+		leftAt, leftErr := time.Parse(time.RFC3339, merged[left].At)
+		rightAt, rightErr := time.Parse(time.RFC3339, merged[right].At)
+		if leftErr == nil && rightErr == nil && !leftAt.Equal(rightAt) {
+			return leftAt.Before(rightAt)
+		}
+		return merged[left].At < merged[right].At
+	})
+	return merged
 }
 
 func usageHistoryMetricPath(path string, metric usageHistoryMetric) string {

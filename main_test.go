@@ -367,8 +367,8 @@ func TestUsageHistoryRetainsIndependentMetricWindows(t *testing.T) {
 	if len(weekly) != maxUsageHistoryPoints || len(fiveHour) != maxUsageHistoryPoints {
 		t.Fatalf("independent history lengths = weekly %d, five-hour %d; want %d each", len(weekly), len(fiveHour), maxUsageHistoryPoints)
 	}
-	if weekly[0].UsedPercent != 12 || weekly[len(weekly)-1].UsedPercent != 59 {
-		t.Fatalf("weekly history range = %v..%v, want 12..59", weekly[0].UsedPercent, weekly[len(weekly)-1].UsedPercent)
+	if weekly[0].UsedPercent != 36 || weekly[1].UsedPercent != 36 || weekly[len(weekly)-1].UsedPercent != 59 {
+		t.Fatalf("weekly history range = %v..%v, want 36..59", weekly[0].UsedPercent, weekly[len(weekly)-1].UsedPercent)
 	}
 	if fiveHour[0].FiveHourUsedPercent == nil || *fiveHour[0].FiveHourUsedPercent != 72 {
 		t.Fatalf("five-hour history starts at %v, want 72", fiveHour[0].FiveHourUsedPercent)

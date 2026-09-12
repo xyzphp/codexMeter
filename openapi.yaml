@@ -530,12 +530,12 @@ components:
             $ref: '#/components/schemas/HistoryPoint'
         weekly_history:
           type: array
-          description: 周额度独立时间线，按采样时间升序返回；连续相同采样仅保留区间第一条，最多保留最新 48 个变化点，不受 5 小时额度变化影响。
+          description: 周额度独立时间线，按采样时间升序返回；最多保留最新 48 次采样，即使连续采样的百分比相同也会保留，不受 5 小时额度变化影响。
           items:
             $ref: '#/components/schemas/HistoryPoint'
         five_hour_history:
           type: array
-          description: 5 小时额度独立时间线，按采样时间升序返回；连续相同采样仅保留区间第一条，最多保留最新 48 个变化点，不受周额度变化影响。
+          description: 5 小时额度独立时间线，按采样时间升序返回；最多保留最新 48 次采样，即使连续采样的百分比相同也会保留，不受周额度变化影响。
           items:
             $ref: '#/components/schemas/HistoryPoint'
 
