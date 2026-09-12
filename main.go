@@ -783,27 +783,28 @@ type whamWindow struct {
 }
 
 type UsageService struct {
-	cfgMu               sync.RWMutex
-	cfg                 Config
-	clientMu            sync.RWMutex
-	client              *http.Client
-	cacheMu             sync.Mutex
-	refreshMu           sync.Mutex
-	resetRefreshMu      sync.Mutex
-	analyticsRefreshMu  sync.Mutex
-	cached              *UsageResponse
-	cachedAt            time.Time
-	history             []HistoryPoint
-	weeklyHistory       []HistoryPoint
-	fiveHourHistory     []HistoryPoint
-	resetCached         *ResetPrediction
-	resetCachedAt       time.Time
-	analyticsCached     *UsageAnalytics
-	analyticsCachedAt   time.Time
-	analyticsCachedKey  string
-	historyFile         string
-	weeklyHistoryFile   string
-	fiveHourHistoryFile string
+	cfgMu                 sync.RWMutex
+	cfg                   Config
+	clientMu              sync.RWMutex
+	client                *http.Client
+	cacheMu               sync.Mutex
+	refreshMu             sync.Mutex
+	resetRefreshMu        sync.Mutex
+	analyticsRefreshMu    sync.Mutex
+	cached                *UsageResponse
+	cachedAt              time.Time
+	history               []HistoryPoint
+	weeklyHistory         []HistoryPoint
+	fiveHourHistory       []HistoryPoint
+	lastSuccessfulHistory *HistoryPoint
+	resetCached           *ResetPrediction
+	resetCachedAt         time.Time
+	analyticsCached       *UsageAnalytics
+	analyticsCachedAt     time.Time
+	analyticsCachedKey    string
+	historyFile           string
+	weeklyHistoryFile     string
+	fiveHourHistoryFile   string
 }
 
 func NewUsageService(cfg Config) (*UsageService, error) {
@@ -830,6 +831,12 @@ func NewUsageService(cfg Config) (*UsageService, error) {
 	// whose weekly file only contains the old change-point records.
 	weeklyHistory = compactUsageHistoryMetric(mergeUsageHistorySamples(legacyHistory, weeklyHistory), usageHistoryMetricWeekly)
 	fiveHourHistory = compactUsageHistoryMetric(mergeUsageHistorySamples(legacyHistory, fiveHourHistory), usageHistoryMetricFiveHour)
+	if err := rewriteUsageHistoryIfChanged(weeklyHistoryFile, weeklyHistory); err != nil {
+		slog.Warn("rewrite compacted weekly usage history failed", "path", weeklyHistoryFile, "error", err)
+	}
+	if err := rewriteUsageHistoryIfChanged(fiveHourHistoryFile, fiveHourHistory); err != nil {
+		slog.Warn("rewrite compacted five-hour usage history failed", "path", fiveHourHistoryFile, "error", err)
+	}
 	history := mergeUsageHistories(weeklyHistory, fiveHourHistory)
 	slog.Info("usage history loaded", "path", defaultUsageHistoryFile, "points", len(history), "weekly_points", len(weeklyHistory), "five_hour_points", len(fiveHourHistory))
 	return &UsageService{
@@ -1029,6 +1036,10 @@ func usageHistorySampleTimestamp(sampleAt time.Time) string {
 
 func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
 	s.cacheMu.Lock()
+	if !point.Stale {
+		latestSuccessful := cloneHistoryPoint(point)
+		s.lastSuccessfulHistory = &latestSuccessful
+	}
 	if len(s.weeklyHistory) == 0 && len(s.fiveHourHistory) == 0 && len(s.history) > 0 {
 		// Keep services constructed by older callers compatible while the two
 		// metric-specific timelines are introduced.
@@ -1043,8 +1054,8 @@ func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
 			return
 		}
 	}
-	// Every scheduled sample is evaluated for the weekly timeline. Identical
-	// points are deduplicated independently, and the five-hour timeline follows
+	// Every scheduled sample is evaluated for the weekly timeline. Repeated
+	// values are deduplicated independently, and the five-hour timeline follows
 	// the same rule when that window is present; neither timeline is driven by
 	// the other one's value changes.
 	s.weeklyHistory = compactUsageHistoryMetric(append(s.weeklyHistory, point), usageHistoryMetricWeekly)
@@ -1082,6 +1093,9 @@ func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
 func (s *UsageService) lastSuccessfulHistoryPoint() (HistoryPoint, bool) {
 	s.cacheMu.Lock()
 	defer s.cacheMu.Unlock()
+	if s.lastSuccessfulHistory != nil {
+		return cloneHistoryPoint(*s.lastSuccessfulHistory), true
+	}
 	history := s.history
 	if len(history) == 0 {
 		history = mergeUsageHistories(s.weeklyHistory, s.fiveHourHistory)
@@ -1091,11 +1105,9 @@ func (s *UsageService) lastSuccessfulHistoryPoint() (HistoryPoint, bool) {
 		if point.Stale {
 			continue
 		}
-		if point.FiveHourUsedPercent != nil {
-			fiveHourUsedPercent := *point.FiveHourUsedPercent
-			point.FiveHourUsedPercent = &fiveHourUsedPercent
-		}
-		return point, true
+		latestSuccessful := cloneHistoryPoint(point)
+		s.lastSuccessfulHistory = &latestSuccessful
+		return cloneHistoryPoint(latestSuccessful), true
 	}
 	return HistoryPoint{}, false
 }
@@ -1115,45 +1127,60 @@ func usageHistoryPoint(usage *UsageResponse) (HistoryPoint, bool) {
 	return point, true
 }
 
-// deduplicateUsageHistoryMetric keeps the first record of each identical point
-// for one metric. The timestamp is part of the point identity, so equal values
-// sampled at different times remain separate timeline points. The stale marker
-// and the other quota window are not part of the point identity.
+// deduplicateUsageHistoryMetric keeps the latest successful record for every
+// distinct value of one metric, falling back to the latest stale record when
+// no successful sample exists. Timestamps, stale markers, and the other quota
+// window do not make an unchanged metric value a new chart point.
 func deduplicateUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric) []HistoryPoint {
 	if len(points) == 0 {
 		return nil
 	}
 	compact := make([]HistoryPoint, 0, len(points))
 	seen := make(map[string]struct{}, len(points))
+	hasSuccessful := make(map[string]bool, len(points))
 	for _, point := range points {
 		if metric == usageHistoryMetricFiveHour && point.FiveHourUsedPercent == nil {
 			continue
 		}
-		key := usageHistoryMetricPointKey(point, metric)
+		if !point.Stale {
+			hasSuccessful[usageHistoryMetricValueKey(point, metric)] = true
+		}
+	}
+	for index := len(points) - 1; index >= 0; index-- {
+		point := points[index]
+		if metric == usageHistoryMetricFiveHour && point.FiveHourUsedPercent == nil {
+			continue
+		}
+		key := usageHistoryMetricValueKey(point, metric)
+		if point.Stale && hasSuccessful[key] {
+			continue
+		}
 		if _, exists := seen[key]; exists {
 			continue
 		}
 		seen[key] = struct{}{}
 		compact = append(compact, point)
 	}
+	for left, right := 0, len(compact)-1; left < right; left, right = left+1, right-1 {
+		compact[left], compact[right] = compact[right], compact[left]
+	}
 	return compact
 }
 
-func usageHistoryMetricPointKey(point HistoryPoint, metric usageHistoryMetric) string {
+func usageHistoryMetricValueKey(point HistoryPoint, metric usageHistoryMetric) string {
 	value := "nil"
 	if metric == usageHistoryMetricWeekly {
 		value = strconv.FormatFloat(point.UsedPercent, 'g', -1, 64)
 	} else if point.FiveHourUsedPercent != nil {
 		value = strconv.FormatFloat(*point.FiveHourUsedPercent, 'g', -1, 64)
 	}
-	// A metric point is identified only by its timestamp and its own value.
-	// In particular, weekly history must not be deduplicated by the five-hour
-	// value, and a stale marker must not create another point for the same value.
-	return point.At + "\x00" + value
+	// Weekly and five-hour histories are deduplicated only by their own value,
+	// so changes in the other quota window cannot consume this metric's limit.
+	return value
 }
 
-// limitUsageHistoryPoints retains the latest points after metric-specific
-// deduplication has completed.
+// limitUsageHistoryPoints retains the latest distinct values after
+// metric-specific deduplication has completed.
 func limitUsageHistoryPoints(points []HistoryPoint) []HistoryPoint {
 	if len(points) > maxUsageHistoryPoints {
 		return points[len(points)-maxUsageHistoryPoints:]
@@ -1161,9 +1188,9 @@ func limitUsageHistoryPoints(points []HistoryPoint) []HistoryPoint {
 	return points
 }
 
-// compactUsageHistoryMetric first removes identical points for one metric, then
-// retains the latest 48 samples. The other quota window cannot consume this
-// metric's limit.
+// compactUsageHistoryMetric first keeps the latest successful occurrence of
+// every value for one metric, then retains the latest 48 distinct values. The
+// other quota window cannot consume this metric's limit.
 func compactUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric) []HistoryPoint {
 	if len(points) < 2 {
 		return limitUsageHistoryPoints(deduplicateUsageHistoryMetric(points, metric))
@@ -1434,6 +1461,38 @@ func writeUsageHistory(path string, history []HistoryPoint) error {
 		return fmt.Errorf("replace usage history: %w", err)
 	}
 	return nil
+}
+
+func rewriteUsageHistoryIfChanged(path string, history []HistoryPoint) error {
+	current, exists, invalid, err := readUsageHistoryFile(path)
+	if err != nil {
+		return err
+	}
+	if !exists && len(history) == 0 {
+		return nil
+	}
+	if exists && !invalid && usageHistoriesEqual(current, history) {
+		return nil
+	}
+	return writeUsageHistory(path, history)
+}
+
+func usageHistoriesEqual(left, right []HistoryPoint) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index].At != right[index].At || left[index].UsedPercent != right[index].UsedPercent || left[index].Stale != right[index].Stale {
+			return false
+		}
+		if (left[index].FiveHourUsedPercent == nil) != (right[index].FiveHourUsedPercent == nil) {
+			return false
+		}
+		if left[index].FiveHourUsedPercent != nil && *left[index].FiveHourUsedPercent != *right[index].FiveHourUsedPercent {
+			return false
+		}
+	}
+	return true
 }
 
 func encodeUsageHistory(history []HistoryPoint) ([]byte, error) {

@@ -579,17 +579,18 @@
       }
       function deduplicateUsageHistoryPoints(points) {
         if (points.length < 2) return points;
-        var deduplicated = []; var seen = Object.create(null);
-        points.forEach(function (point) {
-          // The chart point is identified by its timestamp and selected
-          // metric value. Equal values at different times are valid samples
-          // and must remain before the 48-point limit is applied.
-          var key = String(point.time) + '|' + String(point.used);
-          if (Object.prototype.hasOwnProperty.call(seen, key)) return;
+        var deduplicated = []; var seen = Object.create(null); var hasSuccessful = Object.create(null); var index;
+        points.forEach(function (point) { if (!point.stale) hasSuccessful[String(point.used)] = true; });
+        // Traverse from newest to oldest so every displayed percentage keeps
+        // its latest successful sample, independent of the other quota window.
+        for (index = points.length - 1; index >= 0; index -= 1) {
+          var point = points[index]; var key = String(point.used);
+          if (point.stale && Object.prototype.hasOwnProperty.call(hasSuccessful, key)) continue;
+          if (Object.prototype.hasOwnProperty.call(seen, key)) continue;
           seen[key] = true;
           deduplicated.push(point);
-        });
-        return deduplicated;
+        }
+        return deduplicated.reverse();
       }
       var usageHistoryMaxPoints = 48;
       function bindUsageHistoryTooltips(container) {
@@ -608,9 +609,8 @@
         var points = (Array.isArray(history) ? history : []).map(function (point) { var at = point && point.at ? timestamp(point.at) : 0; var used = number(point && point[options.metric]); return at > 0 && isFinite(used) ? {at:point.at, time:at, used:clamp(used, 0, 100), stale:Boolean(point && point.stale), changePoint:true} : null; }).filter(function (point) { return point !== null; });
         points.sort(function (left, right) { return left.time - right.time; });
         if (!points.length) { text(options.currentId, '—'); text(options.maxId, '—'); text(options.minId, '—'); container.innerHTML = '<div class="empty">暂无' + escaped(options.emptyLabel || '额度') + '采样</div>'; return; }
-        // Remove identical coordinates from the selected metric first. Equal
-        // values at different timestamps are real timeline samples and must
-        // count toward the 48-point window.
+        // Remove repeated values for this metric before applying the 48-point
+        // limit. The latest successful occurrence of each percentage is kept.
         points = deduplicateUsageHistoryPoints(points);
         if (points.length > usageHistoryMaxPoints) points = points.slice(points.length - usageHistoryMaxPoints);
         points.forEach(function (point, index) { point.position = index; });

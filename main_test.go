@@ -394,12 +394,13 @@ func TestUsageHistoryPersistsAndKeepsMostRecentPoints(t *testing.T) {
 func TestUsageHistoryDeduplicatesBeforeApplyingPointLimit(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
 	const sourcePointCount = maxUsageHistoryPoints + 12
+	baseTime := time.Date(2026, time.August, 27, 12, 0, 0, 0, time.UTC)
 	for index := 0; index < sourcePointCount; index++ {
-		point := HistoryPoint{
-			At:          time.Date(2026, time.August, 27, 12, index, 0, 0, time.UTC).Format(time.RFC3339),
-			UsedPercent: float64(index),
-		}
 		for duplicate := 0; duplicate < 2; duplicate++ {
+			point := HistoryPoint{
+				At:          baseTime.Add(time.Duration(index*2+duplicate) * time.Minute).Format(time.RFC3339),
+				UsedPercent: float64(index),
+			}
 			if err := appendUsageHistory(path, point); err != nil {
 				t.Fatalf("append duplicate usage history: %v", err)
 			}
@@ -416,6 +417,9 @@ func TestUsageHistoryDeduplicatesBeforeApplyingPointLimit(t *testing.T) {
 	}
 	if loaded[0].UsedPercent != 12 || loaded[len(loaded)-1].UsedPercent != float64(sourcePointCount-1) {
 		t.Fatalf("deduplicated history range = %v..%v, want 12..%d", loaded[0].UsedPercent, loaded[len(loaded)-1].UsedPercent, sourcePointCount-1)
+	}
+	if loaded[0].At != baseTime.Add(25*time.Minute).Format(time.RFC3339) || loaded[len(loaded)-1].At != baseTime.Add(119*time.Minute).Format(time.RFC3339) {
+		t.Fatalf("deduplicated history did not retain the latest occurrence: %s..%s", loaded[0].At, loaded[len(loaded)-1].At)
 	}
 }
 
@@ -435,11 +439,15 @@ func TestUsageHistoryRetainsIndependentMetricWindows(t *testing.T) {
 	if len(weekly) != maxUsageHistoryPoints || len(fiveHour) != maxUsageHistoryPoints {
 		t.Fatalf("independent history lengths = weekly %d, five-hour %d; want %d each", len(weekly), len(fiveHour), maxUsageHistoryPoints)
 	}
-	if weekly[0].UsedPercent != 36 || weekly[1].UsedPercent != 36 || weekly[len(weekly)-1].UsedPercent != 59 {
-		t.Fatalf("weekly history range = %v..%v, want 36..59", weekly[0].UsedPercent, weekly[len(weekly)-1].UsedPercent)
+	if weekly[0].UsedPercent != 12 || weekly[1].UsedPercent != 13 || weekly[len(weekly)-1].UsedPercent != 59 {
+		t.Fatalf("weekly history range = %v..%v, want 12..59", weekly[0].UsedPercent, weekly[len(weekly)-1].UsedPercent)
 	}
-	if weekly[0].At == weekly[1].At {
-		t.Fatalf("weekly history collapsed distinct timestamps: %#v", weekly[:2])
+	weeklyValues := make(map[float64]struct{}, len(weekly))
+	for _, point := range weekly {
+		if _, exists := weeklyValues[point.UsedPercent]; exists {
+			t.Fatalf("weekly history contains duplicate value %v: %#v", point.UsedPercent, weekly)
+		}
+		weeklyValues[point.UsedPercent] = struct{}{}
 	}
 	if fiveHour[0].FiveHourUsedPercent == nil || *fiveHour[0].FiveHourUsedPercent != 72 {
 		t.Fatalf("five-hour history starts at %v, want 72", fiveHour[0].FiveHourUsedPercent)
@@ -452,18 +460,19 @@ func TestUsageHistoryRetainsIndependentMetricWindows(t *testing.T) {
 func TestUsageHistoryMetricDeduplicationIgnoresOtherWindow(t *testing.T) {
 	firstFiveHour := 12.0
 	secondFiveHour := 13.0
-	at := "2026-08-27T12:00:00Z"
+	firstAt := "2026-08-27T12:00:00Z"
+	secondAt := "2026-08-27T12:05:00Z"
 	points := []HistoryPoint{
-		{At: at, UsedPercent: 55, FiveHourUsedPercent: &firstFiveHour},
-		{At: at, UsedPercent: 55, FiveHourUsedPercent: &secondFiveHour},
+		{At: firstAt, UsedPercent: 55, FiveHourUsedPercent: &firstFiveHour},
+		{At: secondAt, UsedPercent: 55, FiveHourUsedPercent: &secondFiveHour},
 	}
 
 	weekly := compactUsageHistoryMetric(points, usageHistoryMetricWeekly)
 	if len(weekly) != 1 {
 		t.Fatalf("weekly history used five-hour changes during deduplication: %#v", weekly)
 	}
-	if weekly[0].FiveHourUsedPercent == nil || *weekly[0].FiveHourUsedPercent != firstFiveHour {
-		t.Fatalf("weekly history did not retain the first weekly point: %#v", weekly[0])
+	if weekly[0].At != secondAt || weekly[0].FiveHourUsedPercent == nil || *weekly[0].FiveHourUsedPercent != secondFiveHour {
+		t.Fatalf("weekly history did not retain the latest weekly point: %#v", weekly[0])
 	}
 
 	fiveHour := compactUsageHistoryMetric(points, usageHistoryMetricFiveHour)
@@ -472,12 +481,13 @@ func TestUsageHistoryMetricDeduplicationIgnoresOtherWindow(t *testing.T) {
 	}
 }
 
-func TestUsageHistoryDeduplicationKeepsFirstRecord(t *testing.T) {
+func TestUsageHistoryDeduplicationKeepsLatestRecord(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
 	firstAt := time.Date(2026, time.August, 27, 12, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	latestAt := time.Date(2026, time.August, 27, 12, 5, 0, 0, time.UTC).Format(time.RFC3339)
 	for _, point := range []HistoryPoint{
 		{At: firstAt, UsedPercent: 12},
-		{At: firstAt, UsedPercent: 12},
+		{At: latestAt, UsedPercent: 12},
 	} {
 		if err := appendUsageHistory(path, point); err != nil {
 			t.Fatalf("append repeated usage history: %v", err)
@@ -488,8 +498,8 @@ func TestUsageHistoryDeduplicationKeepsFirstRecord(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load repeated usage history: %v", err)
 	}
-	if len(loaded) != 1 || loaded[0].At != firstAt {
-		t.Fatalf("deduplicated record = %#v, want first record at %s", loaded, firstAt)
+	if len(loaded) != 1 || loaded[0].At != latestAt {
+		t.Fatalf("deduplicated record = %#v, want latest record at %s", loaded, latestAt)
 	}
 }
 
@@ -540,6 +550,40 @@ func TestWriteUsageHistoryKeepsPreviousSnapshotAsBackup(t *testing.T) {
 	}
 	if invalid || len(current) != len(updated) || len(backup) != len(initial) {
 		t.Fatalf("history snapshots current=%#v backup=%#v invalid=%v", current, backup, invalid)
+	}
+}
+
+func TestRewriteUsageHistoryIfChangedPersistsCompactedValuesOnce(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data", "usage-history-weekly.jsonl")
+	raw := []HistoryPoint{
+		{At: "2026-08-28T01:00:00Z", UsedPercent: 10},
+		{At: "2026-08-28T01:05:00Z", UsedPercent: 10},
+		{At: "2026-08-28T01:10:00Z", UsedPercent: 11},
+	}
+	for _, point := range raw {
+		if err := appendUsageHistory(path, point); err != nil {
+			t.Fatalf("append raw usage history: %v", err)
+		}
+	}
+	compacted := compactUsageHistoryMetric(raw, usageHistoryMetricWeekly)
+
+	if err := rewriteUsageHistoryIfChanged(path, compacted); err != nil {
+		t.Fatalf("rewrite compacted usage history: %v", err)
+	}
+	if err := rewriteUsageHistoryIfChanged(path, compacted); err != nil {
+		t.Fatalf("skip unchanged compacted usage history: %v", err)
+	}
+
+	current, exists, invalid, err := readUsageHistoryFile(path)
+	if err != nil || !exists || invalid {
+		t.Fatalf("read rewritten usage history: exists=%v invalid=%v err=%v", exists, invalid, err)
+	}
+	if len(current) != 2 || current[0].At != raw[1].At || current[1].At != raw[2].At {
+		t.Fatalf("rewritten usage history = %#v, want latest unique values", current)
+	}
+	backup, backupExists, backupInvalid, err := readUsageHistoryFile(usageHistoryBackupPath(path))
+	if err != nil || !backupExists || backupInvalid || len(backup) != len(raw) {
+		t.Fatalf("compaction backup = %#v, exists=%v invalid=%v err=%v", backup, backupExists, backupInvalid, err)
 	}
 }
 
@@ -647,8 +691,12 @@ func TestScheduledUsageCollectionFallsBackToLastSuccessfulPoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load fallback history: %v", err)
 	}
-	if len(loaded) != 2 || !loaded[1].Stale || loaded[1].UsedPercent != lastPoint.UsedPercent || loaded[1].FiveHourUsedPercent == nil || *loaded[1].FiveHourUsedPercent != fiveHour {
-		t.Fatalf("fallback history = %#v, want stale copy of %#v", loaded, lastPoint)
+	if len(loaded) != 1 || loaded[0].Stale || loaded[0].At != lastPoint.At || loaded[0].UsedPercent != lastPoint.UsedPercent || loaded[0].FiveHourUsedPercent == nil || *loaded[0].FiveHourUsedPercent != fiveHour {
+		t.Fatalf("fallback history = %#v, want existing successful point %#v", loaded, lastPoint)
+	}
+	lastSuccessful, ok := service.lastSuccessfulHistoryPoint()
+	if !ok || lastSuccessful.Stale || lastSuccessful.At != lastPoint.At || lastSuccessful.UsedPercent != lastPoint.UsedPercent {
+		t.Fatalf("last successful history = %#v, %v; want %#v", lastSuccessful, ok, lastPoint)
 	}
 }
 
