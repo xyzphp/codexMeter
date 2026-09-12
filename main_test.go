@@ -423,6 +423,49 @@ func TestUsageHistoryDeduplicatesBeforeApplyingPointLimit(t *testing.T) {
 	}
 }
 
+func TestUsageHistoryKeepsCompleteRawArchiveBeforeWeeklyLimit(t *testing.T) {
+	directory := t.TempDir()
+	historyPath := filepath.Join(directory, "data", "usage-history.jsonl")
+	rawPath := filepath.Join(directory, "data", "usage-history-raw.jsonl")
+	service := &UsageService{
+		historyFile:    historyPath,
+		rawHistoryFile: rawPath,
+	}
+	const sourcePointCount = maxUsageHistoryPoints + 12
+	baseTime := time.Date(2026, time.August, 27, 12, 0, 0, 0, time.UTC)
+	fiveHour := 24.0
+	for index := 0; index < sourcePointCount; index++ {
+		service.persistUsageHistoryPoint(HistoryPoint{
+			At:                  baseTime.Add(time.Duration(index) * usageHistorySampleInterval).Format(time.RFC3339),
+			UsedPercent:         float64(index),
+			FiveHourUsedPercent: &fiveHour,
+		})
+	}
+
+	raw, err := loadUsageHistoryRecords(rawPath)
+	if err != nil {
+		t.Fatalf("load raw usage history: %v", err)
+	}
+	if len(raw) != sourcePointCount {
+		t.Fatalf("raw history contains %d points, want all %d scheduled samples", len(raw), sourcePointCount)
+	}
+	if len(service.weeklyHistory) != maxUsageHistoryPoints {
+		t.Fatalf("weekly history contains %d points, want %d derived points", len(service.weeklyHistory), maxUsageHistoryPoints)
+	}
+	if service.weeklyHistory[0].UsedPercent != 12 || service.weeklyHistory[len(service.weeklyHistory)-1].UsedPercent != sourcePointCount-1 {
+		t.Fatalf("weekly history range = %v..%v, want 12..%d", service.weeklyHistory[0].UsedPercent, service.weeklyHistory[len(service.weeklyHistory)-1].UsedPercent, sourcePointCount-1)
+	}
+
+	weeklyPath := usageHistoryMetricPath(historyPath, usageHistoryMetricWeekly)
+	weeklySnapshot, exists, invalid, err := readUsageHistoryFile(weeklyPath)
+	if err != nil || !exists || invalid {
+		t.Fatalf("read weekly snapshot: exists=%v invalid=%v err=%v", exists, invalid, err)
+	}
+	if len(weeklySnapshot) != maxUsageHistoryPoints {
+		t.Fatalf("weekly snapshot contains %d points, want %d", len(weeklySnapshot), maxUsageHistoryPoints)
+	}
+}
+
 func TestUsageHistoryRetainsIndependentMetricWindows(t *testing.T) {
 	points := make([]HistoryPoint, 0, maxUsageHistoryPoints*2+24)
 	for index := 0; index < maxUsageHistoryPoints*2+24; index++ {

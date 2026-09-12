@@ -545,12 +545,12 @@ components:
             $ref: '#/components/schemas/HistoryPoint'
         weekly_history:
           type: array
-          description: 周额度独立时间线，按自身 used_percent 去重并优先保留每个百分比最近的正常采样（没有正常采样时保留最近降级采样），再按采样时间升序返回最近最多 48 个不同百分比；不受 5 小时额度变化影响。
+          description: 从完整定时采样归档计算的周额度独立时间线，先按自身 used_percent 去重并优先保留每个百分比最近的正常采样（没有正常采样时保留最近降级采样），再按采样时间升序返回最近最多 48 个不同百分比；不受 5 小时额度变化影响。
           items:
             $ref: '#/components/schemas/HistoryPoint'
         five_hour_history:
           type: array
-          description: 5 小时额度独立时间线，按自身 five_hour_used_percent 去重并优先保留每个百分比最近的正常采样（没有正常采样时保留最近降级采样），再按采样时间升序返回最近最多 48 个不同百分比；不受周额度变化影响。
+          description: 从完整定时采样归档计算的 5 小时额度独立时间线，先按自身 five_hour_used_percent 去重并优先保留每个百分比最近的正常采样（没有正常采样时保留最近降级采样），再按采样时间升序返回最近最多 48 个不同百分比；不受周额度变化影响。
           items:
             $ref: '#/components/schemas/HistoryPoint'
 
