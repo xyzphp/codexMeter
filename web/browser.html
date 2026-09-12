@@ -571,7 +571,7 @@
       function collapseUsageHistoryPoints(points) {
         if (points.length < 2) return points;
         var collapsed = []; var start = 0;
-        var copyPoint = function (point, repeatCount, changePoint) { return {at:point.at, time:point.time, used:point.used, stale:point.stale, position:point.position, repeatCount:repeatCount, changePoint:changePoint !== false}; };
+        var copyPoint = function (point, repeatCount) { return {at:point.at, time:point.time, used:point.used, stale:point.stale, position:0, repeatCount:repeatCount, changePoint:true}; };
         for (var index = 1; index <= points.length; index += 1) {
           // A stale fallback keeps the same quota value. It must not create a
           // second point in a metric-specific chart; compare only the value
@@ -583,12 +583,7 @@
           // contain extra records because the other quota window changed, so
           // this compaction must be performed separately for each chart's
           // selected metric.
-          collapsed.push(copyPoint(points[start], repeatCount, true));
-          // Keep a marker only for the first point in a stable run, while an
-          // invisible tail point lets the line and time axis reach the most
-          // recent sample. Without it, a value such as 83% that stays stable
-          // while the other quota window changes appears to stop too early.
-          if (repeatCount > 1) collapsed.push(copyPoint(points[index - 1], repeatCount, false));
+          collapsed.push(copyPoint(points[start], repeatCount));
           start = index;
         }
         return collapsed;
@@ -608,9 +603,12 @@
         var container = byId(options.chartId); if (!container) return;
         var points = (Array.isArray(history) ? history : []).map(function (point) { var at = point && point.at ? timestamp(point.at) : 0; var used = number(point && point[options.metric]); return at > 0 && isFinite(used) ? {at:point.at, time:at, used:clamp(used, 0, 100), stale:Boolean(point && point.stale), changePoint:true} : null; }).filter(function (point) { return point !== null; });
         points.sort(function (left, right) { return left.time - right.time; });
-        points.forEach(function (point, index) { point.position = index; });
         if (!points.length) { text(options.currentId, '—'); text(options.maxId, '—'); text(options.minId, '—'); container.innerHTML = '<div class="empty">暂无' + escaped(options.emptyLabel || '额度') + '采样</div>'; return; }
-        var sampleCount = points.length; points = collapseUsageHistoryPoints(points); var values = points.map(function (point) { return point.used; }); var current = values[values.length - 1]; var maximum = Math.max.apply(Math, values); var minimum = Math.min.apply(Math, values); var resetIndexes = []; var resetDropThreshold = options.metric === 'five_hour_used_percent' ? 1 : 10;
+        // Each metric has its own change-point sequence. A five-hour-only
+        // sample must not reserve horizontal space in the weekly chart.
+        points = collapseUsageHistoryPoints(points);
+        points.forEach(function (point, index) { point.position = index; });
+        var sampleCount = points.length; var values = points.map(function (point) { return point.used; }); var current = values[values.length - 1]; var maximum = Math.max.apply(Math, values); var minimum = Math.min.apply(Math, values); var resetIndexes = []; var resetDropThreshold = options.metric === 'five_hour_used_percent' ? 1 : 10;
         for (var resetIndex = 1; resetIndex < values.length; resetIndex += 1) if (values[resetIndex - 1] - values[resetIndex] >= resetDropThreshold) resetIndexes.push(resetIndex);
         text(options.currentId, percent(current) + '%'); text(options.maxId, percent(maximum) + '%'); text(options.minId, percent(minimum) + '%');
         var axisPadding = maximum === minimum ? 5 : Math.max((maximum - minimum) * .2, .5); var axisMin = Math.max(0, Math.floor((minimum - axisPadding) * 10) / 10); var axisMax = Math.min(100, Math.ceil((maximum + axisPadding) * 10) / 10); if (axisMax <= axisMin) { axisMin = Math.max(0, axisMax - 1); axisMax = Math.min(100, axisMin + 1); } var axisSpan = axisMax - axisMin || 1;
