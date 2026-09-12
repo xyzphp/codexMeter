@@ -525,7 +525,17 @@ components:
             - $ref: '#/components/schemas/Window'
         history:
           type: array
-          description: 按采样时间升序返回；连续相同采样仅保留区间第一条，最多保留 48 个变化点。
+          description: 兼容字段，返回周额度和 5 小时额度独立时间线的合并结果，按采样时间升序排列；合并结果最多包含 96 条记录。新客户端应使用 weekly_history 和 five_hour_history。
+          items:
+            $ref: '#/components/schemas/HistoryPoint'
+        weekly_history:
+          type: array
+          description: 周额度独立时间线，按采样时间升序返回；连续相同采样仅保留区间第一条，最多保留最新 48 个变化点，不受 5 小时额度变化影响。
+          items:
+            $ref: '#/components/schemas/HistoryPoint'
+        five_hour_history:
+          type: array
+          description: 5 小时额度独立时间线，按采样时间升序返回；连续相同采样仅保留区间第一条，最多保留最新 48 个变化点，不受周额度变化影响。
           items:
             $ref: '#/components/schemas/HistoryPoint'
 

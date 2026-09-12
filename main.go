@@ -29,18 +29,19 @@ import (
 )
 
 const (
-	defaultBindAddr             = "127.0.0.1:8080"
-	defaultUserAgent            = "codex-tui/0.146.0 (Ubuntu 22.4.0; x86_64) xterm-256color"
-	defaultCacheTTL             = 10 * time.Minute
-	defaultUsageHistoryFile     = "data/usage-history.jsonl"
-	maxUsageHistoryPoints       = 48
-	usageHistorySampleInterval  = 5 * time.Minute
-	upstreamRequestTimeout      = 15 * time.Second
-	resetStatusEndpoint         = "https://codex-resets.com/api/v1/status"
-	resetHistoryEndpoint        = "https://codex-resets.com/api/resets"
-	resetHomepageEndpoint       = "https://codex-resets.com/"
-	dailyTokenUsageEndpoint     = "https://chatgpt.com/backend-api/wham/usage/daily-token-usage-breakdown"
-	dailyWorkspaceUsageEndpoint = "https://chatgpt.com/backend-api/wham/analytics/daily-workspace-usage-counts"
+	defaultBindAddr               = "127.0.0.1:8080"
+	defaultUserAgent              = "codex-tui/0.146.0 (Ubuntu 22.4.0; x86_64) xterm-256color"
+	defaultCacheTTL               = 10 * time.Minute
+	defaultUsageHistoryFile       = "data/usage-history.jsonl"
+	maxUsageHistoryPoints         = 48
+	maxCombinedUsageHistoryPoints = maxUsageHistoryPoints * 2
+	usageHistorySampleInterval    = 5 * time.Minute
+	upstreamRequestTimeout        = 15 * time.Second
+	resetStatusEndpoint           = "https://codex-resets.com/api/v1/status"
+	resetHistoryEndpoint          = "https://codex-resets.com/api/resets"
+	resetHomepageEndpoint         = "https://codex-resets.com/"
+	dailyTokenUsageEndpoint       = "https://chatgpt.com/backend-api/wham/usage/daily-token-usage-breakdown"
+	dailyWorkspaceUsageEndpoint   = "https://chatgpt.com/backend-api/wham/analytics/daily-workspace-usage-counts"
 )
 
 // The two embedded pages intentionally have different layouts: indexHTML is
@@ -375,6 +376,8 @@ type UsageResponse struct {
 	FiveHour              *Window        `json:"five_hour,omitempty"`
 	SevenDay              *Window        `json:"seven_day,omitempty"`
 	History               []HistoryPoint `json:"history,omitempty"`
+	WeeklyHistory         []HistoryPoint `json:"weekly_history,omitempty"`
+	FiveHourHistory       []HistoryPoint `json:"five_hour_history,omitempty"`
 }
 
 type Credits struct {
@@ -402,6 +405,13 @@ type HistoryPoint struct {
 	FiveHourUsedPercent *float64 `json:"five_hour_used_percent,omitempty"`
 	Stale               bool     `json:"stale,omitempty"`
 }
+
+type usageHistoryMetric uint8
+
+const (
+	usageHistoryMetricWeekly usageHistoryMetric = iota
+	usageHistoryMetricFiveHour
+)
 
 // UsageAnalytics is the compact date-range payload exposed to the frontend.
 // The upstream responses contain a longer history and several nested
@@ -682,23 +692,27 @@ type whamWindow struct {
 }
 
 type UsageService struct {
-	cfgMu              sync.RWMutex
-	cfg                Config
-	clientMu           sync.RWMutex
-	client             *http.Client
-	cacheMu            sync.Mutex
-	refreshMu          sync.Mutex
-	resetRefreshMu     sync.Mutex
-	analyticsRefreshMu sync.Mutex
-	cached             *UsageResponse
-	cachedAt           time.Time
-	history            []HistoryPoint
-	resetCached        *ResetPrediction
-	resetCachedAt      time.Time
-	analyticsCached    *UsageAnalytics
-	analyticsCachedAt  time.Time
-	analyticsCachedKey string
-	historyFile        string
+	cfgMu               sync.RWMutex
+	cfg                 Config
+	clientMu            sync.RWMutex
+	client              *http.Client
+	cacheMu             sync.Mutex
+	refreshMu           sync.Mutex
+	resetRefreshMu      sync.Mutex
+	analyticsRefreshMu  sync.Mutex
+	cached              *UsageResponse
+	cachedAt            time.Time
+	history             []HistoryPoint
+	weeklyHistory       []HistoryPoint
+	fiveHourHistory     []HistoryPoint
+	resetCached         *ResetPrediction
+	resetCachedAt       time.Time
+	analyticsCached     *UsageAnalytics
+	analyticsCachedAt   time.Time
+	analyticsCachedKey  string
+	historyFile         string
+	weeklyHistoryFile   string
+	fiveHourHistoryFile string
 }
 
 func NewUsageService(cfg Config) (*UsageService, error) {
@@ -706,16 +720,37 @@ func NewUsageService(cfg Config) (*UsageService, error) {
 	if err != nil {
 		return nil, err
 	}
-	history, err := loadUsageHistory(defaultUsageHistoryFile)
+	legacyHistory, err := loadUsageHistoryRecords(defaultUsageHistoryFile)
 	if err != nil {
 		return nil, fmt.Errorf("load usage history: %w", err)
 	}
-	slog.Info("usage history loaded", "path", defaultUsageHistoryFile, "points", len(history))
+	weeklyHistoryFile := usageHistoryMetricPath(defaultUsageHistoryFile, usageHistoryMetricWeekly)
+	fiveHourHistoryFile := usageHistoryMetricPath(defaultUsageHistoryFile, usageHistoryMetricFiveHour)
+	weeklyHistory, weeklyFound, err := loadUsageHistoryMetric(weeklyHistoryFile, usageHistoryMetricWeekly)
+	if err != nil {
+		return nil, fmt.Errorf("load weekly usage history: %w", err)
+	}
+	if !weeklyFound {
+		weeklyHistory = compactUsageHistoryMetric(legacyHistory, usageHistoryMetricWeekly)
+	}
+	fiveHourHistory, fiveHourFound, err := loadUsageHistoryMetric(fiveHourHistoryFile, usageHistoryMetricFiveHour)
+	if err != nil {
+		return nil, fmt.Errorf("load five-hour usage history: %w", err)
+	}
+	if !fiveHourFound {
+		fiveHourHistory = compactUsageHistoryMetric(legacyHistory, usageHistoryMetricFiveHour)
+	}
+	history := mergeUsageHistories(weeklyHistory, fiveHourHistory)
+	slog.Info("usage history loaded", "path", defaultUsageHistoryFile, "points", len(history), "weekly_points", len(weeklyHistory), "five_hour_points", len(fiveHourHistory))
 	return &UsageService{
-		cfg:         cfg,
-		client:      client,
-		history:     history,
-		historyFile: defaultUsageHistoryFile,
+		cfg:                 cfg,
+		client:              client,
+		history:             history,
+		weeklyHistory:       weeklyHistory,
+		fiveHourHistory:     fiveHourHistory,
+		historyFile:         defaultUsageHistoryFile,
+		weeklyHistoryFile:   weeklyHistoryFile,
+		fiveHourHistoryFile: fiveHourHistoryFile,
 	}, nil
 }
 
@@ -827,6 +862,8 @@ func (s *UsageService) Get(ctx context.Context, force bool) (*UsageResponse, err
 
 	s.cacheMu.Lock()
 	usage.History = append([]HistoryPoint(nil), s.history...)
+	usage.WeeklyHistory = append([]HistoryPoint(nil), s.weeklyHistory...)
+	usage.FiveHourHistory = append([]HistoryPoint(nil), s.fiveHourHistory...)
 	s.cached = cloneUsage(usage)
 	s.cachedAt = time.Now()
 	s.cacheMu.Unlock()
@@ -902,6 +939,12 @@ func usageHistorySampleTimestamp(sampleAt time.Time) string {
 
 func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
 	s.cacheMu.Lock()
+	if len(s.weeklyHistory) == 0 && len(s.fiveHourHistory) == 0 && len(s.history) > 0 {
+		// Keep services constructed by older callers compatible while the two
+		// metric-specific timelines are introduced.
+		s.weeklyHistory = compactUsageHistoryMetric(s.history, usageHistoryMetricWeekly)
+		s.fiveHourHistory = compactUsageHistoryMetric(s.history, usageHistoryMetricFiveHour)
+	}
 	if len(s.history) > 0 {
 		lastAt, parseErr := time.Parse(time.RFC3339, s.history[len(s.history)-1].At)
 		pointAt, pointErr := time.Parse(time.RFC3339, point.At)
@@ -910,18 +953,28 @@ func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
 			return
 		}
 	}
-	if len(s.history) > 0 && sameUsageHistoryValue(s.history[len(s.history)-1], point) {
-		// Keep the first sample of a stable value run; later duplicates do not
-		// replace its timestamp or consume another chart point.
+	weeklyChanged := usageHistoryMetricChanged(s.weeklyHistory, point, usageHistoryMetricWeekly)
+	fiveHourChanged := usageHistoryMetricChanged(s.fiveHourHistory, point, usageHistoryMetricFiveHour)
+	if !weeklyChanged && !fiveHourChanged {
+		// Keep the first sample of a stable value run in each timeline; later
+		// duplicates do not replace its timestamp or consume another point.
 		s.cacheMu.Unlock()
 		return
-	} else {
-		s.history = append(s.history, point)
 	}
-	s.history = compactUsageHistory(s.history)
+	if weeklyChanged {
+		s.weeklyHistory = compactUsageHistoryMetric(append(s.weeklyHistory, point), usageHistoryMetricWeekly)
+	}
+	if fiveHourChanged {
+		s.fiveHourHistory = compactUsageHistoryMetric(append(s.fiveHourHistory, point), usageHistoryMetricFiveHour)
+	}
+	s.history = mergeUsageHistories(s.weeklyHistory, s.fiveHourHistory)
 	history := append([]HistoryPoint(nil), s.history...)
+	weeklyHistory := append([]HistoryPoint(nil), s.weeklyHistory...)
+	fiveHourHistory := append([]HistoryPoint(nil), s.fiveHourHistory...)
 	if s.cached != nil {
 		s.cached.History = append([]HistoryPoint(nil), history...)
+		s.cached.WeeklyHistory = append([]HistoryPoint(nil), weeklyHistory...)
+		s.cached.FiveHourHistory = append([]HistoryPoint(nil), fiveHourHistory...)
 	}
 	s.cacheMu.Unlock()
 
@@ -930,13 +983,27 @@ func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
 			slog.Warn("persist usage history failed", "error", err)
 		}
 	}
+	if weeklyHistoryFile := s.weeklyHistoryPath(); weeklyHistoryFile != "" {
+		if err := writeUsageHistory(weeklyHistoryFile, weeklyHistory); err != nil {
+			slog.Warn("persist weekly usage history failed", "error", err)
+		}
+	}
+	if fiveHourHistoryFile := s.fiveHourHistoryPath(); fiveHourHistoryFile != "" {
+		if err := writeUsageHistory(fiveHourHistoryFile, fiveHourHistory); err != nil {
+			slog.Warn("persist five-hour usage history failed", "error", err)
+		}
+	}
 }
 
 func (s *UsageService) lastSuccessfulHistoryPoint() (HistoryPoint, bool) {
 	s.cacheMu.Lock()
 	defer s.cacheMu.Unlock()
-	for index := len(s.history) - 1; index >= 0; index-- {
-		point := s.history[index]
+	history := s.history
+	if len(history) == 0 {
+		history = mergeUsageHistories(s.weeklyHistory, s.fiveHourHistory)
+	}
+	for index := len(history) - 1; index >= 0; index-- {
+		point := history[index]
 		if point.Stale {
 			continue
 		}
@@ -965,8 +1032,15 @@ func usageHistoryPoint(usage *UsageResponse) (HistoryPoint, bool) {
 }
 
 func sameUsageHistoryValue(left, right HistoryPoint) bool {
-	if left.UsedPercent != right.UsedPercent || left.Stale != right.Stale {
+	return sameUsageHistoryMetricValue(left, right, usageHistoryMetricWeekly) && sameUsageHistoryMetricValue(left, right, usageHistoryMetricFiveHour)
+}
+
+func sameUsageHistoryMetricValue(left, right HistoryPoint, metric usageHistoryMetric) bool {
+	if left.Stale != right.Stale {
 		return false
+	}
+	if metric == usageHistoryMetricWeekly {
+		return left.UsedPercent == right.UsedPercent
 	}
 	if left.FiveHourUsedPercent == nil || right.FiveHourUsedPercent == nil {
 		return left.FiveHourUsedPercent == nil && right.FiveHourUsedPercent == nil
@@ -974,9 +1048,117 @@ func sameUsageHistoryValue(left, right HistoryPoint) bool {
 	return *left.FiveHourUsedPercent == *right.FiveHourUsedPercent
 }
 
-// compactUsageHistory keeps the first record for each consecutive value run.
-// The limit is applied only after compaction, so repeated samples do not
-// consume the 48-point chart window.
+func usageHistoryMetricChanged(history []HistoryPoint, point HistoryPoint, metric usageHistoryMetric) bool {
+	if metric == usageHistoryMetricFiveHour && point.FiveHourUsedPercent == nil {
+		return false
+	}
+	if len(history) == 0 {
+		return true
+	}
+	return !sameUsageHistoryMetricValue(history[len(history)-1], point, metric)
+}
+
+func compactUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric) []HistoryPoint {
+	if len(points) == 0 {
+		return nil
+	}
+	compact := make([]HistoryPoint, 0, len(points))
+	for _, point := range points {
+		if metric == usageHistoryMetricFiveHour && point.FiveHourUsedPercent == nil {
+			continue
+		}
+		if len(compact) > 0 && sameUsageHistoryMetricValue(compact[len(compact)-1], point, metric) {
+			continue
+		}
+		compact = append(compact, point)
+	}
+	if len(compact) > maxUsageHistoryPoints {
+		compact = compact[len(compact)-maxUsageHistoryPoints:]
+	}
+	return compact
+}
+
+func usageHistoryMetricPath(path string, metric usageHistoryMetric) string {
+	suffix := "weekly"
+	if metric == usageHistoryMetricFiveHour {
+		suffix = "five-hour"
+	}
+	extension := filepath.Ext(path)
+	if extension == "" {
+		return path + "-" + suffix
+	}
+	return strings.TrimSuffix(path, extension) + "-" + suffix + extension
+}
+
+func (s *UsageService) weeklyHistoryPath() string {
+	if s.weeklyHistoryFile != "" {
+		return s.weeklyHistoryFile
+	}
+	if s.historyFile == "" {
+		return ""
+	}
+	return usageHistoryMetricPath(s.historyFile, usageHistoryMetricWeekly)
+}
+
+func (s *UsageService) fiveHourHistoryPath() string {
+	if s.fiveHourHistoryFile != "" {
+		return s.fiveHourHistoryFile
+	}
+	if s.historyFile == "" {
+		return ""
+	}
+	return usageHistoryMetricPath(s.historyFile, usageHistoryMetricFiveHour)
+}
+
+func mergeUsageHistories(weeklyHistory, fiveHourHistory []HistoryPoint) []HistoryPoint {
+	if len(weeklyHistory) == 0 && len(fiveHourHistory) == 0 {
+		return nil
+	}
+	merged := make([]HistoryPoint, 0, len(weeklyHistory)+len(fiveHourHistory))
+	indexes := make(map[string]int, len(weeklyHistory)+len(fiveHourHistory))
+	add := func(point HistoryPoint, weekly bool) {
+		point = cloneHistoryPoint(point)
+		if index, ok := indexes[point.At]; ok {
+			if weekly {
+				merged[index].UsedPercent = point.UsedPercent
+				merged[index].Stale = point.Stale
+			} else if point.FiveHourUsedPercent != nil {
+				fiveHourUsedPercent := *point.FiveHourUsedPercent
+				merged[index].FiveHourUsedPercent = &fiveHourUsedPercent
+			}
+			return
+		}
+		indexes[point.At] = len(merged)
+		merged = append(merged, point)
+	}
+	for _, point := range weeklyHistory {
+		add(point, true)
+	}
+	for _, point := range fiveHourHistory {
+		add(point, false)
+	}
+	sort.SliceStable(merged, func(left, right int) bool {
+		leftAt, leftErr := time.Parse(time.RFC3339, merged[left].At)
+		rightAt, rightErr := time.Parse(time.RFC3339, merged[right].At)
+		if leftErr == nil && rightErr == nil && !leftAt.Equal(rightAt) {
+			return leftAt.Before(rightAt)
+		}
+		return merged[left].At < merged[right].At
+	})
+	return merged
+}
+
+func cloneHistoryPoint(point HistoryPoint) HistoryPoint {
+	if point.FiveHourUsedPercent != nil {
+		fiveHourUsedPercent := *point.FiveHourUsedPercent
+		point.FiveHourUsedPercent = &fiveHourUsedPercent
+	}
+	return point
+}
+
+// compactUsageHistory keeps the legacy combined history behavior for old
+// callers and migration data. Runtime persistence uses
+// compactUsageHistoryMetric so the two quota windows have separate limits.
 func compactUsageHistory(points []HistoryPoint) []HistoryPoint {
 	if len(points) == 0 {
 		return nil
@@ -995,6 +1177,14 @@ func compactUsageHistory(points []HistoryPoint) []HistoryPoint {
 }
 
 func loadUsageHistory(path string) ([]HistoryPoint, error) {
+	history, err := loadUsageHistoryRecords(path)
+	if err != nil {
+		return nil, err
+	}
+	return compactUsageHistory(history), nil
+}
+
+func loadUsageHistoryRecords(path string) ([]HistoryPoint, error) {
 	history, exists, invalid, err := readUsageHistoryFile(path)
 	if err == nil && exists && !invalid && len(history) > 0 {
 		return history, nil
@@ -1015,6 +1205,27 @@ func loadUsageHistory(path string) ([]HistoryPoint, error) {
 	return history, nil
 }
 
+func loadUsageHistoryMetric(path string, metric usageHistoryMetric) ([]HistoryPoint, bool, error) {
+	history, exists, invalid, err := readUsageHistoryFile(path)
+	if err == nil && exists && !invalid && len(history) > 0 {
+		return compactUsageHistoryMetric(history, metric), true, nil
+	}
+
+	backupPath := usageHistoryBackupPath(path)
+	backup, backupExists, backupInvalid, backupErr := readUsageHistoryFile(backupPath)
+	if backupErr == nil && backupExists && !backupInvalid && len(backup) > 0 {
+		slog.Warn("metric usage history restored from backup", "path", path, "backup", backupPath, "points", len(backup), "metric", metric)
+		return compactUsageHistoryMetric(backup, metric), true, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	if backupErr != nil {
+		slog.Warn("metric usage history backup could not be read", "path", backupPath, "error", backupErr, "metric", metric)
+	}
+	return nil, false, nil
+}
+
 func readUsageHistoryFile(path string) ([]HistoryPoint, bool, bool, error) {
 	raw, err := os.Open(path)
 	if err != nil {
@@ -1025,7 +1236,7 @@ func readUsageHistoryFile(path string) ([]HistoryPoint, bool, bool, error) {
 	}
 	defer raw.Close()
 
-	history := make([]HistoryPoint, 0, maxUsageHistoryPoints)
+	history := make([]HistoryPoint, 0, maxCombinedUsageHistoryPoints)
 	invalid := false
 	scanner := bufio.NewScanner(raw)
 	scanner.Buffer(make([]byte, 1024), 1024*1024)
@@ -1056,7 +1267,7 @@ func readUsageHistoryFile(path string) ([]HistoryPoint, bool, bool, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, true, invalid, err
 	}
-	return compactUsageHistory(history), true, invalid, nil
+	return history, true, invalid, nil
 }
 
 func usageHistoryBackupPath(path string) string {
@@ -1787,6 +1998,8 @@ func (s *UsageService) activateConfig(old, next Config) error {
 	s.cached = nil
 	s.cachedAt = time.Time{}
 	s.history = nil
+	s.weeklyHistory = nil
+	s.fiveHourHistory = nil
 	s.resetCached = nil
 	s.resetCachedAt = time.Time{}
 	s.analyticsCached = nil
@@ -2172,6 +2385,12 @@ func cloneUsage(input *UsageResponse) *UsageResponse {
 	}
 	if input.History != nil {
 		output.History = append([]HistoryPoint(nil), input.History...)
+	}
+	if input.WeeklyHistory != nil {
+		output.WeeklyHistory = append([]HistoryPoint(nil), input.WeeklyHistory...)
+	}
+	if input.FiveHourHistory != nil {
+		output.FiveHourHistory = append([]HistoryPoint(nil), input.FiveHourHistory...)
 	}
 	return &output
 }

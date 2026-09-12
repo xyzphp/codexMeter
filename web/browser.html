@@ -545,8 +545,11 @@
         renderWindow(weekly, 'weekly', 'weeklyReset');
         text('usageUpdated', usage && usage.fetched_at ? '更新 ' + date(usage.fetched_at) : '已连接');
         classes('statusDot', 'status-dot'); text('statusText', '已连接');
-        renderUsageHistory(usage && usage.history, {metric:'five_hour_used_percent', label:'5小时', emptyLabel:'5小时额度', chartId:'fiveHourHistoryChart', currentId:'fiveHourHistoryCurrent', maxId:'fiveHourHistoryMax', minId:'fiveHourHistoryMin'});
-        renderUsageHistory(usage && usage.history, {metric:'used_percent', label:'本周', emptyLabel:'本周额度', chartId:'weeklyHistoryChart', currentId:'weeklyHistoryCurrent', maxId:'weeklyHistoryMax', minId:'weeklyHistoryMin'});
+        var legacyHistory = usage && usage.history;
+        var fiveHourHistory = usage && Array.isArray(usage.five_hour_history) ? usage.five_hour_history : legacyHistory;
+        var weeklyHistory = usage && Array.isArray(usage.weekly_history) ? usage.weekly_history : legacyHistory;
+        renderUsageHistory(fiveHourHistory, {metric:'five_hour_used_percent', label:'5小时', emptyLabel:'5小时额度', chartId:'fiveHourHistoryChart', currentId:'fiveHourHistoryCurrent', maxId:'fiveHourHistoryMax', minId:'fiveHourHistoryMin'});
+        renderUsageHistory(weeklyHistory, {metric:'used_percent', label:'本周', emptyLabel:'本周额度', chartId:'weeklyHistoryChart', currentId:'weeklyHistoryCurrent', maxId:'weeklyHistoryMax', minId:'weeklyHistoryMin'});
       }
       function usageHistoryAxisLabel(value) {
         var parsed = new Date(value); if (isNaN(parsed.getTime())) return '—';
@@ -588,6 +591,7 @@
         }
         return collapsed;
       }
+      var usageHistoryMaxPoints = 48;
       function bindUsageHistoryTooltips(container) {
         if (!container || !container.querySelectorAll) return;
         Array.prototype.forEach.call(container.querySelectorAll('.usage-history-point-hit[aria-label]'), function (point) {
@@ -607,6 +611,7 @@
         // Each metric has its own change-point sequence. A five-hour-only
         // sample must not reserve horizontal space in the weekly chart.
         points = collapseUsageHistoryPoints(points);
+        if (points.length > usageHistoryMaxPoints) points = points.slice(points.length - usageHistoryMaxPoints);
         points.forEach(function (point, index) { point.position = index; });
         var sampleCount = points.length; var values = points.map(function (point) { return point.used; }); var current = values[values.length - 1]; var maximum = Math.max.apply(Math, values); var minimum = Math.min.apply(Math, values); var resetIndexes = []; var resetDropThreshold = options.metric === 'five_hour_used_percent' ? 1 : 10;
         for (var resetIndex = 1; resetIndex < values.length; resetIndex += 1) if (values[resetIndex - 1] - values[resetIndex] >= resetDropThreshold) resetIndexes.push(resetIndex);

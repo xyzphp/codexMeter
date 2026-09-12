@@ -351,6 +351,30 @@ func TestUsageHistoryDeduplicatesBeforeApplyingPointLimit(t *testing.T) {
 	}
 }
 
+func TestUsageHistoryRetainsIndependentMetricWindows(t *testing.T) {
+	points := make([]HistoryPoint, 0, maxUsageHistoryPoints*2+24)
+	for index := 0; index < maxUsageHistoryPoints*2+24; index++ {
+		fiveHour := float64(index % 100)
+		points = append(points, HistoryPoint{
+			At:                  time.Date(2026, time.August, 27, 12, index, 0, 0, time.UTC).Format(time.RFC3339),
+			UsedPercent:         float64((index / 2) % 60),
+			FiveHourUsedPercent: &fiveHour,
+		})
+	}
+
+	weekly := compactUsageHistoryMetric(points, usageHistoryMetricWeekly)
+	fiveHour := compactUsageHistoryMetric(points, usageHistoryMetricFiveHour)
+	if len(weekly) != maxUsageHistoryPoints || len(fiveHour) != maxUsageHistoryPoints {
+		t.Fatalf("independent history lengths = weekly %d, five-hour %d; want %d each", len(weekly), len(fiveHour), maxUsageHistoryPoints)
+	}
+	if weekly[0].UsedPercent != 12 || weekly[len(weekly)-1].UsedPercent != 59 {
+		t.Fatalf("weekly history range = %v..%v, want 12..59", weekly[0].UsedPercent, weekly[len(weekly)-1].UsedPercent)
+	}
+	if fiveHour[0].FiveHourUsedPercent == nil || *fiveHour[0].FiveHourUsedPercent != 72 {
+		t.Fatalf("five-hour history starts at %v, want 72", fiveHour[0].FiveHourUsedPercent)
+	}
+}
+
 func TestUsageHistoryDeduplicationKeepsFirstRecord(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
 	firstAt := time.Date(2026, time.August, 27, 12, 0, 0, 0, time.UTC).Format(time.RFC3339)
