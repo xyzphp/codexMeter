@@ -370,8 +370,21 @@ func TestUsageHistoryRetainsIndependentMetricWindows(t *testing.T) {
 	if weekly[0].UsedPercent != 12 || weekly[1].UsedPercent != 13 || weekly[len(weekly)-1].UsedPercent != 59 {
 		t.Fatalf("weekly history range = %v..%v, want 12..59", weekly[0].UsedPercent, weekly[len(weekly)-1].UsedPercent)
 	}
+	for index := 1; index < len(weekly); index++ {
+		if weekly[index].UsedPercent == weekly[index-1].UsedPercent {
+			t.Fatalf("weekly history contains adjacent duplicate at index %d: %#v", index, weekly[index])
+		}
+	}
 	if fiveHour[0].FiveHourUsedPercent == nil || *fiveHour[0].FiveHourUsedPercent != 72 {
 		t.Fatalf("five-hour history starts at %v, want 72", fiveHour[0].FiveHourUsedPercent)
+	}
+	for index := 1; index < len(fiveHour); index++ {
+		if fiveHour[index].FiveHourUsedPercent == nil || fiveHour[index-1].FiveHourUsedPercent == nil {
+			t.Fatalf("five-hour history has missing value at index %d", index)
+		}
+		if *fiveHour[index].FiveHourUsedPercent == *fiveHour[index-1].FiveHourUsedPercent {
+			t.Fatalf("five-hour history contains adjacent duplicate at index %d: %#v", index, fiveHour[index])
+		}
 	}
 }
 

@@ -1041,10 +1041,10 @@ func sameUsageHistoryMetricValue(left, right HistoryPoint, metric usageHistoryMe
 	return *left.FiveHourUsedPercent == *right.FiveHourUsedPercent
 }
 
-// compactUsageHistoryMetric keeps the first record of each consecutive value
-// run for one metric, then retains the latest 48 independent changes. The
-// other quota window cannot consume this metric's limit.
-func compactUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric) []HistoryPoint {
+// deduplicateUsageHistoryMetric keeps the first record of each consecutive
+// value run for one metric and collection state. A stale-state transition is
+// retained so the history still records when a fallback sample was used.
+func deduplicateUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric) []HistoryPoint {
 	if len(points) == 0 {
 		return nil
 	}
@@ -1058,10 +1058,23 @@ func compactUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric)
 		}
 		compact = append(compact, point)
 	}
-	if len(compact) > maxUsageHistoryPoints {
-		compact = compact[len(compact)-maxUsageHistoryPoints:]
-	}
 	return compact
+}
+
+// limitUsageHistoryPoints retains the latest points after metric-specific
+// deduplication has completed.
+func limitUsageHistoryPoints(points []HistoryPoint) []HistoryPoint {
+	if len(points) > maxUsageHistoryPoints {
+		return points[len(points)-maxUsageHistoryPoints:]
+	}
+	return points
+}
+
+// compactUsageHistoryMetric first removes consecutive duplicate values for one
+// metric, then retains the latest 48 independent changes. The other quota
+// window cannot consume this metric's limit.
+func compactUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric) []HistoryPoint {
+	return limitUsageHistoryPoints(deduplicateUsageHistoryMetric(points, metric))
 }
 
 func mergeUsageHistorySamples(histories ...[]HistoryPoint) []HistoryPoint {
