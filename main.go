@@ -952,10 +952,10 @@ func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
 			return
 		}
 	}
-	// Every scheduled sample belongs to the weekly timeline, even when the
-	// weekly percentage stays unchanged. The five-hour timeline follows the
-	// same rule when that window is present; neither timeline is driven by the
-	// other one's value changes.
+	// Every scheduled sample is evaluated for the weekly timeline. Consecutive
+	// equal values are compacted independently, and the five-hour timeline
+	// follows the same rule when that window is present; neither timeline is
+	// driven by the other one's value changes.
 	s.weeklyHistory = compactUsageHistoryMetric(append(s.weeklyHistory, point), usageHistoryMetricWeekly)
 	if point.FiveHourUsedPercent != nil {
 		s.fiveHourHistory = compactUsageHistoryMetric(append(s.fiveHourHistory, point), usageHistoryMetricFiveHour)
@@ -1041,9 +1041,9 @@ func sameUsageHistoryMetricValue(left, right HistoryPoint, metric usageHistoryMe
 	return *left.FiveHourUsedPercent == *right.FiveHourUsedPercent
 }
 
-// compactUsageHistoryMetric retains the most recent samples for one metric.
-// Repeated values are intentionally kept: the chart is a timeline of the
-// latest 48 independent samples, not just a list of value changes.
+// compactUsageHistoryMetric keeps the first record of each consecutive value
+// run for one metric, then retains the latest 48 independent changes. The
+// other quota window cannot consume this metric's limit.
 func compactUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric) []HistoryPoint {
 	if len(points) == 0 {
 		return nil
@@ -1051,6 +1051,9 @@ func compactUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric)
 	compact := make([]HistoryPoint, 0, len(points))
 	for _, point := range points {
 		if metric == usageHistoryMetricFiveHour && point.FiveHourUsedPercent == nil {
+			continue
+		}
+		if len(compact) > 0 && sameUsageHistoryMetricValue(compact[len(compact)-1], point, metric) {
 			continue
 		}
 		compact = append(compact, point)

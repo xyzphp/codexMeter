@@ -546,12 +546,10 @@
         text('usageUpdated', usage && usage.fetched_at ? '更新 ' + date(usage.fetched_at) : '已连接');
         classes('statusDot', 'status-dot'); text('statusText', '已连接');
         var legacyHistory = usage && usage.history;
-        var hasFiveHourHistory = usage && Array.isArray(usage.five_hour_history);
-        var hasWeeklyHistory = usage && Array.isArray(usage.weekly_history);
-        var fiveHourHistory = hasFiveHourHistory ? usage.five_hour_history : legacyHistory;
-        var weeklyHistory = hasWeeklyHistory ? usage.weekly_history : legacyHistory;
-        renderUsageHistory(fiveHourHistory, {metric:'five_hour_used_percent', label:'5小时', emptyLabel:'5小时额度', preserveSamples:hasFiveHourHistory, chartId:'fiveHourHistoryChart', currentId:'fiveHourHistoryCurrent', maxId:'fiveHourHistoryMax', minId:'fiveHourHistoryMin'});
-        renderUsageHistory(weeklyHistory, {metric:'used_percent', label:'本周', emptyLabel:'本周额度', preserveSamples:hasWeeklyHistory, chartId:'weeklyHistoryChart', currentId:'weeklyHistoryCurrent', maxId:'weeklyHistoryMax', minId:'weeklyHistoryMin'});
+        var fiveHourHistory = usage && Array.isArray(usage.five_hour_history) ? usage.five_hour_history : legacyHistory;
+        var weeklyHistory = usage && Array.isArray(usage.weekly_history) ? usage.weekly_history : legacyHistory;
+        renderUsageHistory(fiveHourHistory, {metric:'five_hour_used_percent', label:'5小时', emptyLabel:'5小时额度', chartId:'fiveHourHistoryChart', currentId:'fiveHourHistoryCurrent', maxId:'fiveHourHistoryMax', minId:'fiveHourHistoryMin'});
+        renderUsageHistory(weeklyHistory, {metric:'used_percent', label:'本周', emptyLabel:'本周额度', chartId:'weeklyHistoryChart', currentId:'weeklyHistoryCurrent', maxId:'weeklyHistoryMax', minId:'weeklyHistoryMin'});
       }
       function usageHistoryAxisLabel(value) {
         var parsed = new Date(value); if (isNaN(parsed.getTime())) return '—';
@@ -610,10 +608,10 @@
         var points = (Array.isArray(history) ? history : []).map(function (point) { var at = point && point.at ? timestamp(point.at) : 0; var used = number(point && point[options.metric]); return at > 0 && isFinite(used) ? {at:point.at, time:at, used:clamp(used, 0, 100), stale:Boolean(point && point.stale), changePoint:true} : null; }).filter(function (point) { return point !== null; });
         points.sort(function (left, right) { return left.time - right.time; });
         if (!points.length) { text(options.currentId, '—'); text(options.maxId, '—'); text(options.minId, '—'); container.innerHTML = '<div class="empty">暂无' + escaped(options.emptyLabel || '额度') + '采样</div>'; return; }
-        // New metric-specific payloads already contain the latest samples for
-        // this timeline. Only compact the legacy combined payload, where the
-        // other quota window may have added extra rows.
-        if (!options.preserveSamples) points = collapseUsageHistoryPoints(points);
+        // Compact each selected metric independently. The legacy combined
+        // payload may contain rows caused by the other quota window, while
+        // repeated values in either timeline should still render once.
+        points = collapseUsageHistoryPoints(points);
         if (points.length > usageHistoryMaxPoints) points = points.slice(points.length - usageHistoryMaxPoints);
         points.forEach(function (point, index) { point.position = index; });
         var sampleCount = points.length; var values = points.map(function (point) { return point.used; }); var current = values[values.length - 1]; var maximum = Math.max.apply(Math, values); var minimum = Math.min.apply(Math, values); var resetIndexes = []; var resetDropThreshold = options.metric === 'five_hour_used_percent' ? 1 : 10;
