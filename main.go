@@ -1024,27 +1024,10 @@ func usageHistoryPoint(usage *UsageResponse) (HistoryPoint, bool) {
 	return point, true
 }
 
-func sameUsageHistoryValue(left, right HistoryPoint) bool {
-	return left.At == right.At && sameUsageHistoryMetricValue(left, right, usageHistoryMetricWeekly) && sameUsageHistoryMetricValue(left, right, usageHistoryMetricFiveHour)
-}
-
-func sameUsageHistoryMetricValue(left, right HistoryPoint, metric usageHistoryMetric) bool {
-	if left.Stale != right.Stale {
-		return false
-	}
-	if metric == usageHistoryMetricWeekly {
-		return left.UsedPercent == right.UsedPercent
-	}
-	if left.FiveHourUsedPercent == nil || right.FiveHourUsedPercent == nil {
-		return left.FiveHourUsedPercent == nil && right.FiveHourUsedPercent == nil
-	}
-	return *left.FiveHourUsedPercent == *right.FiveHourUsedPercent
-}
-
 // deduplicateUsageHistoryMetric keeps the first record of each identical point
 // for one metric. The timestamp is part of the point identity, so equal values
-// sampled at different times remain separate timeline points. A stale-state
-// transition is also retained so the history records fallback samples.
+// sampled at different times remain separate timeline points. The stale marker
+// and the other quota window are not part of the point identity.
 func deduplicateUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric) []HistoryPoint {
 	if len(points) == 0 {
 		return nil
@@ -1072,7 +1055,10 @@ func usageHistoryMetricPointKey(point HistoryPoint, metric usageHistoryMetric) s
 	} else if point.FiveHourUsedPercent != nil {
 		value = strconv.FormatFloat(*point.FiveHourUsedPercent, 'g', -1, 64)
 	}
-	return point.At + "\x00" + strconv.FormatBool(point.Stale) + "\x00" + value
+	// A metric point is identified only by its timestamp and its own value.
+	// In particular, weekly history must not be deduplicated by the five-hour
+	// value, and a stale marker must not create another point for the same value.
+	return point.At + "\x00" + value
 }
 
 // limitUsageHistoryPoints retains the latest points after metric-specific
@@ -1088,7 +1074,19 @@ func limitUsageHistoryPoints(points []HistoryPoint) []HistoryPoint {
 // retains the latest 48 samples. The other quota window cannot consume this
 // metric's limit.
 func compactUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric) []HistoryPoint {
-	return limitUsageHistoryPoints(deduplicateUsageHistoryMetric(points, metric))
+	if len(points) < 2 {
+		return limitUsageHistoryPoints(deduplicateUsageHistoryMetric(points, metric))
+	}
+	ordered := append([]HistoryPoint(nil), points...)
+	sort.SliceStable(ordered, func(left, right int) bool {
+		leftAt, leftErr := time.Parse(time.RFC3339, ordered[left].At)
+		rightAt, rightErr := time.Parse(time.RFC3339, ordered[right].At)
+		if leftErr == nil && rightErr == nil && !leftAt.Equal(rightAt) {
+			return leftAt.Before(rightAt)
+		}
+		return ordered[left].At < ordered[right].At
+	})
+	return limitUsageHistoryPoints(deduplicateUsageHistoryMetric(ordered, metric))
 }
 
 func mergeUsageHistorySamples(histories ...[]HistoryPoint) []HistoryPoint {
@@ -1207,23 +1205,11 @@ func cloneHistoryPoint(point HistoryPoint) HistoryPoint {
 }
 
 // compactUsageHistory keeps the legacy combined history behavior for old
-// callers and migration data. Runtime persistence uses
-// compactUsageHistoryMetric so the two quota windows have separate limits.
+// callers and migration data. Its deduplication is based on the weekly
+// metric only; runtime persistence uses compactUsageHistoryMetric so the two
+// quota windows have separate limits.
 func compactUsageHistory(points []HistoryPoint) []HistoryPoint {
-	if len(points) == 0 {
-		return nil
-	}
-	compact := make([]HistoryPoint, 0, len(points))
-	for _, point := range points {
-		if len(compact) > 0 && sameUsageHistoryValue(compact[len(compact)-1], point) {
-			continue
-		}
-		compact = append(compact, point)
-	}
-	if len(compact) > maxUsageHistoryPoints {
-		compact = compact[len(compact)-maxUsageHistoryPoints:]
-	}
-	return compact
+	return compactUsageHistoryMetric(points, usageHistoryMetricWeekly)
 }
 
 func loadUsageHistory(path string) ([]HistoryPoint, error) {

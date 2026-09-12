@@ -385,6 +385,29 @@ func TestUsageHistoryRetainsIndependentMetricWindows(t *testing.T) {
 	}
 }
 
+func TestUsageHistoryMetricDeduplicationIgnoresOtherWindow(t *testing.T) {
+	firstFiveHour := 12.0
+	secondFiveHour := 13.0
+	at := "2026-08-27T12:00:00Z"
+	points := []HistoryPoint{
+		{At: at, UsedPercent: 55, FiveHourUsedPercent: &firstFiveHour},
+		{At: at, UsedPercent: 55, FiveHourUsedPercent: &secondFiveHour},
+	}
+
+	weekly := compactUsageHistoryMetric(points, usageHistoryMetricWeekly)
+	if len(weekly) != 1 {
+		t.Fatalf("weekly history used five-hour changes during deduplication: %#v", weekly)
+	}
+	if weekly[0].FiveHourUsedPercent == nil || *weekly[0].FiveHourUsedPercent != firstFiveHour {
+		t.Fatalf("weekly history did not retain the first weekly point: %#v", weekly[0])
+	}
+
+	fiveHour := compactUsageHistoryMetric(points, usageHistoryMetricFiveHour)
+	if len(fiveHour) != 2 {
+		t.Fatalf("five-hour history lost its own value change: %#v", fiveHour)
+	}
+}
+
 func TestUsageHistoryDeduplicationKeepsFirstRecord(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data", "usage-history.jsonl")
 	firstAt := time.Date(2026, time.August, 27, 12, 0, 0, 0, time.UTC).Format(time.RFC3339)
