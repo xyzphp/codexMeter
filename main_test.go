@@ -916,6 +916,22 @@ func TestWhamRequestUsesOAuthHeadersAndGET(t *testing.T) {
 	}
 }
 
+func TestConfigViewMasksProxyCredentials(t *testing.T) {
+	service := &UsageService{cfg: Config{UpstreamProxy: "socks5://alice:secret-password@127.0.0.1:1080"}}
+	view := service.ConfigView()
+	if strings.Contains(view.ProxyURL, "secret-password") {
+		t.Fatalf("config view leaked proxy credentials: %q", view.ProxyURL)
+	}
+	if view.ProxyURL != "socks5://alice:****@127.0.0.1:1080" {
+		t.Fatalf("masked proxy URL = %q, want %q", view.ProxyURL, "socks5://alice:****@127.0.0.1:1080")
+	}
+
+	service.cfg.UpstreamProxy = "http://127.0.0.1:7890"
+	if view := service.ConfigView(); view.ProxyURL != "http://127.0.0.1:7890" {
+		t.Fatalf("proxy URL without credentials = %q, want unchanged", view.ProxyURL)
+	}
+}
+
 func TestProxySchemes(t *testing.T) {
 	for _, test := range []struct {
 		name       string

@@ -350,6 +350,9 @@ func (s *Server) handlePrediction(response http.ResponseWriter, request *http.Re
 }
 
 func (s *Server) handleConfigGet(response http.ResponseWriter, _ *http.Request) {
+	// The view contains credential hints and a masked proxy URL, so it must
+	// never be cached by browsers or shared proxies.
+	response.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 	writeJSON(response, http.StatusOK, s.usage.ConfigView())
 }
 

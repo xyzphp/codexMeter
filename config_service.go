@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -131,7 +132,7 @@ func (s *UsageService) ConfigView() ConfigView {
 		SessionID:                   cfg.SessionID,
 		ClientObservation:           cfg.ClientObservation,
 		Referer:                     cfg.UpstreamReferer,
-		ProxyURL:                    cfg.UpstreamProxy,
+		ProxyURL:                    maskedProxyURL(cfg.UpstreamProxy),
 		CacheTTL:                    cfg.CacheTTL.String(),
 		ConfigFile:                  cfg.ConfigPath,
 		SetupRequired:               cfg.SetupRequired,
@@ -286,6 +287,35 @@ func cookieHint(raw string) string {
 	}
 	count := strings.Count(raw, ";") + 1
 	return fmt.Sprintf("已配置（%d 项）", count)
+}
+
+// maskedProxyURL hides an embedded proxy password so the config view never
+// echoes proxy credentials. Scheme, host, port and username stay visible so
+// the settings page can still show the connection details; proxies with
+// credentials are maintained through the config file editor, which the
+// settings page already treats as the source of truth for the raw value.
+func maskedProxyURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.User == nil {
+		return raw
+	}
+	if _, hasPassword := parsed.User.Password(); !hasPassword {
+		return raw
+	}
+	// url.UserPassword escapes the mask characters on String(), so splice the
+	// masked password into the original URL text instead of re-serializing.
+	prefix := parsed.Scheme + "://"
+	rest := strings.TrimPrefix(raw, prefix)
+	colonIndex := strings.Index(rest, ":")
+	atIndex := strings.LastIndex(rest, "@")
+	if colonIndex < 0 || atIndex < 0 || colonIndex > atIndex {
+		return raw
+	}
+	return prefix + rest[:colonIndex] + ":****" + rest[atIndex:]
 }
 
 func (s *UsageService) TestConfig(ctx context.Context, update ConfigUpdate) (ConfigTestResult, error) {
