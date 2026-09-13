@@ -128,6 +128,8 @@ docker run -d --name codex-meter --restart unless-stopped -p 8123:8123 -v "$(pwd
 
 Compose 会将宿主机的 `config/` 挂载到容器的 `/app/config`，并将宿主机的 `data/` 挂载到容器的 `/app/data`。后端首次启动时自动创建 `config/config.json`，配置页面会继续更新该文件；设置和额度采样历史都会保留在宿主机，停止或重新创建容器不会删除这些文件。
 
+容器入口脚本会先把挂载目录的属主调整为非特权用户 `codex`（UID 1000），再以该用户运行服务进程，应用本身不会以 root 身份运行。Docker 自动创建的宿主机目录或旧版本以 root 写入的文件，都会在启动时自动修复属主，无需手动处理。
+
 额度采样历史保存在 SQLite 数据库：
 
 ```text

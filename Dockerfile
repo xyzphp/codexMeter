@@ -30,12 +30,17 @@ ARG APP_COMMIT=unknown
 LABEL org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.revision="${APP_COMMIT}"
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata su-exec \
+    && addgroup -S codex \
+    && adduser -S -G codex -u 1000 codex
 
 WORKDIR /app
 
 COPY --from=builder /out/codex-meter /app/codex-meter
 COPY config.example.json /app/config.example.json
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+
+RUN chmod 0755 /app/docker-entrypoint.sh
 
 ENV BIND_ADDR=0.0.0.0:8123
 
@@ -44,4 +49,6 @@ EXPOSE 8123
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -q --spider "http://127.0.0.1:8123${BASE_PATH:-}/healthz" || exit 1
 
-ENTRYPOINT ["/app/codex-meter"]
+# The entrypoint fixes mount ownership and then drops to the codex user, so
+# the server process never runs as root.
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
