@@ -222,6 +222,72 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/config/file:
+    get:
+      tags: [config]
+      operationId: getConfigFile
+      summary: 读取原始配置文件
+      description: |
+        返回服务端 config.json 的原文内容。该接口包含 OAuth Token、Cookie
+        等敏感凭证，必须受 Basic Auth 或 App API Key 保护；在两者均未启用时
+        服务端直接拒绝访问（403）。请勿把响应内容写入日志、URL 或前端源码。
+      security:
+        - basicAuth: []
+        - appApiKey: []
+        - appBearer: []
+      responses:
+        '200':
+          description: 配置文件原文
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigFileView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 未启用任何管理认证，配置文件接口拒绝访问。
+        '500':
+          description: 服务端读取配置文件失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags: [config]
+      operationId: updateConfigFile
+      summary: 校验并保存原始配置文件
+      description: |
+        用请求体中的 content 整体替换服务端 config.json。内容必须是合法的
+        配置 JSON，服务端会先写入临时文件完成完整性与凭证校验，再落盘并立即
+        重新加载运行配置。修改 bind_addr 或 base_path 后需要重启服务才会生效。
+        请仅从可信的管理端调用，不要把响应内容写入日志、URL 或前端源码。
+      security:
+        - basicAuth: []
+        - appApiKey: []
+        - appBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigFileUpdate'
+            example:
+              content: '{"cache_ttl":"10m"}'
+      responses:
+        '200':
+          description: 保存后的配置文件原文
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigFileView'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 未启用任何管理认证，配置文件接口拒绝访问。
+
   /api/config/test:
     post:
       tags: [config]
@@ -816,6 +882,7 @@ components:
         proxy_url:
           type: string
           format: uri
+          description: 上游代理 URL。若代理 URL 内嵌了密码，返回值会把密码脱敏为 ****；完整凭证仅保存在服务端配置文件中，请通过配置文件接口维护。
         cache_ttl:
           type: string
           example: 5m0s
@@ -835,6 +902,28 @@ components:
           type: string
           readOnly: true
           description: 当前 App API Key；仅对已认证请求返回，响应不缓存。
+
+    ConfigFileView:
+      type: object
+      required: [config_file, content]
+      properties:
+        config_file:
+          type: string
+          description: 服务端实际使用的配置文件路径。
+        content:
+          type: string
+          description: |
+            config.json 的原文内容。包含 OAuth Token、Cookie 等敏感凭证，
+            仅对已认证请求返回，请勿写入日志、URL 或前端源码。
+
+    ConfigFileUpdate:
+      type: object
+      required: [content]
+      additionalProperties: false
+      properties:
+        content:
+          type: string
+          description: 完整的配置文件 JSON 内容，服务端校验通过后整体替换。
 
     ConfigUpdate:
       type: object

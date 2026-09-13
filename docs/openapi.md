@@ -95,6 +95,8 @@ GET /openapi.yaml
 | GET | `/api/prediction` | 公共重置预测 |
 | GET | `/api/config` | 获取脱敏后的运行配置；`setup_required` 表示是否需要首次配置 |
 | GET | `/api/config/app-key` | 在已认证时读取当前管理密钥，供接口调试页使用 |
+| GET | `/api/config/file` | 读取 config.json 原文，含敏感凭证，需要 Basic Auth 或 App API Key |
+| PUT | `/api/config/file` | 校验并整体替换 config.json，保存后立即重新加载配置 |
 | POST | `/api/config/test-proxy` | 在填写账号凭证前测试代理或直连 |
 | POST | `/api/config/test` | 使用临时配置测试 OpenAI 额度连接，不保存配置 |
 | PUT | `/api/config` | 部分更新运行配置 |
