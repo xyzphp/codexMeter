@@ -1,4 +1,6 @@
-# syntax=docker/dockerfile:1
+# No `# syntax=` directive: the builtin BuildKit frontend supports everything
+# used here, which keeps local builds working without fetching the frontend
+# image from Docker Hub.
 
 FROM --platform=$BUILDPLATFORM golang:1.22-alpine AS builder
 
