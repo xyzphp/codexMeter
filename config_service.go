@@ -185,8 +185,8 @@ func (s *UsageService) activateConfig(old, next Config) error {
 	} else {
 		// SQLite history belongs to the running installation and remains
 		// available after a credential or proxy refresh.
-		s.weeklyHistory = compactUsageHistoryMetric(s.rawHistory, usageHistoryMetricWeekly)
-		s.fiveHourHistory = compactUsageHistoryMetric(s.rawHistory, usageHistoryMetricFiveHour)
+		s.weeklyHistory = compactUsageHistoryMetricOrdered(s.rawHistory, usageHistoryMetricWeekly)
+		s.fiveHourHistory = compactUsageHistoryMetricOrdered(s.rawHistory, usageHistoryMetricFiveHour)
 		s.history = mergeUsageHistories(s.weeklyHistory, s.fiveHourHistory)
 	}
 	s.resetCached = nil

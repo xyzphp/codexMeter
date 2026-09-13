@@ -77,9 +77,9 @@ func NewUsageService(cfg Config) (*UsageService, error) {
 			slog.Info("migrated usage history into sqlite", "path", historyStore.Path(), "points", len(rawHistory))
 		}
 	}
-	rawHistory = orderUsageHistoryPoints(rawHistory)
-	weeklyHistory := compactUsageHistoryMetric(rawHistory, usageHistoryMetricWeekly)
-	fiveHourHistory := compactUsageHistoryMetric(rawHistory, usageHistoryMetricFiveHour)
+	rawHistory = ensureOrderedUsageHistoryPoints(rawHistory)
+	weeklyHistory := compactUsageHistoryMetricOrdered(rawHistory, usageHistoryMetricWeekly)
+	fiveHourHistory := compactUsageHistoryMetricOrdered(rawHistory, usageHistoryMetricFiveHour)
 	history := mergeUsageHistories(weeklyHistory, fiveHourHistory)
 	var lastSuccessfulHistory *HistoryPoint
 	if point, ok := latestSuccessfulHistoryPoint(rawHistory); ok {

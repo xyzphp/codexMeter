@@ -511,6 +511,71 @@ func TestSQLiteUsageHistoryStorePersistsAllSamples(t *testing.T) {
 	}
 }
 
+func TestAppendUsageHistoryPointToMetricMatchesFullRecompute(t *testing.T) {
+	baseTime := time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)
+	fiveHourValue := 5.0
+	// The collector only produces stale samples by cloning the last successful
+	// point, so every stale step below reuses a value that already has a
+	// successful record in the compacted list.
+	steps := []HistoryPoint{
+		{UsedPercent: 10, FiveHourUsedPercent: &fiveHourValue},
+		{UsedPercent: 10, FiveHourUsedPercent: &fiveHourValue},
+		{UsedPercent: 20, FiveHourUsedPercent: &fiveHourValue},
+		{UsedPercent: 20, FiveHourUsedPercent: &fiveHourValue, Stale: true},
+		{UsedPercent: 30, FiveHourUsedPercent: &fiveHourValue},
+		{UsedPercent: 10, FiveHourUsedPercent: &fiveHourValue},
+		{UsedPercent: 10, FiveHourUsedPercent: &fiveHourValue, Stale: true},
+		{UsedPercent: 20, FiveHourUsedPercent: &fiveHourValue},
+	}
+	for index := range steps {
+		steps[index].At = baseTime.Add(time.Duration(index) * usageHistorySampleInterval).Format(time.RFC3339)
+	}
+
+	for _, metric := range []usageHistoryMetric{usageHistoryMetricWeekly, usageHistoryMetricFiveHour} {
+		var incremental []HistoryPoint
+		for index, point := range steps {
+			incremental = appendUsageHistoryPointToMetric(incremental, point, metric)
+			want := compactUsageHistoryMetric(steps[:index+1], metric)
+			if !usageHistoriesEqual(incremental, want) {
+				t.Fatalf("metric %d step %d: incremental list = %#v, want full recompute %#v", metric, index, incremental, want)
+			}
+		}
+	}
+}
+
+func TestAppendUsageHistoryPointToMetricAppliesLimitAfterDistinctValues(t *testing.T) {
+	baseTime := time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)
+	raw := make([]HistoryPoint, 0, maxUsageHistoryPoints+13)
+	var incremental []HistoryPoint
+	for index := 0; index < maxUsageHistoryPoints+12; index++ {
+		point := HistoryPoint{
+			At:          baseTime.Add(time.Duration(index) * usageHistorySampleInterval).Format(time.RFC3339),
+			UsedPercent: float64(index),
+		}
+		raw = append(raw, point)
+		incremental = appendUsageHistoryPointToMetric(incremental, point, usageHistoryMetricWeekly)
+	}
+	if len(incremental) != maxUsageHistoryPoints {
+		t.Fatalf("incremental list contains %d points, want %d", len(incremental), maxUsageHistoryPoints)
+	}
+
+	// A value that left the window because newer distinct values arrived is
+	// re-admitted with its newest occurrence, and the oldest value drops out.
+	repeated := HistoryPoint{
+		At:          baseTime.Add(time.Duration(maxUsageHistoryPoints+12) * usageHistorySampleInterval).Format(time.RFC3339),
+		UsedPercent: 12,
+	}
+	raw = append(raw, repeated)
+	incremental = appendUsageHistoryPointToMetric(incremental, repeated, usageHistoryMetricWeekly)
+	want := compactUsageHistoryMetric(raw, usageHistoryMetricWeekly)
+	if !usageHistoriesEqual(incremental, want) {
+		t.Fatalf("incremental list = %#v, want full recompute %#v", incremental, want)
+	}
+	if incremental[0].UsedPercent != 13 || incremental[len(incremental)-1].UsedPercent != 12 {
+		t.Fatalf("incremental range = %v..%v, want 13..12", incremental[0].UsedPercent, incremental[len(incremental)-1].UsedPercent)
+	}
+}
+
 func TestUsageHistoryRetainsIndependentMetricWindows(t *testing.T) {
 	points := make([]HistoryPoint, 0, maxUsageHistoryPoints*2+24)
 	for index := 0; index < maxUsageHistoryPoints*2+24; index++ {
@@ -855,8 +920,7 @@ func TestProxySchemes(t *testing.T) {
 		name       string
 		raw        string
 		wantScheme string
-	}{
-		{name: "http", raw: "http://127.0.0.1:7890", wantScheme: "http"},
+	}{{name: "http", raw: "http://127.0.0.1:7890", wantScheme: "http"},
 		{name: "https", raw: "https://127.0.0.1:7890", wantScheme: "https"},
 		{name: "socks5", raw: "socks5://127.0.0.1:1080", wantScheme: "socks5"},
 		{name: "socket5 alias", raw: "socket5://127.0.0.1:1080", wantScheme: "socks5"},

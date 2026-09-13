@@ -39,14 +39,30 @@ func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
 	if len(s.rawHistory) == 0 {
 		// Keep services constructed by older callers compatible while the raw
 		// archive is introduced. New services always load the complete archive.
+		// The derived lists are rebuilt here as well so the incremental
+		// updates below always start from lists that match the raw archive.
 		s.rawHistory = mergeUsageHistorySamples(s.history, s.weeklyHistory, s.fiveHourHistory)
+		s.rawHistory = ensureOrderedUsageHistoryPoints(s.rawHistory)
+		s.weeklyHistory = compactUsageHistoryMetricOrdered(s.rawHistory, usageHistoryMetricWeekly)
+		s.fiveHourHistory = compactUsageHistoryMetricOrdered(s.rawHistory, usageHistoryMetricFiveHour)
+		s.history = mergeUsageHistories(s.weeklyHistory, s.fiveHourHistory)
 	}
-	s.rawHistory = orderUsageHistoryPoints(s.rawHistory)
+	// The raw archive is maintained in chronological order: the sqlite loader
+	// returns ordered rows and every accepted append is gated to be at least
+	// one sample interval after the newest stored sample. The interval check
+	// therefore only needs the newest element, not a re-sorted copy.
 	if len(s.rawHistory) > 0 {
 		lastAt, parseErr := time.Parse(time.RFC3339, s.rawHistory[len(s.rawHistory)-1].At)
 		pointAt, pointErr := time.Parse(time.RFC3339, point.At)
 		if parseErr == nil && pointErr == nil && pointAt.Sub(lastAt) < usageHistorySampleInterval {
 			s.cacheMu.Unlock()
+			return
+		}
+		if pointErr != nil {
+			// An unparsable timestamp cannot be placed in the ordered archive
+			// and would corrupt the incremental compaction invariant.
+			s.cacheMu.Unlock()
+			slog.Warn("skip usage history sample with invalid timestamp", "at", point.At)
 			return
 		}
 	}
@@ -59,21 +75,21 @@ func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
 	}
 	// Retain every scheduled sample in the raw archive. Each API timeline is
 	// derived from that complete source, deduplicated by its own metric value,
-	// and limited only after deduplication.
+	// and limited only after deduplication. The derived lists are updated
+	// incrementally so a growing archive does not rescan every stored sample.
 	s.rawHistory = append(s.rawHistory, cloneHistoryPoint(point))
-	s.rawHistory = orderUsageHistoryPoints(s.rawHistory)
-	s.weeklyHistory = compactUsageHistoryMetric(s.rawHistory, usageHistoryMetricWeekly)
-	s.fiveHourHistory = compactUsageHistoryMetric(s.rawHistory, usageHistoryMetricFiveHour)
+	s.weeklyHistory = appendUsageHistoryPointToMetric(s.weeklyHistory, point, usageHistoryMetricWeekly)
+	s.fiveHourHistory = appendUsageHistoryPointToMetric(s.fiveHourHistory, point, usageHistoryMetricFiveHour)
 	s.history = mergeUsageHistories(s.weeklyHistory, s.fiveHourHistory)
+	if s.cached != nil {
+		s.cached.History = append([]HistoryPoint(nil), s.history...)
+		s.cached.WeeklyHistory = append([]HistoryPoint(nil), s.weeklyHistory...)
+		s.cached.FiveHourHistory = append([]HistoryPoint(nil), s.fiveHourHistory...)
+	}
 	rawHistory := append([]HistoryPoint(nil), s.rawHistory...)
 	history := append([]HistoryPoint(nil), s.history...)
 	weeklyHistory := append([]HistoryPoint(nil), s.weeklyHistory...)
 	fiveHourHistory := append([]HistoryPoint(nil), s.fiveHourHistory...)
-	if s.cached != nil {
-		s.cached.History = append([]HistoryPoint(nil), history...)
-		s.cached.WeeklyHistory = append([]HistoryPoint(nil), weeklyHistory...)
-		s.cached.FiveHourHistory = append([]HistoryPoint(nil), fiveHourHistory...)
-	}
 	s.cacheMu.Unlock()
 
 	if s.historyStore != nil {
@@ -190,17 +206,36 @@ func usageHistoryMetricValueKey(point HistoryPoint, metric usageHistoryMetric) s
 	return value
 }
 
+// usageHistoryTimestampLess orders samples chronologically. RFC3339 timestamps
+// compare as a fallback so malformed entries keep a stable relative position.
+func usageHistoryTimestampLess(left, right HistoryPoint) bool {
+	leftAt, leftErr := time.Parse(time.RFC3339, left.At)
+	rightAt, rightErr := time.Parse(time.RFC3339, right.At)
+	if leftErr == nil && rightErr == nil && !leftAt.Equal(rightAt) {
+		return leftAt.Before(rightAt)
+	}
+	return left.At < right.At
+}
+
 func orderUsageHistoryPoints(points []HistoryPoint) []HistoryPoint {
 	ordered := append([]HistoryPoint(nil), points...)
 	sort.SliceStable(ordered, func(left, right int) bool {
-		leftAt, leftErr := time.Parse(time.RFC3339, ordered[left].At)
-		rightAt, rightErr := time.Parse(time.RFC3339, ordered[right].At)
-		if leftErr == nil && rightErr == nil && !leftAt.Equal(rightAt) {
-			return leftAt.Before(rightAt)
-		}
-		return ordered[left].At < ordered[right].At
+		return usageHistoryTimestampLess(ordered[left], ordered[right])
 	})
 	return ordered
+}
+
+// ensureOrderedUsageHistoryPoints trusts an already ordered archive and only
+// pays for a sort when the string-adjacency check detects out-of-order
+// samples. Runtime appends are gated to be monotonic, so the steady-state
+// cost of loading the database is a single linear scan.
+func ensureOrderedUsageHistoryPoints(points []HistoryPoint) []HistoryPoint {
+	for index := 1; index < len(points); index++ {
+		if points[index-1].At > points[index].At {
+			return orderUsageHistoryPoints(points)
+		}
+	}
+	return points
 }
 
 // limitUsageHistoryPoints retains the latest distinct values after
@@ -216,11 +251,39 @@ func limitUsageHistoryPoints(points []HistoryPoint) []HistoryPoint {
 // every value for one metric, then retains the latest 48 distinct values. The
 // other quota window cannot consume this metric's limit.
 func compactUsageHistoryMetric(points []HistoryPoint, metric usageHistoryMetric) []HistoryPoint {
-	if len(points) < 2 {
-		return limitUsageHistoryPoints(deduplicateUsageHistoryMetric(points, metric))
+	return compactUsageHistoryMetricOrdered(orderUsageHistoryPoints(points), metric)
+}
+
+// compactUsageHistoryMetricOrdered expects points in chronological order, as
+// produced by the sqlite loader and the runtime append gate, and skips the
+// re-sort.
+func compactUsageHistoryMetricOrdered(points []HistoryPoint, metric usageHistoryMetric) []HistoryPoint {
+	return limitUsageHistoryPoints(deduplicateUsageHistoryMetric(points, metric))
+}
+
+// appendUsageHistoryPointToMetric applies one new sample to a metric's already
+// compacted list and produces the same result as re-running
+// compactUsageHistoryMetric over the extended archive: an unchanged metric
+// value only moves that value's kept record forward, a stale sample never
+// replaces a successful record of the same value, and the 48-point limit
+// applies after the value-level update.
+func appendUsageHistoryPointToMetric(list []HistoryPoint, point HistoryPoint, metric usageHistoryMetric) []HistoryPoint {
+	if metric == usageHistoryMetricFiveHour && point.FiveHourUsedPercent == nil {
+		return list
 	}
-	ordered := orderUsageHistoryPoints(points)
-	return limitUsageHistoryPoints(deduplicateUsageHistoryMetric(ordered, metric))
+	key := usageHistoryMetricValueKey(point, metric)
+	for index, existing := range list {
+		if usageHistoryMetricValueKey(existing, metric) != key {
+			continue
+		}
+		if point.Stale && !existing.Stale {
+			return list
+		}
+		updated := append(make([]HistoryPoint, 0, len(list)), list[:index]...)
+		updated = append(updated, list[index+1:]...)
+		return limitUsageHistoryPoints(append(updated, cloneHistoryPoint(point)))
+	}
+	return limitUsageHistoryPoints(append(append(make([]HistoryPoint, 0, len(list)+1), list...), cloneHistoryPoint(point)))
 }
 
 func mergeUsageHistorySamples(histories ...[]HistoryPoint) []HistoryPoint {
@@ -250,12 +313,7 @@ func mergeUsageHistorySamples(histories ...[]HistoryPoint) []HistoryPoint {
 		}
 	}
 	sort.SliceStable(merged, func(left, right int) bool {
-		leftAt, leftErr := time.Parse(time.RFC3339, merged[left].At)
-		rightAt, rightErr := time.Parse(time.RFC3339, merged[right].At)
-		if leftErr == nil && rightErr == nil && !leftAt.Equal(rightAt) {
-			return leftAt.Before(rightAt)
-		}
-		return merged[left].At < merged[right].At
+		return usageHistoryTimestampLess(merged[left], merged[right])
 	})
 	return merged
 }
@@ -338,12 +396,7 @@ func mergeUsageHistories(weeklyHistory, fiveHourHistory []HistoryPoint) []Histor
 		add(point, false)
 	}
 	sort.SliceStable(merged, func(left, right int) bool {
-		leftAt, leftErr := time.Parse(time.RFC3339, merged[left].At)
-		rightAt, rightErr := time.Parse(time.RFC3339, merged[right].At)
-		if leftErr == nil && rightErr == nil && !leftAt.Equal(rightAt) {
-			return leftAt.Before(rightAt)
-		}
-		return merged[left].At < merged[right].At
+		return usageHistoryTimestampLess(merged[left], merged[right])
 	})
 	return merged
 }
@@ -364,13 +417,14 @@ func compactUsageHistory(points []HistoryPoint) []HistoryPoint {
 	return compactUsageHistoryMetric(points, usageHistoryMetricWeekly)
 }
 
+// latestSuccessfulHistoryPoint scans an ordered archive backwards for the
+// newest non-stale sample. Callers must pass chronologically ordered points.
 func latestSuccessfulHistoryPoint(points []HistoryPoint) (HistoryPoint, bool) {
-	ordered := orderUsageHistoryPoints(points)
-	for index := len(ordered) - 1; index >= 0; index-- {
-		if ordered[index].Stale {
+	for index := len(points) - 1; index >= 0; index-- {
+		if points[index].Stale {
 			continue
 		}
-		return cloneHistoryPoint(ordered[index]), true
+		return cloneHistoryPoint(points[index]), true
 	}
 	return HistoryPoint{}, false
 }
@@ -589,34 +643,7 @@ func encodeUsageHistory(history []HistoryPoint) ([]byte, error) {
 }
 
 func writeUsageHistoryFileAtomic(path string, payload []byte) error {
-	directory := filepath.Dir(path)
-	temporary, err := os.CreateTemp(directory, "."+filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	temporaryPath := temporary.Name()
-	closed := false
-	defer func() {
-		if !closed {
-			_ = temporary.Close()
-		}
-		_ = os.Remove(temporaryPath)
-	}()
-
-	if err := temporary.Chmod(0o600); err != nil {
-		return err
-	}
-	if _, err := temporary.Write(payload); err != nil {
-		return err
-	}
-	if err := temporary.Sync(); err != nil {
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	closed = true
-	return os.Rename(temporaryPath, path)
+	return writeFileAtomic(path, payload, 0o600)
 }
 
 func appendUsageHistory(path string, point HistoryPoint) error {
