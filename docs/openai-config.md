@@ -129,9 +129,9 @@ chmod 600 config.json
 | `openai.referer` | 否 | 上游请求 Referer，例如 ChatGPT 使用情况页面 |
 | `openai.user_agent` | 否 | 上游请求 User-Agent；留空时使用项目默认值 |
 | `openai.fedramp` | 否 | 仅在明确需要 FedRAMP 请求头时设为 `true` |
-| `proxy.url` | 否 | 代理 URL，支持 `http://`、`https://`、`socks5://`；也兼容 `socket5://` |
-| `bind_addr` | 否 | 服务监听地址，仅通过配置文件或 `BIND_ADDR` 设置；设置页面不提供此项 |
-| `base_path` | 否 | 反向代理前缀，仅通过配置文件或 `BASE_PATH` 设置；设置页面不提供此项 |
+| `proxy.url` | 否 | 代理 URL，支持 `http://`、`https://`、`socks5://`；也兼容 `socket5://`。URL 中可以内嵌 `user:password@` 凭证；`GET /api/config` 返回时密码会脱敏为 `****`，完整凭证只保存在配置文件里 |
+| `bind_addr` | 否 | 服务监听地址，仅通过配置文件或 `BIND_ADDR` 设置；设置页面不提供此项，修改后需重启服务生效 |
+| `base_path` | 否 | 反向代理前缀，仅通过配置文件或 `BASE_PATH` 设置；设置页面不提供此项，修改后需重启服务生效 |
 | `cache_ttl` | 否 | 缓存时长，例如 `10m`、`30s` 或 `0` |
 
 ### 环境变量与 JSON 配置项
