@@ -414,7 +414,40 @@ func writeConfigFile(path string, content []byte) error {
 	if err := os.MkdirAll(directory, 0o750); err != nil {
 		return err
 	}
-	return os.WriteFile(path, content, 0o600)
+	return writeFileAtomic(path, content, 0o600)
+}
+
+// writeFileAtomic writes payload through a temp file in the target directory
+// plus fsync and rename, so a crash or power loss can never leave a truncated
+// configuration file behind.
+func writeFileAtomic(path string, payload []byte, perm os.FileMode) error {
+	directory := filepath.Dir(path)
+	temporary, err := os.CreateTemp(directory, "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	closed := false
+	defer func() {
+		if !closed {
+			_ = temporary.Close()
+		}
+		_ = os.Remove(temporaryPath)
+	}()
+	if err := temporary.Chmod(perm); err != nil {
+		return err
+	}
+	if _, err := temporary.Write(payload); err != nil {
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	closed = true
+	return os.Rename(temporaryPath, path)
 }
 
 func (s *UsageService) ReadConfigFile() (ConfigFileView, error) {
