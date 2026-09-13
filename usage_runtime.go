@@ -218,10 +218,10 @@ func makeWindow(raw rawWindow, fetchedAt time.Time) *Window {
 		window.UsedPercent = *raw.UsedPercent
 	}
 	if raw.WindowMinutes != nil {
-		window.WindowMinutes = maxInt(*raw.WindowMinutes, 0)
+		window.WindowMinutes = max(*raw.WindowMinutes, 0)
 	}
 	if raw.ResetAfterSeconds != nil {
-		window.ResetAfterSeconds = maxInt(*raw.ResetAfterSeconds, 0)
+		window.ResetAfterSeconds = max(*raw.ResetAfterSeconds, 0)
 	}
 	if raw.ResetAtUnix != nil && *raw.ResetAtUnix > 0 {
 		window.ResetAt = time.Unix(*raw.ResetAtUnix, 0).UTC()
@@ -235,11 +235,4 @@ func makeWindow(raw rawWindow, fetchedAt time.Time) *Window {
 		}
 	}
 	return window
-}
-
-func maxInt(value, minimum int) int {
-	if value < minimum {
-		return minimum
-	}
-	return value
 }
