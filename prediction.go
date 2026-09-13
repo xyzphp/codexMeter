@@ -43,6 +43,19 @@ func (s *UsageService) GetPrediction(ctx context.Context, force bool) (*ResetPre
 }
 
 func (s *UsageService) queryResetPrediction(ctx context.Context) (*ResetPrediction, error) {
+	// The community poll homepage is the slowest of the three public requests
+	// and only supplementary; fetch it concurrently with the JSON endpoints so
+	// a slow homepage does not extend the forecast wait.
+	type pollFetch struct {
+		page []byte
+		err  error
+	}
+	pollChannel := make(chan pollFetch, 1)
+	go func() {
+		page, err := s.queryPublicResetPage(ctx)
+		pollChannel <- pollFetch{page: page, err: err}
+	}()
+
 	var envelope resetStatusEnvelope
 	if err := s.queryPublicResetJSON(ctx, resetStatusEndpoint, &envelope); err != nil {
 		return nil, fmt.Errorf("reset status request failed: %w", err)
@@ -66,12 +79,13 @@ func (s *UsageService) queryResetPrediction(ctx context.Context) (*ResetPredicti
 		stats.Total = len(history)
 	}
 	var communityPoll *ResetPoll
-	if homepage, err := s.queryPublicResetPage(ctx); err != nil {
+	fetch := <-pollChannel
+	if fetch.err != nil {
 		// The community poll is supplementary. Keep the forecast available if
 		// the public homepage is temporarily unavailable or changes shape.
-		slog.Warn("reset poll request failed", "error", err)
+		slog.Warn("reset poll request failed", "error", fetch.err)
 	} else {
-		communityPoll = parseResetPoll(homepage)
+		communityPoll = parseResetPoll(fetch.page)
 	}
 	return &ResetPrediction{
 		Source:        "codex_resets_status",

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -1259,11 +1260,14 @@ func TestResetStatusResponseDecodesPrediction(t *testing.T) {
 }
 
 func TestResetPredictionRequestUsesPublicEndpoints(t *testing.T) {
+	var captureMu sync.Mutex
 	var captured []*http.Request
 	service := &UsageService{
 		cfg: Config{CacheTTL: time.Minute},
 		client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			captureMu.Lock()
 			captured = append(captured, request)
+			captureMu.Unlock()
 			body := `{"data":{"active_watch":null,"stats":{"total":0}},"meta":{"generated_at":"2026-08-22T08:34:14Z"}}`
 			if request.URL.String() == resetHistoryEndpoint {
 				body = `{"events":[{"tweet_id":"2090","tweet_url":"https://x.com/thsottiaux/status/2090","text":"Reset complete","announced_at":"2026-08-21T23:40:12Z","reset_type":"regular","source":"webhook"}]}`
@@ -1286,17 +1290,23 @@ func TestResetPredictionRequestUsesPublicEndpoints(t *testing.T) {
 	if prediction.CommunityPoll == nil || prediction.CommunityPoll.YesVotes != 1042 || prediction.CommunityPoll.NoVotes != 100 {
 		t.Fatalf("community poll = %#v", prediction.CommunityPoll)
 	}
+	captureMu.Lock()
+	defer captureMu.Unlock()
 	if len(captured) != 3 {
 		t.Fatalf("captured %d requests, want status, history and homepage", len(captured))
 	}
-	if captured[0].Method != http.MethodGet || captured[0].URL.String() != resetStatusEndpoint {
-		t.Fatalf("status request = %s %s, want GET %s", captured[0].Method, captured[0].URL, resetStatusEndpoint)
+	endpoints := map[string]string{}
+	for _, request := range captured {
+		endpoints[request.URL.String()] = request.Method
 	}
-	if captured[1].Method != http.MethodGet || captured[1].URL.String() != resetHistoryEndpoint {
-		t.Fatalf("history request = %s %s, want GET %s", captured[1].Method, captured[1].URL, resetHistoryEndpoint)
-	}
-	if captured[2].Method != http.MethodGet || captured[2].URL.String() != resetHomepageEndpoint {
-		t.Fatalf("homepage request = %s %s, want GET %s", captured[2].Method, captured[2].URL, resetHomepageEndpoint)
+	for endpoint, wantMethod := range map[string]string{
+		resetStatusEndpoint:   http.MethodGet,
+		resetHistoryEndpoint:  http.MethodGet,
+		resetHomepageEndpoint: http.MethodGet,
+	} {
+		if endpoints[endpoint] != wantMethod {
+			t.Fatalf("request %s = %q, want %q", endpoint, endpoints[endpoint], wantMethod)
+		}
 	}
 	if got := captured[0].Header.Get("User-Agent"); got != "codex-usage-dashboard/1.0" {
 		t.Fatalf("User-Agent = %q, want dashboard user agent", got)
