@@ -200,14 +200,15 @@ type dailyWorkspaceUsageTotals struct {
 }
 
 type ResetPrediction struct {
-	Source        string       `json:"source"`
-	FetchedAt     string       `json:"fetched_at"`
-	FromCache     bool         `json:"from_cache"`
-	LatestReset   *ResetEvent  `json:"latest_reset,omitempty"`
-	ActiveWatch   *ResetWatch  `json:"active_watch,omitempty"`
-	CommunityPoll *ResetPoll   `json:"community_poll,omitempty"`
-	History       []ResetEvent `json:"history,omitempty"`
-	Stats         ResetStats   `json:"stats"`
+	Source         string          `json:"source"`
+	FetchedAt      string          `json:"fetched_at"`
+	FromCache      bool            `json:"from_cache"`
+	LatestReset    *ResetEvent     `json:"latest_reset,omitempty"`
+	ScheduledReset *ScheduledReset `json:"scheduled_reset,omitempty"`
+	ActiveWatch    *ResetWatch     `json:"active_watch,omitempty"`
+	CommunityPoll  *ResetPoll      `json:"community_poll,omitempty"`
+	History        []ResetEvent    `json:"history,omitempty"`
+	Stats          ResetStats      `json:"stats"`
 }
 
 type ResetEvent struct {
@@ -224,12 +225,22 @@ type ResetSource struct {
 	URL    string `json:"url"`
 }
 
+// ScheduledReset is an explicit announcement awaiting execution evidence.
+// Reaching ScheduledFor alone does not mean that the reset has completed.
+type ScheduledReset struct {
+	ResetEvent
+	Status       string  `json:"status"`
+	ScheduledFor *string `json:"scheduled_for"`
+}
+
 type ResetWatch struct {
-	ResetChancePercent float64 `json:"reset_chance_percent"`
-	ForecastWindow     string  `json:"forecast_window"`
-	ObservedAt         string  `json:"observed_at"`
-	ExpiresAt          string  `json:"expires_at"`
-	Level              string  `json:"level"`
+	ResetChancePercent *float64     `json:"reset_chance_percent"`
+	ForecastWindow     string       `json:"forecast_window"`
+	ObservedAt         string       `json:"observed_at"`
+	ExpiresAt          string       `json:"expires_at"`
+	Level              string       `json:"level"`
+	Text               string       `json:"text,omitempty"`
+	Source             *ResetSource `json:"source,omitempty"`
 }
 
 type ResetPoll struct {
@@ -248,9 +259,10 @@ type ResetStats struct {
 
 type resetStatusEnvelope struct {
 	Data struct {
-		LatestReset *ResetEvent `json:"latest_reset"`
-		ActiveWatch *ResetWatch `json:"active_watch"`
-		Stats       ResetStats  `json:"stats"`
+		LatestReset    *ResetEvent     `json:"latest_reset"`
+		ScheduledReset *ScheduledReset `json:"scheduled_reset"`
+		ActiveWatch    *ResetWatch     `json:"active_watch"`
+		Stats          ResetStats      `json:"stats"`
 	} `json:"data"`
 	Meta struct {
 		APIVersion  string `json:"api_version"`

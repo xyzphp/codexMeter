@@ -1329,6 +1329,199 @@ func TestResetPredictionRequestUsesPublicEndpoints(t *testing.T) {
 	}
 }
 
+func TestResetStatusResponseDecodesSignals(t *testing.T) {
+	tests := []struct {
+		name          string
+		data          string
+		wantScheduled bool
+		wantTime      string
+		wantWatch     bool
+		wantChance    bool
+		chance        float64
+	}{
+		{name: "legacy idle response", data: `{"latest_reset":null,"active_watch":null,"stats":{"total":56}}`},
+		{name: "active watch", data: `{"active_watch":{"level":"strong","reset_chance_percent":78,"forecast_window":"next 24 hours","text":"A reset may be coming.","source":{"type":"x_post","url":"https://codex-resets.com/"}}}`, wantWatch: true, wantChance: true, chance: 78},
+		{name: "watch without probability", data: `{"active_watch":{"level":"elevated","reset_chance_percent":null,"forecast_window":"next week"}}`, wantWatch: true},
+		{name: "scheduled without watch", data: `{"scheduled_reset":{"id":"scheduled","status":"scheduled","reset_type":"regular","announced_at":"2026-10-02T02:00:00Z","scheduled_for":"2026-10-02T17:00:00Z","text":"A reset has been scheduled.","source":{"type":"x_post","author":"thsottiaux","url":"https://codex-resets.com/"}},"active_watch":null}`, wantScheduled: true, wantTime: "2026-10-02T17:00:00Z"},
+		{name: "scheduled time not yet announced", data: `{"scheduled_reset":{"id":"scheduled","status":"scheduled","scheduled_for":null}}`, wantScheduled: true},
+		{name: "passed time still awaiting evidence", data: `{"scheduled_reset":{"id":"scheduled","status":"scheduled","scheduled_for":"2025-01-01T00:00:00Z"}}`, wantScheduled: true, wantTime: "2025-01-01T00:00:00Z"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var envelope resetStatusEnvelope
+			if err := json.Unmarshal([]byte(`{"data":`+test.data+`,"meta":{"api_version":"v1"}}`), &envelope); err != nil {
+				t.Fatalf("decode reset status: %v", err)
+			}
+			scheduled := envelope.Data.ScheduledReset
+			if (scheduled != nil) != test.wantScheduled {
+				t.Fatalf("scheduled reset = %#v, want present %v", scheduled, test.wantScheduled)
+			}
+			if scheduled != nil {
+				if scheduled.Status != "scheduled" || scheduled.ID != "scheduled" {
+					t.Fatalf("scheduled reset identity = %#v", scheduled)
+				}
+				if test.wantTime == "" {
+					if scheduled.ScheduledFor != nil {
+						t.Fatalf("scheduled_for = %q, want null", *scheduled.ScheduledFor)
+					}
+				} else if scheduled.ScheduledFor == nil || *scheduled.ScheduledFor != test.wantTime {
+					t.Fatalf("scheduled_for = %v, want %q", scheduled.ScheduledFor, test.wantTime)
+				}
+			}
+			watch := envelope.Data.ActiveWatch
+			if (watch != nil) != test.wantWatch {
+				t.Fatalf("active watch = %#v, want present %v", watch, test.wantWatch)
+			}
+			if watch != nil {
+				if (watch.ResetChancePercent != nil) != test.wantChance {
+					t.Fatalf("probability = %v, want present %v", watch.ResetChancePercent, test.wantChance)
+				}
+				if test.wantChance && *watch.ResetChancePercent != test.chance {
+					t.Fatalf("probability = %v, want %v", *watch.ResetChancePercent, test.chance)
+				}
+				encoded, err := json.Marshal(watch)
+				if err != nil {
+					t.Fatalf("encode watch: %v", err)
+				}
+				if !test.wantChance && !strings.Contains(string(encoded), `"reset_chance_percent":null`) {
+					t.Fatalf("unknown probability was not preserved as null: %s", encoded)
+				}
+			}
+		})
+	}
+}
+
+func TestScheduledPredictionEndpoint(t *testing.T) {
+	statusJSON := `{"data":{"latest_reset":{"id":"executed","reset_type":"banked","announced_at":"2026-09-29T19:00:00Z","text":"Reset completed."},"scheduled_reset":{"id":"scheduled","status":"scheduled","reset_type":"regular","announced_at":"2026-10-02T02:00:00Z","scheduled_for":"2026-10-02T17:00:00Z","text":"A reset has been scheduled.","source":{"type":"x_post","author":"thsottiaux","url":"https://codex-resets.com/"}},"active_watch":null,"stats":{"total":56}},"meta":{"generated_at":"2026-10-02T03:00:00Z"}}`
+	tests := []struct {
+		name           string
+		authorized     bool
+		upstreamStatus int
+		wantStatus     int
+	}{
+		{name: "scheduled signal on prefixed protected route", authorized: true, upstreamStatus: http.StatusOK, wantStatus: http.StatusOK},
+		{name: "authentication is still required", upstreamStatus: http.StatusOK, wantStatus: http.StatusUnauthorized},
+		{name: "status failure is not reported as idle", authorized: true, upstreamStatus: http.StatusServiceUnavailable, wantStatus: http.StatusBadGateway},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var requestMu sync.Mutex
+			requests := make(map[string]int)
+			cfg := Config{BasePath: "/codex", CacheTTL: time.Minute, BasicAuthEnabled: true, BasicAuthUsername: "test-user", BasicAuthPassword: "test-password"}
+			service := &UsageService{cfg: cfg, client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				requestMu.Lock()
+				defer requestMu.Unlock()
+				requests[request.URL.String()]++
+				if request.Header.Get("Authorization") != "" || request.Header.Get("Cookie") != "" || request.Header.Get("X-App-API-Key") != "" {
+					t.Errorf("public upstream request unexpectedly contained account credentials")
+				}
+				body := statusJSON
+				status := test.upstreamStatus
+				if request.URL.String() == resetHistoryEndpoint {
+					status = http.StatusOK
+					body = `{"events":[{"tweet_id":"executed","reset_type":"banked","announced_at":"2026-09-29T19:00:00Z","text":"Reset completed."}]}`
+				}
+				return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+			})}}
+			server := NewServer(cfg, service)
+			request := httptest.NewRequest(http.MethodGet, "/codex/api/prediction?force=true", nil)
+			if test.authorized {
+				request.SetBasicAuth("test-user", "test-password")
+			}
+			recorder := httptest.NewRecorder()
+			server.handler.ServeHTTP(recorder, request)
+			if recorder.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", recorder.Code, test.wantStatus, recorder.Body.String())
+			}
+			if test.wantStatus == http.StatusOK {
+				var prediction ResetPrediction
+				if err := json.Unmarshal(recorder.Body.Bytes(), &prediction); err != nil {
+					t.Fatalf("decode prediction: %v", err)
+				}
+				if prediction.ScheduledReset == nil || prediction.ScheduledReset.ScheduledFor == nil || *prediction.ScheduledReset.ScheduledFor != "2026-10-02T17:00:00Z" {
+					t.Fatalf("scheduled reset missing from API response: %#v", prediction.ScheduledReset)
+				}
+				if prediction.LatestReset == nil || prediction.LatestReset.ID != "executed" || len(prediction.History) != 1 || prediction.History[0].ID != "executed" || prediction.Stats.Total != 56 {
+					t.Fatalf("pending announcement changed executed history or statistics: %#v", prediction)
+				}
+				if prediction.ActiveWatch != nil || prediction.CommunityPoll != nil {
+					t.Fatalf("scheduled reset incorrectly acquired probability or poll: %#v", prediction)
+				}
+				requestMu.Lock()
+				defer requestMu.Unlock()
+				if requests[resetStatusEndpoint] != 1 || requests[resetHistoryEndpoint] != 1 || requests[resetHomepageEndpoint] != 0 {
+					t.Fatalf("scheduled requests = %v, want status and history without poll homepage", requests)
+				}
+			}
+		})
+	}
+}
+
+func TestResetPredictionKeepsStatusOnSupplementaryFailures(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint string
+	}{
+		{name: "history unavailable", endpoint: resetHistoryEndpoint},
+		{name: "homepage unavailable", endpoint: resetHomepageEndpoint},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := &UsageService{cfg: Config{CacheTTL: time.Minute}, client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				status := http.StatusOK
+				body := `{"data":{"latest_reset":{"id":"executed"},"active_watch":{"level":"strong","reset_chance_percent":78},"stats":{"total":56}}}`
+				if request.URL.String() == resetHistoryEndpoint {
+					body = `{"events":[{"tweet_id":"executed"}]}`
+				} else if request.URL.String() == resetHomepageEndpoint {
+					body = `<div data-role="watch-poll" data-yes="1042" data-no="100"></div>`
+				}
+				if request.URL.String() == test.endpoint {
+					status = http.StatusServiceUnavailable
+				}
+				return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+			})}}
+			prediction, err := service.queryResetPrediction(context.Background())
+			if err != nil {
+				t.Fatalf("supplementary failure suppressed the status: %v", err)
+			}
+			if prediction.ActiveWatch == nil || prediction.ActiveWatch.ResetChancePercent == nil || *prediction.ActiveWatch.ResetChancePercent != 78 || prediction.LatestReset == nil || prediction.LatestReset.ID != "executed" || prediction.Stats.Total != 56 {
+				t.Fatalf("authoritative status was lost: %#v", prediction)
+			}
+			if test.endpoint == resetHistoryEndpoint && prediction.CommunityPoll == nil {
+				t.Fatal("history failure also discarded the available poll")
+			}
+			if test.endpoint == resetHomepageEndpoint && len(prediction.History) != 1 {
+				t.Fatal("poll failure also discarded the available history")
+			}
+		})
+	}
+}
+
+func TestGetPredictionKeepsScheduledCacheIsolated(t *testing.T) {
+	service := &UsageService{cfg: Config{CacheTTL: time.Minute}, client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		body := `{"data":{"scheduled_reset":{"id":"scheduled","status":"scheduled","scheduled_for":"2026-10-02T17:00:00Z","source":{"url":"https://codex-resets.com/"}},"active_watch":{"reset_chance_percent":78,"source":{"url":"https://codex-resets.com/"}}}}`
+		if request.URL.String() == resetHistoryEndpoint {
+			body = `{"events":[]}`
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+	})}}
+	first, err := service.GetPrediction(context.Background(), false)
+	if err != nil {
+		t.Fatalf("get prediction: %v", err)
+	}
+	*first.ScheduledReset.ScheduledFor = "changed"
+	first.ScheduledReset.Source.URL = "changed"
+	*first.ActiveWatch.ResetChancePercent = 0
+	first.ActiveWatch.Source.URL = "changed"
+	second, err := service.GetPrediction(context.Background(), false)
+	if err != nil {
+		t.Fatalf("get cached prediction: %v", err)
+	}
+	if !second.FromCache || *second.ScheduledReset.ScheduledFor != "2026-10-02T17:00:00Z" || second.ScheduledReset.Source.URL != "https://codex-resets.com/" || *second.ActiveWatch.ResetChancePercent != 78 || second.ActiveWatch.Source.URL != "https://codex-resets.com/" {
+		t.Fatalf("returned pointers allowed the cache to be mutated: %#v", second)
+	}
+}
+
 func TestParseResetPoll(t *testing.T) {
 	poll := parseResetPoll([]byte(`<section data-role="watch-poll" data-episode-id="manual" data-yes="1042" data-no="100"></section>`))
 	if poll == nil {

@@ -169,7 +169,14 @@
     .prediction-hero { margin-top:20px; padding:20px 22px; border:1px solid var(--border); border-radius:16px; background:var(--soft); }
     .prediction-state { font-size:22px; font-weight:700; }
     .prediction-state.danger { color:var(--danger); }
+    .prediction-state.scheduled { color:var(--accent); }
     .prediction-hint { margin-top:6px; color:var(--muted); font-size:14px; }
+    .prediction-scheduled { margin-top:14px; }
+    .prediction-scheduled-row { display:flex; justify-content:space-between; gap:12px; margin-top:7px; color:var(--muted); font-size:14px; }
+    .prediction-scheduled-row strong { color:var(--text); text-align:right; }
+    .prediction-scheduled-text { margin-top:10px; color:var(--muted); font-size:13px; line-height:1.5; overflow-wrap:break-word; }
+    .prediction-scheduled-source { display:inline-block; margin-top:6px; color:var(--accent); font-size:12px; }
+    .prediction-scheduled-source[hidden] { display:none; }
     .prediction-probability { margin-top:18px; }
     .prediction-probability-head { display:flex; justify-content:space-between; gap:12px; margin-bottom:8px; color:var(--muted); font-size:14px; }
     .prediction-probability-head strong { color:var(--text); font-size:15px; }
@@ -308,6 +315,10 @@
       .prediction-hero { margin-top:12px; padding:12px; border-radius:11px; }
       .prediction-state { font-size:16px; }
       .prediction-hint { margin-top:4px; font-size:10px; }
+      .prediction-scheduled { margin-top:8px; }
+      .prediction-scheduled-row { margin-top:5px; font-size:10px; }
+      .prediction-scheduled-text { margin-top:7px; font-size:10px; }
+      .prediction-scheduled-source { font-size:10px; }
       .prediction-probability { margin-top:10px; }
       .prediction-probability-head { margin-bottom:5px; font-size:10px; }
       .prediction-probability-head strong { font-size:11px; }
@@ -432,8 +443,14 @@
       <div class="prediction-hero">
         <div id="predictionState" class="prediction-state">读取中…</div>
         <div id="predictionHint" class="prediction-hint">正在获取公共重置信号</div>
-        <div class="prediction-probability"><div class="prediction-probability-head"><span>模型预测概率</span><strong id="predictionChance">—</strong></div><div class="progress-track prediction-track"><div id="predictionChanceBar" class="prediction-bar"></div></div></div>
-        <div class="prediction-poll">
+        <div id="predictionScheduled" class="prediction-scheduled" hidden>
+          <div class="prediction-scheduled-row"><span>预计执行（本地时间）</span><strong id="predictionScheduledAt">—</strong></div>
+          <div class="prediction-scheduled-row"><span>距离执行</span><strong id="predictionScheduledCountdown">—</strong></div>
+          <div id="predictionScheduledText" class="prediction-scheduled-text"></div>
+          <a id="predictionScheduledSource" class="prediction-scheduled-source" target="_blank" rel="noopener noreferrer" hidden>查看公告原文 ↗</a>
+        </div>
+        <div id="predictionProbability" class="prediction-probability"><div class="prediction-probability-head"><span>模型预测概率</span><strong id="predictionChance">—</strong></div><div class="progress-track prediction-track"><div id="predictionChanceBar" class="prediction-bar"></div></div></div>
+        <div id="predictionPoll" class="prediction-poll">
           <div class="prediction-poll-head"><span>社区投票（赞成）</span><strong id="predictionPollValue">—</strong></div>
           <div class="prediction-poll-track"><div id="predictionPollBar" class="prediction-poll-bar"></div></div>
           <div id="predictionPollMeta" class="prediction-poll-meta">—</div>
@@ -441,7 +458,7 @@
       </div>
       <div class="prediction-grid">
         <div class="prediction-metric"><div class="prediction-metric-label">信号级别</div><div id="predictionLevel" class="prediction-metric-value">—</div></div>
-        <div class="prediction-metric"><div class="prediction-metric-label">观察窗口</div><div id="predictionWindow" class="prediction-metric-value">—</div></div>
+        <div class="prediction-metric"><div id="predictionWindowLabel" class="prediction-metric-label">观察窗口</div><div id="predictionWindow" class="prediction-metric-value">—</div></div>
         <div class="prediction-metric"><div class="prediction-metric-label">历史公告</div><div id="predictionTotal" class="prediction-metric-value">—</div></div>
         <div class="prediction-metric"><div class="prediction-metric-label">平均间隔</div><div id="predictionAverage" class="prediction-metric-value">—</div></div>
       </div>
@@ -466,6 +483,7 @@
       var refreshEnabled = true;
       var refreshBusy = false;
       var resetWindows = {};
+      var scheduledReset = null;
       var analyticsRange = {startDate:'', endDate:''};
       var analyticsCalendarData = null;
       var analyticsCalendarRange = {startDate:'', endDate:''};
@@ -735,14 +753,47 @@
         var weekdays = ['一', '二', '三', '四', '五', '六', '日']; var weekdayHTML = weekdays.map(function (weekday) { return '<span>' + weekday + '</span>'; }).join(''); var legend = '<div class="reset-calendar-legend"><span class="reset-calendar-legend-item"><i class="reset-calendar-legend-color regular"></i>普通重置</span><span class="reset-calendar-legend-item"><i class="reset-calendar-legend-color banked"></i>赠送重置卡</span><span class="reset-calendar-legend-item"><i class="reset-calendar-legend-color none"></i>无重置</span></div>'; container.innerHTML = '<div class="reset-calendar-layout"><div class="reset-calendar-weekdays">' + weekdayHTML + '</div><div class="reset-calendar-scroll"><div class="reset-calendar-months" style="--reset-weeks:' + weeks + '">' + monthLabels.join('') + '</div><div class="reset-calendar-grid" role="grid" aria-label="Codex 重置历史日历" style="--reset-weeks:' + weeks + '">' + cells.join('') + '</div></div></div><div class="reset-calendar-footer"><span>' + escaped(resetCalendarDateKey(start) + ' 至 ' + resetCalendarDateKey(end)) + '</span>' + legend + '</div>';
         bindHeatmapTooltips(container);
       }
+      function renderScheduledResetCountdown() {
+        if (!scheduledReset) return;
+        var at = scheduledReset.scheduled_for ? timestamp(scheduledReset.scheduled_for) : 0;
+        var remaining = at ? (at - Date.now()) / 1000 : NaN;
+        text('predictionScheduledCountdown', !at ? '等待公布执行时间' : (remaining > 0 ? formatDuration(Math.ceil(remaining)) : '等待上游确认执行'));
+        text('predictionState', at && remaining <= 0 ? '计划时间已到 · 等待确认' : '已公告重置 · 等待执行');
+        text('predictionWindow', !at ? '时间待公布' : (remaining <= 0 ? '等待确认' : date(scheduledReset.scheduled_for).slice(5, 16)));
+      }
+      function renderScheduledReset(scheduled) {
+        scheduledReset = scheduled || null;
+        byId('predictionScheduled').hidden = !scheduledReset;
+        byId('predictionProbability').hidden = Boolean(scheduledReset);
+        byId('predictionPoll').hidden = Boolean(scheduledReset);
+        text('predictionWindowLabel', scheduledReset ? '预计执行' : '观察窗口');
+        if (!scheduledReset) return;
+        text('predictionScheduledAt', scheduledReset.scheduled_for ? date(scheduledReset.scheduled_for) : '时间待公布');
+        byId('predictionScheduledAt').title = scheduledReset.scheduled_for ? 'UTC ' + formatUTCDate(new Date(scheduledReset.scheduled_for)) : '';
+        text('predictionScheduledText', scheduledReset.text || '');
+        var source = byId('predictionScheduledSource'); var url = null;
+        try { var parsed = new URL(scheduledReset.source && scheduledReset.source.url || ''); if (parsed.protocol === 'https:' || parsed.protocol === 'http:') url = parsed.href; } catch (_) {}
+        source.hidden = !url;
+        if (url) source.href = url; else source.removeAttribute('href');
+        renderScheduledResetCountdown();
+      }
       function renderPrediction(data) {
-        var watch = data && data.active_watch; var latest = data && data.latest_reset; var chance = watch ? clamp(number(watch.reset_chance_percent), 0, 100) : NaN;
-        positionPrediction(Boolean(watch));
-        if (watch) { text('predictionState', '检测到重置信号'); classes('predictionState', 'prediction-state'); text('predictionHint', translateForecastWindow(watch.forecast_window)); text('predictionChance', percent(chance) + '%'); style('predictionChanceBar', 'width', chance + '%'); classes('predictionChanceBar', 'prediction-bar ' + (chance >= 70 ? 'high' : '')); text('predictionLevel', translateSignalLevel(watch.level)); text('predictionWindow', translateForecastWindow(watch.forecast_window)); }
+        var scheduled = data && data.scheduled_reset; var watch = data && data.active_watch; var latest = data && data.latest_reset; var chance = watch && watch.reset_chance_percent !== null && watch.reset_chance_percent !== undefined ? clamp(number(watch.reset_chance_percent), 0, 100) : NaN;
+        renderScheduledReset(scheduled);
+        positionPrediction(Boolean(scheduled || watch));
+        if (scheduled) { classes('predictionState', 'prediction-state scheduled'); text('predictionHint', translateResetType(scheduled.reset_type) + ' · 公告已发布，等待执行确认'); text('predictionChance', '—'); style('predictionChanceBar', 'width', '0%'); classes('predictionChanceBar', 'prediction-bar'); text('predictionLevel', '已公告'); }
+        else if (watch) { text('predictionState', '检测到重置信号'); classes('predictionState', 'prediction-state'); text('predictionHint', translateForecastWindow(watch.forecast_window)); text('predictionChance', isFinite(chance) ? percent(chance) + '%' : '暂无概率'); style('predictionChanceBar', 'width', (isFinite(chance) ? chance : 0) + '%'); classes('predictionChanceBar', 'prediction-bar ' + (chance >= 70 ? 'high' : '')); text('predictionLevel', translateSignalLevel(watch.level)); text('predictionWindow', translateForecastWindow(watch.forecast_window)); }
         else { text('predictionState', '当前无重置信号'); classes('predictionState', 'prediction-state'); text('predictionHint', '公共监测处于空闲状态'); text('predictionChance', '—'); style('predictionChanceBar', 'width', '0%'); classes('predictionChanceBar', 'prediction-bar'); text('predictionLevel', '无预警'); text('predictionWindow', '—'); }
-        renderCommunityPoll(data && data.community_poll);
+        renderCommunityPoll(!scheduled && data && data.community_poll);
         text('predictionTotal', data && data.stats ? String(data.stats.total || 0) + ' 条' : '—'); text('predictionAverage', data && data.stats && isFinite(number(data.stats.avg_interval_days)) ? percent(data.stats.avg_interval_days) + ' 天' : '—'); text('predictionUpdated', data && data.fetched_at ? '更新 ' + date(data.fetched_at) : '公共信号'); text('predictionLatestType', latest ? translateResetType(latest.reset_type) : '—'); text('predictionLatestAt', latest ? formatAnnouncementTime(latest.announced_at) : '—'); text('predictionLatestText', latest ? latest.text : '—');
         renderPredictionHistory(data && data.history);
+      }
+      function showPredictionError(error) {
+        renderScheduledReset(null); positionPrediction(false); renderCommunityPoll(null);
+        text('predictionState', '预测数据获取失败'); classes('predictionState', 'prediction-state danger');
+        text('predictionHint', error && error.message ? error.message : '请稍后重试');
+        text('predictionChance', '—'); style('predictionChanceBar', 'width', '0%'); classes('predictionChanceBar', 'prediction-bar error');
+        text('predictionLevel', '—'); text('predictionWindow', '—'); text('predictionUpdated', '获取失败');
       }
       function headers() { var result = {'Accept':'application/json'}; try { var key = sessionStorage.getItem('codex-admin-key') || ''; if (key) result['X-App-API-Key'] = key; } catch (_) {} return result; }
       function apiURL(path) { var result = new URL(path, window.location.href); result.username = ''; result.password = ''; return result.toString(); }
@@ -767,7 +818,7 @@
           getJSON('api/usage' + suffix).then(renderUsage),
           summaryRequest,
           calendarRequest,
-          getJSON('api/prediction' + suffix).then(renderPrediction)
+          getJSON('api/prediction' + suffix).then(renderPrediction).catch(showPredictionError)
         ];
         Promise.all(requests).then(function () { resetRefreshCountdown(); }).catch(setError).then(function () { refreshBusy = false; if (button) button.disabled = false; });
       }
@@ -785,7 +836,7 @@
       Array.prototype.forEach.call(document.querySelectorAll('[data-range-days]'), function (button) { button.addEventListener('click', function () { applyRangePreset(Number(button.getAttribute('data-range-days'))); }); });
       setRangeInputs(365);
       resetRefreshCountdown(); loadAll(false);
-      window.setInterval(function () { renderResets(); tickRefresh(); }, 1000);
+      window.setInterval(function () { renderResets(); renderScheduledResetCountdown(); tickRefresh(); }, 1000);
     }());
   </script>
 </body>

@@ -67,8 +67,28 @@ func cloneResetPrediction(input *ResetPrediction) *ResetPrediction {
 		}
 		output.LatestReset = &event
 	}
+	if input.ScheduledReset != nil {
+		scheduled := *input.ScheduledReset
+		if input.ScheduledReset.ScheduledFor != nil {
+			scheduledFor := *input.ScheduledReset.ScheduledFor
+			scheduled.ScheduledFor = &scheduledFor
+		}
+		if input.ScheduledReset.Source != nil {
+			source := *input.ScheduledReset.Source
+			scheduled.Source = &source
+		}
+		output.ScheduledReset = &scheduled
+	}
 	if input.ActiveWatch != nil {
 		watch := *input.ActiveWatch
+		if input.ActiveWatch.ResetChancePercent != nil {
+			chance := *input.ActiveWatch.ResetChancePercent
+			watch.ResetChancePercent = &chance
+		}
+		if input.ActiveWatch.Source != nil {
+			source := *input.ActiveWatch.Source
+			watch.Source = &source
+		}
 		output.ActiveWatch = &watch
 	}
 	if input.CommunityPoll != nil {

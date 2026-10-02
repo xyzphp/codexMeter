@@ -165,9 +165,11 @@ curl -u '用户名:密码' \
   'http://127.0.0.1:8123/api/prediction'
 ```
 
-`latest_reset` 为空表示暂无公告，`active_watch` 为空表示当前没有活跃观察窗口。这些是公共预测信息，不应直接当作个人账户已重置。
+`latest_reset` 是最新已执行的公共重置，`scheduled_reset` 是已公告但仍待确认执行的重置，`active_watch` 是概率预测观察窗口。没有对应数据时字段可省略；`active_watch` 为空不代表没有已排期重置。这些是公共信号，不应直接当作个人账户已重置。
 
-响应中的 `history` 来自 `https://codex-resets.com/api/resets`，按公告时间倒序提供 Reset 记录。每条记录包含重置类型、公告时间、公告内容和原文链接；该历史数据与当前账户额度相互独立，仅用于参考。`community_poll` 来自 `https://codex-resets.com/` 首页的当前社区投票，`yes_percent` 是赞成票占全部投票的比例，不是模型预测概率。前端预测页会同时展示模型预测概率和社区投票率，并根据历史记录绘制最近 26 周的 UTC 日历热力图。
+`scheduled_reset` 包含 `id`、`status`（`scheduled`）、`reset_type`、`announced_at`、`scheduled_for`、`text` 和 `source`。`scheduled_for` 为 UTC 日期时间，也可以为 `null`（执行时间待公布）。计划时间已过仍须等待上游确认执行，不自动移入历史，也不计入已执行重置统计。已排期重置没有预测概率或社区投票，服务不会为它请求投票首页。观察窗口的 `reset_chance_percent` 也可能为 `null`，表示上游没有提供概率，而非 0%。
+
+响应中的 `history` 来自 `https://codex-resets.com/api/resets`，按公告时间倒序提供已执行 Reset 记录。每条记录包含重置类型、公告时间、公告内容和原文链接；该历史数据与当前账户额度相互独立，仅用于参考。未排期时，`community_poll` 来自 `https://codex-resets.com/` 首页的当前社区投票，`yes_percent` 是赞成票占全部投票的比例，不是模型预测概率。历史或首页请求失败时，主状态 API 的信号仍会正常返回；缺少的补充字段可省略。前端优先展示排期公告、本地执行时间和每秒更新的倒计时；到时显示等待确认。没有排期时展示模型预测和社区投票，并根据已执行历史记录绘制最近 26 周的 UTC 日历热力图。
 
 ### 更新配置
 

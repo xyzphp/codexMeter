@@ -115,7 +115,9 @@ paths:
       operationId: getResetPrediction
       summary: 获取重置预测
       description: |
-        从 codex-resets.com 的公开状态 API 和首页读取最新重置公告、active_watch、社区投票和统计数据。
+        从 codex-resets.com 的公开状态 API 读取最新已执行重置、scheduled_reset（已公告待执行重置）、active_watch 和统计数据。
+        已排期重置没有预测概率或社区投票；即使 scheduled_for 已过，也必须等待上游确认执行。
+        未排期时补充读取首页社区投票。历史记录或首页暂时不可用时仍返回状态 API 的信号数据。
         该数据是公共预测信息，不代表当前账户已经完成额度重置。
       security:
         - basicAuth: []
@@ -745,12 +747,32 @@ components:
           allOf:
             - $ref: '#/components/schemas/ResetSource'
 
+    ScheduledReset:
+      allOf:
+        - $ref: '#/components/schemas/ResetEvent'
+        - type: object
+          required: [status, scheduled_for]
+          description: 明确公告但尚未确认执行的重置，不计入已执行重置历史和统计；计划时间已过不代表已执行。
+          properties:
+            status:
+              type: string
+              enum: [scheduled]
+            scheduled_for:
+              type: string
+              format: date-time
+              nullable: true
+              description: 计划执行时间（UTC）；为空表示尚未公布具体时间。
+
     ResetWatch:
       type: object
       properties:
         reset_chance_percent:
           type: number
           format: double
+          nullable: true
+          minimum: 0
+          maximum: 100
+          description: 模型预测概率；为空表示上游未提供概率，不能解释为 0%。
         forecast_window:
           type: string
         observed_at:
@@ -761,6 +783,10 @@ components:
           format: date-time
         level:
           type: string
+        text:
+          type: string
+        source:
+          $ref: '#/components/schemas/ResetSource'
 
     ResetPoll:
       type: object
@@ -811,6 +837,10 @@ components:
         latest_reset:
           allOf:
             - $ref: '#/components/schemas/ResetEvent'
+          description: 最新已执行的公共重置，尚未执行的公告通过 scheduled_reset 返回。
+        scheduled_reset:
+          allOf:
+            - $ref: '#/components/schemas/ScheduledReset'
         active_watch:
           allOf:
             - $ref: '#/components/schemas/ResetWatch'

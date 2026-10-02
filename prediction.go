@@ -43,29 +43,44 @@ func (s *UsageService) GetPrediction(ctx context.Context, force bool) (*ResetPre
 }
 
 func (s *UsageService) queryResetPrediction(ctx context.Context) (*ResetPrediction, error) {
-	// The community poll homepage is the slowest of the three public requests
-	// and only supplementary; fetch it concurrently with the JSON endpoints so
-	// a slow homepage does not extend the forecast wait.
-	type pollFetch struct {
-		page []byte
-		err  error
-	}
-	pollChannel := make(chan pollFetch, 1)
-	go func() {
-		page, err := s.queryPublicResetPage(ctx)
-		pollChannel <- pollFetch{page: page, err: err}
-	}()
-
 	var envelope resetStatusEnvelope
 	if err := s.queryPublicResetJSON(ctx, resetStatusEndpoint, &envelope); err != nil {
 		return nil, fmt.Errorf("reset status request failed: %w", err)
 	}
 
-	var historyEnvelope resetHistoryEnvelope
-	if err := s.queryPublicResetJSON(ctx, resetHistoryEndpoint, &historyEnvelope); err != nil {
-		return nil, fmt.Errorf("reset history request failed: %w", err)
+	// History and the community poll are supplementary. Fetch them together
+	// after reading the authoritative status, which can now contain a scheduled
+	// reset without an active watch, prediction probability, or poll.
+	type historyFetch struct {
+		history []ResetEvent
+		err     error
 	}
-	history := normalizeResetHistory(historyEnvelope.Events)
+	historyChannel := make(chan historyFetch, 1)
+	go func() {
+		var historyEnvelope resetHistoryEnvelope
+		err := s.queryPublicResetJSON(ctx, resetHistoryEndpoint, &historyEnvelope)
+		historyChannel <- historyFetch{history: normalizeResetHistory(historyEnvelope.Events), err: err}
+	}()
+
+	type pollFetch struct {
+		page []byte
+		err  error
+	}
+	var pollChannel chan pollFetch
+	if envelope.Data.ScheduledReset == nil {
+		pollChannel = make(chan pollFetch, 1)
+		go func() {
+			page, err := s.queryPublicResetPage(ctx)
+			pollChannel <- pollFetch{page: page, err: err}
+		}()
+	}
+
+	fetchedHistory := <-historyChannel
+	history := fetchedHistory.history
+	if fetchedHistory.err != nil {
+		slog.Warn("reset history request failed", "error", fetchedHistory.err)
+		history = nil
+	}
 	fetchedAt := envelope.Meta.GeneratedAt
 	if fetchedAt == "" {
 		fetchedAt = time.Now().UTC().Format(time.RFC3339)
@@ -79,22 +94,25 @@ func (s *UsageService) queryResetPrediction(ctx context.Context) (*ResetPredicti
 		stats.Total = len(history)
 	}
 	var communityPoll *ResetPoll
-	fetch := <-pollChannel
-	if fetch.err != nil {
-		// The community poll is supplementary. Keep the forecast available if
-		// the public homepage is temporarily unavailable or changes shape.
-		slog.Warn("reset poll request failed", "error", fetch.err)
-	} else {
-		communityPoll = parseResetPoll(fetch.page)
+	if pollChannel != nil {
+		fetch := <-pollChannel
+		if fetch.err != nil {
+			// Keep the forecast available if the public homepage is temporarily
+			// unavailable or no longer contains a community poll.
+			slog.Warn("reset poll request failed", "error", fetch.err)
+		} else {
+			communityPoll = parseResetPoll(fetch.page)
+		}
 	}
 	return &ResetPrediction{
-		Source:        "codex_resets_status",
-		FetchedAt:     fetchedAt,
-		LatestReset:   latest,
-		ActiveWatch:   envelope.Data.ActiveWatch,
-		CommunityPoll: communityPoll,
-		History:       history,
-		Stats:         stats,
+		Source:         "codex_resets_status",
+		FetchedAt:      fetchedAt,
+		LatestReset:    latest,
+		ScheduledReset: envelope.Data.ScheduledReset,
+		ActiveWatch:    envelope.Data.ActiveWatch,
+		CommunityPoll:  communityPoll,
+		History:        history,
+		Stats:          stats,
 	}, nil
 }
 
