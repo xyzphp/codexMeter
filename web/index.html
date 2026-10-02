@@ -138,6 +138,8 @@
     .prediction-scheduled { margin-top:8px; }
     .prediction-scheduled-row { display:flex; justify-content:space-between; gap:8px; margin-top:5px; color:var(--muted); font-size:11px; }
     .prediction-scheduled-row strong { color:var(--text); text-align:right; }
+    .prediction-scheduled-countdown { display:flex; align-items:baseline; justify-content:flex-end; flex-wrap:wrap; gap:6px; min-width:0; }
+    .prediction-scheduled-percent { color:var(--muted); font-size:10px; white-space:nowrap; }
     .prediction-scheduled-text { margin-top:7px; color:var(--muted); font-size:11px; line-height:1.45; overflow-wrap:break-word; }
     .prediction-scheduled-source { display:inline-block; margin-top:4px; color:var(--accent); font-size:10px; }
     .prediction-scheduled-source[hidden] { display:none; }
@@ -560,7 +562,8 @@
           <div class="prediction-copy"><div id="predictionState" class="prediction-state">读取中…</div><div id="predictionHint" class="prediction-hint">正在获取公共重置信号</div></div>
           <div id="predictionScheduled" class="prediction-scheduled" hidden>
             <div class="prediction-scheduled-row"><span>预计执行（本地时间）</span><strong id="predictionScheduledAt">—</strong></div>
-            <div class="prediction-scheduled-row"><span>距离执行</span><strong id="predictionScheduledCountdown">—</strong></div>
+            <div class="prediction-scheduled-row"><span>距离执行</span><span class="prediction-scheduled-countdown"><strong id="predictionScheduledCountdown">—</strong><span id="predictionScheduledProgress" class="prediction-scheduled-percent"></span></span></div>
+            <div id="predictionScheduledTrack" class="reset-progress-track" role="progressbar" aria-label="距离执行剩余时间" aria-valuemin="0" aria-valuemax="100" hidden><div id="predictionScheduledBar" class="reset-progress-bar"></div></div>
             <div id="predictionScheduledText" class="prediction-scheduled-text"></div>
             <a id="predictionScheduledSource" class="prediction-scheduled-source" target="_blank" rel="noopener noreferrer" hidden>查看公告原文 ↗</a>
           </div>
@@ -1177,7 +1180,10 @@
       function renderScheduledResetCountdown() {
         if (!scheduledReset) return;
         var at = scheduledReset.scheduled_for ? new Date(scheduledReset.scheduled_for).getTime() : NaN;
-        var remaining = isFinite(at) ? Math.ceil((at - Date.now()) / 1000) : NaN;
+        var now = Date.now();
+        var remaining = isFinite(at) ? Math.ceil((at - now) / 1000) : NaN;
+        var announcedAt = scheduledReset.announced_at ? new Date(scheduledReset.announced_at).getTime() : NaN;
+        var progress = isFinite(announcedAt) && at > announcedAt ? clamp((at - now) / (at - announcedAt) * 100, 0, 100) : NaN;
         var countdown = '等待公布执行时间';
         if (isFinite(remaining)) {
           if (remaining <= 0) countdown = '等待上游确认执行';
@@ -1187,6 +1193,13 @@
           }
         }
         setText('predictionScheduledCountdown', countdown);
+        var track = byId('predictionScheduledTrack');
+        track.hidden = !isFinite(progress);
+        setText('predictionScheduledProgress', isFinite(progress) ? '剩余 ' + formatPercent(progress) + '%' : '');
+        setStyle('predictionScheduledBar', 'width', (isFinite(progress) ? progress : 0) + '%');
+        setClass('predictionScheduledBar', 'reset-progress-bar ' + (isFinite(progress) ? resetRemainingLevel(progress) : ''));
+        if (isFinite(progress)) { track.setAttribute('aria-valuenow', formatPercent(progress)); track.setAttribute('aria-valuetext', countdown + '，剩余 ' + formatPercent(progress) + '%'); }
+        else { track.removeAttribute('aria-valuenow'); track.removeAttribute('aria-valuetext'); }
         setText('predictionState', isFinite(remaining) && remaining <= 0 ? '计划时间已到 · 等待确认' : '已公告重置 · 等待执行');
         setText('predictionWindow', !isFinite(at) ? '时间待公布' : (remaining <= 0 ? '等待确认' : formatDate(scheduledReset.scheduled_for).slice(5, 16)));
       }
