@@ -43,14 +43,14 @@
     .brand-button { display:inline-flex; align-items:center; border:0; background:transparent; padding:0; cursor:pointer; text-align:left; }
     .brand-mark { width:24px; height:24px; display:block; flex:0 0 auto; color:var(--text); fill:currentColor; }
     .brand-title { display:block; margin-left:14px; font-size:16px; font-weight:650; letter-spacing:-.2px; }
-    .build-badge { display:inline-flex; align-items:center; min-height:22px; margin-left:auto; padding:0 7px; border:1px solid var(--border); border-radius:999px; background:var(--card-muted); color:var(--muted); font:600 8px/1 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:nowrap; }
+    .build-badge { display:inline-flex; align-items:center; flex:0 0 auto; min-height:22px; margin:0 10px; padding:0 7px; border:1px solid var(--border); border-radius:999px; background:var(--card-muted); color:var(--muted); font:600 8px/1 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:nowrap; }
     .connection { display:none; }
-    .topbar { gap:12px; }
+    .topbar { flex-wrap:nowrap; }
     .brand-button { min-width:0; }
-    .brand-title { white-space:nowrap; }
-    .device-account-switch { display:inline-flex; align-items:center; justify-content:space-between; flex:0 1 180px; gap:10px; min-width:92px; max-width:28vw; min-height:44px; padding:0 12px; border:1px solid var(--border); border-radius:10px; background:var(--card-muted); cursor:pointer; font-size:12px; }
+    .brand-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .device-account-switch { display:inline-flex; align-items:center; justify-content:space-between; flex:0 1 auto; min-width:88px; max-width:176px; min-height:36px; margin-left:auto; padding:0 12px; border:1px solid var(--border); border-radius:999px; background:var(--card-muted); cursor:pointer; font-size:12px; font-weight:600; }
     .device-account-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .device-account-switch svg { flex:0 0 16px; width:16px; height:16px; color:var(--muted); }
+    .device-account-switch svg { flex:0 0 16px; width:16px; height:16px; margin-left:8px; color:var(--muted); }
     .device-account-switch:disabled { opacity:.6; cursor:wait; }
     .account-picker { position:fixed; z-index:20; top:0; right:0; bottom:0; left:0; display:flex; align-items:center; justify-content:center; padding:18px; background:rgba(15,23,42,.38); }
     .account-picker[hidden] { display:none; }
@@ -73,9 +73,11 @@
     .account-picker-error { margin:0 18px 16px; color:var(--danger); font-size:12px; line-height:18px; overflow-wrap:anywhere; }
     .device-account-switch:focus-visible, .account-choice:focus-visible, .account-picker-close:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
     @media (max-width:600px) {
-      .topbar { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; }
-      .device-account-switch { grid-column:1/-1; grid-row:2; width:100%; max-width:none; }
-      .topbar .build-badge { grid-column:2; grid-row:1; margin-left:0; }
+      .topbar .brand-mark { width:22px; height:22px; }
+      .topbar .brand-title { margin-left:8px; font-size:14px; }
+      .device-account-switch { min-width:80px; max-width:30vw; padding:0 10px; font-size:11px; }
+      .device-account-switch svg { margin-left:6px; }
+      .topbar .build-badge { margin:0 8px; padding:0 5px; }
       .account-picker { align-items:flex-end; padding:12px; }
       .account-picker-panel { width:100%; max-height:80vh; }
       #accounts .device-accounts { grid-template-columns:1fr; }
@@ -520,8 +522,8 @@
             </svg>
             <span class="brand-title">ChatGPT &amp; Codex</span>
           </button>
-          <button id="accountSwitch" class="device-account-switch" type="button" aria-label="切换账号" aria-haspopup="dialog" aria-controls="accountPicker" aria-expanded="false" disabled><span id="accountSwitchName" class="device-account-name">读取中…</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/></svg></button>
           <span class="build-badge" title="版本 {{CODEX_METER_VERSION_LABEL}} · 完整提交 {{CODEX_METER_COMMIT}} · 构建时间 {{CODEX_METER_BUILD_TIME}}">版本 {{CODEX_METER_VERSION_LABEL}}</span>
+          <button id="accountSwitch" class="device-account-switch" type="button" aria-label="切换账号" aria-haspopup="dialog" aria-controls="accountPicker" aria-expanded="false" disabled><span id="accountSwitchName" class="device-account-name">读取中…</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
           <div class="connection"><i id="statusDot" class="dot"></i><span id="statusText">已连接</span></div>
         </header>
         <div class="hero quota-hero">
