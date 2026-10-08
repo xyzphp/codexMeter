@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#f7f7f8">
-  <meta name="application-version" content="{{CODEX_METER_VERSION}}">
+  <meta name="application-version" content="{{CODEX_METER_VERSION_LABEL}}">
   <meta name="application-commit" content="{{CODEX_METER_COMMIT}}">
   <title>ChatGPT &amp; Codex</title>
   <style>
@@ -45,7 +45,41 @@
     .brand-title { display:block; margin-left:14px; font-size:16px; font-weight:650; letter-spacing:-.2px; }
     .build-badge { display:inline-flex; align-items:center; min-height:22px; margin-left:auto; padding:0 7px; border:1px solid var(--border); border-radius:999px; background:var(--card-muted); color:var(--muted); font:600 8px/1 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:nowrap; }
     .connection { display:none; }
-    .device-account-select { width:150px; max-width:26vw; min-height:30px; margin-left:14px; padding:0 7px; border:1px solid var(--border); border-radius:8px; background:var(--card-muted); color:var(--text); font:inherit; font-size:12px; overflow:hidden; }
+    .topbar { gap:12px; }
+    .brand-button { min-width:0; }
+    .brand-title { white-space:nowrap; }
+    .device-account-switch { display:inline-flex; align-items:center; justify-content:space-between; flex:0 1 180px; gap:10px; min-width:92px; max-width:28vw; min-height:44px; padding:0 12px; border:1px solid var(--border); border-radius:10px; background:var(--card-muted); cursor:pointer; font-size:12px; }
+    .device-account-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .device-account-switch svg { flex:0 0 16px; width:16px; height:16px; color:var(--muted); }
+    .device-account-switch:disabled { opacity:.6; cursor:wait; }
+    .account-picker { position:fixed; z-index:20; top:0; right:0; bottom:0; left:0; display:flex; align-items:center; justify-content:center; padding:18px; background:rgba(15,23,42,.38); }
+    .account-picker[hidden] { display:none; }
+    .account-picker-panel { display:flex; flex-direction:column; width:440px; max-width:100%; max-height:100%; min-height:0; overflow:hidden; border:1px solid var(--border); border-radius:20px; background:var(--card); box-shadow:0 20px 60px rgba(0,0,0,.2); }
+    .account-picker-head { display:flex; align-items:center; justify-content:space-between; padding:16px 18px 12px; }
+    .account-picker-title { margin:0; font-size:18px; line-height:26px; }
+    .account-picker-close { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; border:0; border-radius:12px; background:var(--card-muted); cursor:pointer; }
+    .account-picker-close svg { width:18px; height:18px; }
+    .account-picker-list { flex:1 1 auto; min-height:0; padding:0 18px 18px; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; }
+    .account-choice { display:flex; align-items:center; justify-content:space-between; gap:14px; width:100%; min-height:70px; padding:12px 14px; border:1px solid var(--border); border-radius:12px; background:var(--card); text-align:left; cursor:pointer; }
+    .account-choice + .account-choice { margin-top:8px; }
+    .account-choice.selected { border-color:var(--accent); background:rgba(16,163,127,.08); }
+    .account-choice:disabled:not(.selected) { opacity:.6; cursor:wait; }
+    .account-choice-copy { min-width:0; }
+    .account-choice-name { display:block; font-size:14px; font-weight:650; line-height:20px; overflow-wrap:anywhere; word-break:break-word; }
+    .account-choice-meta { display:block; margin-top:4px; color:var(--muted); font-size:12px; line-height:18px; }
+    .account-choice-mark { display:inline-flex; align-items:center; justify-content:center; flex:0 0 22px; width:22px; height:22px; border:1px solid var(--border); border-radius:50%; }
+    .account-choice-mark svg { width:14px; height:14px; }
+    .account-choice.selected .account-choice-mark { border-color:var(--accent); background:var(--accent); color:var(--card); }
+    .account-picker-error { margin:0 18px 16px; color:var(--danger); font-size:12px; line-height:18px; overflow-wrap:anywhere; }
+    .device-account-switch:focus-visible, .account-choice:focus-visible, .account-picker-close:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+    @media (max-width:600px) {
+      .topbar { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; }
+      .device-account-switch { grid-column:1/-1; grid-row:2; width:100%; max-width:none; }
+      .topbar .build-badge { grid-column:2; grid-row:1; margin-left:0; }
+      .account-picker { align-items:flex-end; padding:12px; }
+      .account-picker-panel { width:100%; max-height:80vh; }
+      #accounts .device-accounts { grid-template-columns:1fr; }
+    }
     .device-accounts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:14px; }
     .device-account { min-width:0; padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--card-muted); }
     .device-account.active { border-color:var(--accent); }
@@ -486,8 +520,8 @@
             </svg>
             <span class="brand-title">ChatGPT &amp; Codex</span>
           </button>
-          <select id="accountSelect" class="device-account-select" aria-label="切换监控账号" disabled><option>读取中…</option></select>
-          <span class="build-badge" title="版本 {{CODEX_METER_VERSION}} · 完整提交 {{CODEX_METER_COMMIT}} · 构建时间 {{CODEX_METER_BUILD_TIME}}">版本 {{CODEX_METER_VERSION}} · {{CODEX_METER_COMMIT_SHORT}}</span>
+          <button id="accountSwitch" class="device-account-switch" type="button" aria-label="切换账号" aria-haspopup="dialog" aria-controls="accountPicker" aria-expanded="false" disabled><span id="accountSwitchName" class="device-account-name">读取中…</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/></svg></button>
+          <span class="build-badge" title="版本 {{CODEX_METER_VERSION_LABEL}} · 完整提交 {{CODEX_METER_COMMIT}} · 构建时间 {{CODEX_METER_BUILD_TIME}}">版本 {{CODEX_METER_VERSION_LABEL}}</span>
           <div class="connection"><i id="statusDot" class="dot"></i><span id="statusText">已连接</span></div>
         </header>
         <div class="hero quota-hero">
@@ -615,6 +649,13 @@
       <button class="nav-button" data-screen="accounts" type="button">账号</button>
     </nav>
   </main>
+  <div id="accountPicker" class="account-picker" hidden>
+    <section class="account-picker-panel" role="dialog" aria-modal="true" aria-labelledby="accountPickerTitle">
+      <div class="account-picker-head"><h2 id="accountPickerTitle" class="account-picker-title">切换账号</h2><button id="closeAccountPicker" class="account-picker-close" type="button" aria-label="关闭账号列表"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+      <div id="accountPickerList" class="account-picker-list"></div>
+      <p id="accountPickerError" class="account-picker-error" role="alert" hidden></p>
+    </section>
+  </div>
   <script>
     (function () {
       'use strict';
@@ -629,7 +670,9 @@
       var analyticsLoading = false;
       var predictionLoading = false;
       var selectedAccount = '';
+      var accountChoices = [];
       var accountsLoading = false;
+      var accountSwitching = false;
       var scheduledReset = null;
       var lastAudioAlertBand = null;
       var audioAlertPending = false;
@@ -1092,7 +1135,7 @@
         setHTML('yesterdayModelPieChart', '<div class="analytics-empty analytics-error">请检查 OAuth 凭证或稍后重试</div>');
       }
       function loadAnalytics(force) {
-        if (analyticsLoading) return;
+        if (analyticsLoading || accountSwitching) return Promise.resolve();
         analyticsLoading = true;
         var endpoint = accountPath('api/usage/analytics' + (force ? '?force=true' : ''));
         return fetch(endpoint, { headers: apiHeaders(), credentials:'same-origin', cache:'no-store' }).then(function (response) {
@@ -1333,18 +1376,42 @@
         showAnalyticsError(new Error('正在读取所选账号…'));
       }
       function renderAccounts(view) {
-        var select = byId('accountSelect'); select.textContent = ''; var html = '';
-        (view.accounts || []).forEach(function (account) {
-          var option = document.createElement('option'); option.value = account.id; option.textContent = account.name + (account.primary ? ' · 主账号' : ''); select.appendChild(option);
+        accountChoices = view.accounts || [];
+        var html = ''; var choices = '';
+        accountChoices.forEach(function (account) {
           var usage = account.usage || {};
           function left(window) { return window && isFinite(Number(window.used_percent)) ? formatPercent(clamp(100 - Number(window.used_percent), 0, 100)) + '%' : '—'; }
+          var selected = account.id === selectedAccount;
+          choices += '<button class="account-choice' + (selected ? ' selected' : '') + '" type="button" data-account-choice="' + escapeHTML(account.id) + '" aria-pressed="' + selected + '"' + (selected ? ' disabled' : '') + '><span class="account-choice-copy"><span class="account-choice-name">' + escapeHTML(account.name) + '</span><span class="account-choice-meta">5 小时剩余 ' + left(usage.five_hour) + ' · 本周 ' + left(usage.seven_day) + (account.error ? ' · 暂不可用' : '') + '</span></span><span class="account-choice-mark" aria-hidden="true">' + (selected ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>' : '') + '</span></button>';
           html += '<article class="device-account' + (account.id === selectedAccount ? ' active' : '') + '"><div class="device-account-head"><strong>' + escapeHTML(account.name) + '</strong><button type="button" data-switch-account="' + escapeHTML(account.id) + '"' + (account.id === selectedAccount ? ' disabled' : '') + '>' + (account.id === selectedAccount ? '当前' : '切换') + '</button></div><div class="device-account-values"><span>5 小时剩余 ' + left(usage.five_hour) + '</span><span>本周 ' + left(usage.seven_day) + '</span></div><div class="device-account-meta' + (account.error ? ' error' : '') + '">' + escapeHTML(account.error ? (account.stale ? '最近快照 · ' : '') + account.error : (usage.plan_type || '') + ' · ' + (usage.fetched_at ? formatDate(usage.fetched_at) : '等待数据')) + '</div></article>';
         });
-        select.value = selectedAccount; byId('accountsOverview').innerHTML = html;
+        byId('accountPickerList').innerHTML = choices; byId('accountsOverview').innerHTML = html;
+        updateAccountSwitchName(); setAccountControlsBusy(accountsLoading);
+      }
+      function updateAccountSwitchName() {
+        var account = accountChoices.filter(function (item) { return item.id === selectedAccount; })[0];
+        setText('accountSwitchName', account ? account.name : '选择账号');
+        byId('accountSwitch').setAttribute('aria-label', '切换账号' + (account ? '：' + account.name : ''));
+      }
+      function setAccountControlsBusy(busy) {
+        byId('accountSwitch').disabled = busy; byId('refreshAccounts').disabled = busy;
+        Array.prototype.forEach.call(document.querySelectorAll('[data-account-choice], [data-switch-account]'), function (button) {
+          var id = button.getAttribute('data-account-choice') || button.getAttribute('data-switch-account');
+          button.disabled = busy || id === selectedAccount;
+        });
+      }
+      function setAccountPickerOpen(open) {
+        if (open && (accountsLoading || loading || analyticsLoading)) return;
+        byId('accountPicker').hidden = !open; byId('accountSwitch').setAttribute('aria-expanded', String(open));
+        if (open) {
+          byId('accountPickerError').hidden = true;
+          var first = byId('accountPickerList').querySelector('button:not(:disabled)');
+          (first || byId('closeAccountPicker')).focus();
+        } else if (!byId('accountSwitch').disabled) { byId('accountSwitch').focus(); }
       }
       function refreshAccounts(force) {
         if (accountsLoading || loading || analyticsLoading) return;
-        accountsLoading = true; byId('accountSelect').disabled = true; byId('refreshAccounts').disabled = true;
+        accountsLoading = true; setAccountControlsBusy(true);
         return fetch('api/accounts/usage' + (force ? '?force=true' : ''), {headers:apiHeaders(), credentials:'same-origin', cache:'no-store'}).then(function (response) { if (!response.ok) throw new Error('API ' + response.status); return response.json(); }).then(function (view) {
           if (selectedAccount && selectedAccount !== view.active_account_id) clearAccountData();
           selectedAccount = view.active_account_id; renderAccounts(view);
@@ -1352,14 +1419,16 @@
           if (account && account.usage) { renderUsage(account.usage, force); if (account.error) showError(new Error('最近快照 · ' + account.error)); }
           else { clearAccountData(); showError(new Error(account && account.error || '账号数据不可用')); }
           return loadAnalytics(force);
-        }).catch(showError).then(function () { accountsLoading = false; byId('accountSelect').disabled = false; byId('refreshAccounts').disabled = false; resetRefreshCountdown(); });
+        }).catch(showError).then(function () { accountsLoading = false; setAccountControlsBusy(false); resetRefreshCountdown(); });
       }
       function switchAccount(id) {
         if (accountsLoading || loading || analyticsLoading || id === selectedAccount) return;
-        accountsLoading = true; byId('accountSelect').disabled = true; byId('refreshAccounts').disabled = true;
+        accountsLoading = true; accountSwitching = true; setAccountControlsBusy(true); byId('accountPickerError').hidden = true;
+        var fromPicker = !byId('accountPicker').hidden;
         fetch('api/accounts/active', {method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, apiHeaders()), credentials:'same-origin', cache:'no-store', body:JSON.stringify({account_id:id})}).then(function (response) { return response.json().then(function (view) { if (!response.ok) throw new Error(view.error || '切换失败'); return view; }); }).then(function (view) {
-          selectedAccount = view.active_account_id; clearAccountData(); accountsLoading = false; refreshAccounts(false);
-        }).catch(function (error) { accountsLoading = false; byId('accountSelect').value = selectedAccount; byId('accountSelect').disabled = false; byId('refreshAccounts').disabled = false; showError(error); });
+          selectedAccount = view.active_account_id; updateAccountSwitchName(); clearAccountData(); accountsLoading = false; accountSwitching = false; setAccountPickerOpen(false);
+          return refreshAccounts(false).then(function () { if (fromPicker) byId('accountSwitch').focus(); });
+        }).catch(function (error) { accountsLoading = false; accountSwitching = false; setAccountControlsBusy(false); showError(error); if (fromPicker && !byId('accountPicker').hidden) { setText('accountPickerError', error.message || '切换失败，请重试'); byId('accountPickerError').hidden = false; } });
       }
       function setTheme(theme) { document.documentElement.setAttribute('data-theme', theme); try { localStorage.setItem('codex-theme', theme); } catch (_) {} }
       function initTheme() {
@@ -1371,7 +1440,20 @@
       document.getElementById('themeButton').addEventListener('click', function () {
         setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
       });
-      byId('accountSelect').addEventListener('change', function () { switchAccount(this.value); });
+      byId('accountSwitch').addEventListener('click', function () { setAccountPickerOpen(true); });
+      byId('closeAccountPicker').addEventListener('click', function () { setAccountPickerOpen(false); });
+      byId('accountPicker').addEventListener('click', function (event) { if (event.target === this) setAccountPickerOpen(false); });
+      byId('accountPickerList').addEventListener('click', function (event) { var button = event.target.closest('[data-account-choice]'); if (button && !button.disabled) switchAccount(button.getAttribute('data-account-choice')); });
+      document.addEventListener('keydown', function (event) {
+        if (byId('accountPicker').hidden) return;
+        if (event.key === 'Escape') { event.preventDefault(); setAccountPickerOpen(false); }
+        if (event.key === 'Tab') {
+          var buttons = byId('accountPicker').querySelectorAll('button:not(:disabled)');
+          var first = buttons[0]; var last = buttons[buttons.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+      });
       byId('refreshAccounts').addEventListener('click', function () { refreshAccounts(true); });
       byId('accountsOverview').addEventListener('click', function (event) { var button = event.target.closest('[data-switch-account]'); if (button) switchAccount(button.getAttribute('data-switch-account')); });
       Array.prototype.forEach.call(document.querySelectorAll('.nav-button'), function (button) {

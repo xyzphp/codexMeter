@@ -209,7 +209,7 @@ func TestAPIDocsAndOpenAPISpecAreServed(t *testing.T) {
 
 func TestBuildMetadataIsRenderedAndExposed(t *testing.T) {
 	metadata := BuildMetadata{
-		Version:     "v9.8.7",
+		Version:     "v9.8.7-platform-build",
 		Commit:      "abcdef1234567890",
 		ShortCommit: "abcdef123456",
 		BuildTime:   "2026-09-12T06:45:00Z",
@@ -225,7 +225,7 @@ func TestBuildMetadataIsRenderedAndExposed(t *testing.T) {
 		t.Fatalf("page status = %d, want %d", pageRecorder.Code, http.StatusOK)
 	}
 	pageBody := pageRecorder.Body.String()
-	if !strings.Contains(pageBody, "版本 v9.8.7 · abcdef123456") {
+	if !strings.Contains(pageBody, ">版本 v9.8.7</span>") || strings.Contains(pageBody, "platform-build") {
 		t.Fatalf("page does not contain the rendered build badge")
 	}
 	if strings.Contains(pageBody, "{{CODEX_METER_") {
@@ -268,6 +268,35 @@ func TestRenderHTMLBuildMetadataEscapesValues(t *testing.T) {
 	}
 	if !strings.Contains(rendered, "&lt;script&gt;") || !strings.Contains(rendered, "&#34;&gt;") {
 		t.Fatalf("rendered metadata does not contain escaped values: %s", rendered)
+	}
+}
+
+func TestBuildVersionLabels(t *testing.T) {
+	for _, test := range []struct {
+		version string
+		label   string
+	}{
+		{"v1.0.10", "v1.0.10"},
+		{"1.0.10", "v1.0.10"},
+		{"v1.0.10-xyzos", "v1.0.10"},
+		{"v1.0.10-0.20261002032908-910a3b0d9707+dirty", "v1.0.10"},
+		{" v1.0.10 local-build ", "v1.0.10"},
+		{"dev-xyzos", "dev"},
+		{"", "dev"},
+		{`<script>alert("version")</script>`, "dev"},
+	} {
+		t.Run(test.version, func(t *testing.T) {
+			if got := buildVersionLabel(test.version); got != test.label {
+				t.Fatalf("version label = %q, want %q", got, test.label)
+			}
+		})
+	}
+	metadata := BuildMetadata{Version: "v1.0.10-xyzos", Commit: "fixture-commit", BuildTime: "fixture-time"}
+	for _, page := range [][]byte{indexHTML, browserHTML, settingsHTML, setupHTML, apiDocsHTML} {
+		rendered := string(renderHTMLBuildMetadata(page, metadata))
+		if !strings.Contains(rendered, ">版本 v1.0.10</span>") || strings.Contains(rendered, "xyzos") || strings.Contains(rendered, "{{CODEX_METER_") {
+			t.Fatal("page version badge contains build suffixes or unresolved placeholders")
+		}
 	}
 }
 

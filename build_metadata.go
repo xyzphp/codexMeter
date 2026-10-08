@@ -2,14 +2,16 @@ package main
 
 import (
 	htmlstd "html"
+	"regexp"
 	"runtime/debug"
 	"strings"
 )
 
 var (
-	appVersion   = "dev"
-	appCommit    string
-	appBuildTime string
+	appVersion          = "dev"
+	appCommit           string
+	appBuildTime        string
+	versionLabelPattern = regexp.MustCompile(`^v?([0-9]+\.[0-9]+\.[0-9]+)(?:$|[-+.\s])`)
 )
 
 type BuildMetadata struct {
@@ -87,10 +89,19 @@ func cleanBuildMetadataValue(value string) string {
 
 func renderHTMLBuildMetadata(page []byte, metadata BuildMetadata) []byte {
 	replacer := strings.NewReplacer(
+		"{{CODEX_METER_VERSION_LABEL}}", htmlstd.EscapeString(buildVersionLabel(metadata.Version)),
 		"{{CODEX_METER_VERSION}}", htmlstd.EscapeString(metadata.Version),
 		"{{CODEX_METER_COMMIT}}", htmlstd.EscapeString(metadata.Commit),
 		"{{CODEX_METER_COMMIT_SHORT}}", htmlstd.EscapeString(metadata.ShortCommit),
 		"{{CODEX_METER_BUILD_TIME}}", htmlstd.EscapeString(metadata.BuildTime),
 	)
 	return []byte(replacer.Replace(string(page)))
+}
+
+// Keep the visible badge compact; diagnostic APIs retain the full build version.
+func buildVersionLabel(version string) string {
+	if match := versionLabelPattern.FindStringSubmatch(strings.TrimSpace(version)); len(match) > 1 {
+		return "v" + match[1]
+	}
+	return "dev"
 }

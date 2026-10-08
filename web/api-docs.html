@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f7f8">
-  <meta name="application-version" content="{{CODEX_METER_VERSION}}">
+  <meta name="application-version" content="{{CODEX_METER_VERSION_LABEL}}">
   <meta name="application-commit" content="{{CODEX_METER_COMMIT}}">
   <title>接口文档 · ChatGPT &amp; Codex 使用面板</title>
   <style>
@@ -138,7 +138,7 @@
         <span class="brand-title">ChatGPT &amp; Codex 接口文档</span>
       </a>
       <div class="header-actions">
-        <span class="build-badge" title="版本 {{CODEX_METER_VERSION}} · 完整提交 {{CODEX_METER_COMMIT}} · 构建时间 {{CODEX_METER_BUILD_TIME}}">版本 {{CODEX_METER_VERSION}} · {{CODEX_METER_COMMIT_SHORT}}</span>
+        <span class="build-badge" title="版本 {{CODEX_METER_VERSION_LABEL}} · 完整提交 {{CODEX_METER_COMMIT}} · 构建时间 {{CODEX_METER_BUILD_TIME}}">版本 {{CODEX_METER_VERSION_LABEL}}</span>
         <a class="action" href="./">返回面板</a>
         <a class="action" href="settings">设置</a>
         <a class="action" href="openapi.yaml" target="_blank" rel="noopener">OpenAPI 原文</a>
@@ -147,7 +147,7 @@
     </header>
 
     <section class="card intro-card">
-      <div class="card-head"><div class="card-title">接口文档与在线调试</div><div class="card-meta">服务版本 {{CODEX_METER_VERSION}} · 提交 {{CODEX_METER_COMMIT_SHORT}}</div></div>
+      <div class="card-head"><div class="card-title">接口文档与在线调试</div><div class="card-meta">服务版本 {{CODEX_METER_VERSION_LABEL}}</div></div>
       <p class="intro-copy">下面列出当前服务提供的额度、统计、预测、配置和资源接口。调试器只请求当前页面所在的服务地址，适合检查反向代理路径、认证和返回数据。</p>
       <div class="security-note">认证规则：启用 Basic Auth 时由浏览器自动携带用户名密码；配置了 App API Key 时，调试器会使用 <code>X-App-API-Key</code> 请求头。OAuth Token 只保留在服务端，不会被本页面读取。</div>
     </section>

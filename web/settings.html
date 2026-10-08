@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#f7f7f8">
-  <meta name="application-version" content="{{CODEX_METER_VERSION}}">
+  <meta name="application-version" content="{{CODEX_METER_VERSION_LABEL}}">
   <meta name="application-commit" content="{{CODEX_METER_COMMIT}}">
   <title>ChatGPT &amp; Codex 设置</title>
   <style>
@@ -140,7 +140,7 @@
     label { font-size:14px; line-height:19px; font-weight:700; }
     .field { gap:8px; }
     input, select { height:46px; padding:0 13px; border-radius:10px; background:var(--card); color:var(--text); font-size:15px; font-weight:550; color-scheme:light; }
-    html[data-theme="dark"] input { color-scheme:dark; }
+    html[data-theme="dark"] input, html[data-theme="dark"] select { color-scheme:dark; }
     input[readonly] { background:var(--soft); }
     input::placeholder { color:#a1a1aa; }
     html[data-theme="dark"] input::placeholder { color:#71717a; }
@@ -259,9 +259,25 @@
     .config-file-card { padding:16px; }
     .config-file-path { max-width:52%; overflow:hidden; color:var(--muted); font:12px/18px ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace; text-overflow:ellipsis; white-space:nowrap; }
     .config-file-editor { display:block; min-height:420px; }
-    .account-manager { margin-bottom:18px; padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
+    .account-manager { margin:24px 0 0; padding:22px; border:1px solid var(--border); border-radius:16px; background:var(--card); box-shadow:0 4px 16px rgba(32,33,35,.035); }
+    .account-manager-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:20px; }
+    .account-manager-title { margin:0; font-size:17px; line-height:24px; font-weight:700; }
+    .account-manager-copy { margin:4px 0 0; color:var(--muted); font-size:13px; line-height:19px; }
+    .account-add { display:inline-flex; align-items:center; justify-content:center; gap:6px; flex:0 0 auto; min-height:40px; padding:0 13px; border:1px solid var(--border); border-radius:10px; background:var(--card); cursor:pointer; font-size:13px; font-weight:650; }
+    .account-add:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+    .account-add svg { width:16px; height:16px; }
     .account-manager-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
-    .account-manager-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    .account-manager .account-manager-fields { gap:20px; }
+    .account-manager input, .account-manager select { background:var(--soft); }
+    .account-manager .input-action .small-button { background:var(--card); }
+    .account-manager-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:20px; padding-top:16px; border-top:1px solid var(--border); }
+    .account-manager-actions .secondary { background:var(--card); }
+    .account-manager-actions .secondary:not(:disabled):not(.account-delete) { border-color:rgba(16,163,127,.3); background:rgba(16,163,127,.06); color:var(--accent); }
+    .account-manager-actions .secondary:disabled { background:var(--soft); color:var(--muted); border-color:transparent; opacity:1; }
+    .account-manager .account-delete { color:var(--danger); border-color:transparent; background:transparent; }
+    .account-manager .account-delete:hover:not(:disabled) { border-color:var(--border); background:var(--soft); }
+    .account-manager button:disabled { cursor:not-allowed; }
+    .account-manager button[hidden] { display:none; }
     @media (max-width:600px) { .account-manager-fields { grid-template-columns:1fr; } }
     .config-file-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px; }
     .config-file-actions .proxy-status { flex:1 1 280px; margin-top:0; }
@@ -278,6 +294,11 @@
       h1 { margin-top:1px; font-size:24px; line-height:30px; }
       .intro { font-size:12px; line-height:18px; }
       .form { padding:0 16px 18px; }
+      .account-manager { margin-top:18px; padding:16px; border-radius:13px; }
+      .account-manager-head { margin-bottom:16px; gap:10px; }
+      .account-manager-title { font-size:15px; }
+      .account-manager-copy { font-size:12px; }
+      .account-manager .account-manager-fields { gap:14px; }
       .form-section { padding:16px 0 17px; }
       .section-title { font-size:16px; }
       .section-hint { font-size:11px; }
@@ -322,6 +343,11 @@
       .page-header { align-items:flex-start; flex-wrap:wrap; }
       .header-actions { width:100%; flex-wrap:wrap; justify-content:flex-end; }
       .field-grid { grid-template-columns:1fr; }
+      .account-manager { margin-top:16px; padding:16px; }
+      .account-manager-head { align-items:flex-start; }
+      .account-manager-copy { max-width:180px; }
+      .account-manager-actions { margin-top:16px; padding-top:14px; }
+      .account-manager input, .account-manager select, .account-manager button { min-height:44px; }
       .basic-auth-fields { grid-template-columns:1fr; gap:10px; }
       .proxy-form-grid { grid-template-columns:1fr 1fr; }
       .proxy-form-grid .field:nth-child(2) { grid-column:1/-1; }
@@ -350,7 +376,7 @@
         <span class="brand-title">ChatGPT &amp; Codex 使用面板</span>
       </a>
       <div class="header-actions">
-        <span class="build-badge" title="版本 {{CODEX_METER_VERSION}} · 完整提交 {{CODEX_METER_COMMIT}} · 构建时间 {{CODEX_METER_BUILD_TIME}}">版本 {{CODEX_METER_VERSION}} · {{CODEX_METER_COMMIT_SHORT}}</span>
+        <span class="build-badge" title="版本 {{CODEX_METER_VERSION_LABEL}} · 完整提交 {{CODEX_METER_COMMIT}} · 构建时间 {{CODEX_METER_BUILD_TIME}}">版本 {{CODEX_METER_VERSION_LABEL}}</span>
         <a class="action" href="./">返回面板</a>
         <a class="action" href="api-docs">接口文档</a>
         <button id="themeButton" class="action" type="button">切换主题</button>
@@ -383,11 +409,17 @@
       </div>
 
       <form id="configForm" class="form">
-        <div class="account-manager">
-          <div class="account-manager-fields"><div class="field"><label for="managedAccount">选择账号</label><select id="managedAccount"></select></div><div class="field"><label for="accountName">账号名称</label><input id="accountName" maxlength="80" autocomplete="off" placeholder="例如：工作账号"></div></div>
-          <div class="account-manager-actions"><button id="newAccount" class="secondary" type="button">新增账号</button><button id="renameAccount" class="secondary" type="button">保存名称</button><button id="activateAccount" class="secondary" type="button">设为展示账号</button><button id="deleteAccount" class="secondary" type="button">删除账号</button></div>
-          <span class="hint">所选账号的代理、凭证、额度和历史各自独立。旧应用 API 默认使用主账号，页面切换只改变展示；主账号可更新凭证，需保留。</span>
-        </div>
+        <section class="account-manager" aria-labelledby="accountManagerTitle">
+          <div class="account-manager-head">
+            <div><h2 id="accountManagerTitle" class="account-manager-title">账号管理</h2><p class="account-manager-copy">管理各账号的网络与凭证</p></div>
+            <button id="newAccount" class="account-add" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>新增账号</button>
+          </div>
+          <div class="account-manager-fields">
+            <div class="field"><label for="managedAccount">选择账号</label><select id="managedAccount"></select></div>
+            <div class="field"><label for="accountName">账号名称</label><div class="input-action"><input id="accountName" maxlength="80" autocomplete="off" placeholder="例如：工作账号"><button id="renameAccount" class="small-button" type="button">保存名称</button></div></div>
+          </div>
+          <div class="account-manager-actions"><button id="activateAccount" class="secondary" type="button">切换到此账号</button><button id="deleteAccount" class="secondary account-delete" type="button">删除账号</button></div>
+        </section>
         <section id="proxySection" class="form-section tab-panel" role="tabpanel" aria-labelledby="tabProxy">
           <div class="section-head"><div class="section-title">配置上游连接</div><div class="section-hint">步骤 1</div></div>
           <div class="step-card">
@@ -925,12 +957,14 @@
         renderCredentialSummary(account);
         document.getElementById('renameAccount').disabled = !id || accountBusy;
         document.getElementById('activateAccount').disabled = !id || account.active || account.setup_required || accountBusy;
+        document.getElementById('activateAccount').textContent = account.active ? '正在使用' : '切换到此账号';
         document.getElementById('deleteAccount').disabled = !id || account.primary || accountList.length <= 1 || accountBusy;
+        document.getElementById('deleteAccount').hidden = !id || account.primary || accountList.length <= 1;
         setWizardStatus(id ? '正在编辑：' + account.name : '填写名称并粘贴新账号的 Fetch / cURL 请求。');
       }
       function renderAccountManager(view, preferred) {
         accountList = view.accounts || []; managedAccount.textContent = '';
-        accountList.forEach(function (account) { var option = document.createElement('option'); option.value = account.id; option.textContent = account.name + (account.primary ? ' · 主账号' : '') + (account.active ? ' · 当前展示' : ''); managedAccount.appendChild(option); });
+        accountList.forEach(function (account) { var option = document.createElement('option'); option.value = account.id; option.textContent = account.name; managedAccount.appendChild(option); });
         var draft = document.createElement('option'); draft.value = ''; draft.textContent = '＋ 新增账号'; managedAccount.appendChild(draft);
         var id = preferred === undefined ? editingAccount : preferred;
         if (id === null || (id && !accountList.some(function (item) { return item.id === id; }))) id = view.active_account_id;
@@ -959,7 +993,7 @@
         if (action === 'activate') { path = 'api/accounts/active'; body = {account_id:editingAccount}; }
         if (action === 'delete') { method = 'DELETE'; body = undefined; }
         setAccountBusy(true); setWizardStatus('正在保存…');
-        accountRequest(path, method, body).then(function (view) { renderAccountManager(view, action === 'delete' ? view.active_account_id : editingAccount); setWizardStatus(action === 'activate' ? '页面展示账号已切换，旧应用 API 仍使用主账号。' : (action === 'delete' ? '账号已删除，历史记录已保留。' : '账号名称已保存。'), 'ok'); }).catch(function (error) { setWizardStatus(error.message, 'error'); }).then(function () { setAccountBusy(false); });
+        accountRequest(path, method, body).then(function (view) { renderAccountManager(view, action === 'delete' ? view.active_account_id : editingAccount); setWizardStatus(action === 'activate' ? '账号已切换。' : (action === 'delete' ? '账号已删除，历史记录已保留。' : '账号名称已保存。'), 'ok'); }).catch(function (error) { setWizardStatus(error.message, 'error'); }).then(function () { setAccountBusy(false); });
       }
       function renderParsedSummary(values) {
         var found = [];
