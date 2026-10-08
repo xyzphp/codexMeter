@@ -67,7 +67,13 @@ func (s *UsageService) persistUsageHistoryPoint(point HistoryPoint) {
 		}
 	}
 	if s.historyStore != nil {
-		if err := s.historyStore.Insert(context.Background(), point); err != nil {
+		var err error
+		if s.accountID == "" {
+			err = s.historyStore.Insert(context.Background(), point)
+		} else {
+			err = s.historyStore.InsertAccount(context.Background(), s.historyAccountID, point)
+		}
+		if err != nil {
 			s.cacheMu.Unlock()
 			slog.Warn("persist usage history to sqlite failed", "error", err)
 			return

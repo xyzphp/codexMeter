@@ -40,14 +40,17 @@
 
 ## 主要功能
 
-- 查询 ChatGPT OAuth 账号额度、Token 使用量和重置时间
+- 监控最多 32 个 ChatGPT OAuth 账号的额度、Token 使用量和重置时间；每个账号拥有独立缓存与历史
+- 在浏览器或 LX04 页面切换展示账号，并在设置页新增账号、更新凭证、改名或删除
 - 显示 5 小时和本周剩余额度，以及对应的重置时间
 - 浏览器端使用分析中的每日 Token 日历固定显示最近 365 个完整日期；日期范围支持 7 / 30 / 60 / 90 天快捷查询和自定义范围，且只影响额度使用、总对话轮次和总计使用量，点击日历日期可查看当天 Token 数、模型占比和对话轮次
 - LX04 设备页保留紧凑的最近 7 个完整日期统计，并显示 Token、对话轮次和模型使用情况
 - 对接公开的 Codex Reset 预测接口
-- 支持自动刷新、额度区间提示音、HTTP Basic Auth、API Key 和代理
+- 支持自动刷新、额度区间提示音、HTTP Basic Auth、API Key，以及每个账号独立的代理（支持用户名和密码认证）
 - LX04 设备页面和浏览器工作台均内嵌到 Go 二进制文件中，并按 User-Agent 自动分流
 - 使用 SQLite `quota_history` 表保留完整定时采样，周额度按自身使用值去重后返回最近最多 48 个点
+
+多账号配置与接口使用见 [多账号监控说明](docs/multi-account.md)。已有单账号 `openai` 配置会自动作为 `default` 账号读取，保存后使用新的多账号结构。
 
 ## 运行
 
@@ -57,7 +60,7 @@
 cp config.example.json config.json
 ```
 
-填写 OAuth Access Token 和 ChatGPT Account ID 后，启动服务：
+在 `accounts[].openai` 中填写 OAuth Access Token 和 ChatGPT Account ID 后，启动服务：
 
 ```bash
 go run .
@@ -134,3 +137,5 @@ GitHub Actions 自动发布、触发方式、构建平台和发布包内容见 [
 
 - [openapi.yaml](openapi.yaml)：可导入 Swagger UI、Postman、Apifox；
 - [docs/openapi.md](docs/openapi.md)：中文接口接入和部署说明。
+
+旧应用 API 默认固定读取主账号（优先 `id=default`）；浏览器和 LX04 的账号切换只改变页面展示。旧客户端无需新增参数，原响应格式、认证与缓存行为保持兼容。

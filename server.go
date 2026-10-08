@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -55,6 +56,14 @@ func (s *Server) registerRoutes(mux *http.ServeMux, prefix string) {
 	mux.HandleFunc("GET "+route("/assets/account-credentials-guide.png"), s.handleCredentialGuide)
 	mux.HandleFunc("GET "+route("/audio"), s.handleAudio)
 	mux.HandleFunc("GET "+route("/api/usage"), s.handleUsage)
+	mux.HandleFunc("GET "+route("/api/accounts"), s.handleAccounts)
+	mux.HandleFunc("GET "+route("/api/accounts/usage"), s.handleAccountsUsage)
+	mux.HandleFunc("POST "+route("/api/accounts"), s.handleAccountCreate)
+	mux.HandleFunc("PUT "+route("/api/accounts/active"), s.handleAccountSwitch)
+	mux.HandleFunc("PUT "+route("/api/accounts/{account_id}"), s.handleAccountUpdate)
+	mux.HandleFunc("DELETE "+route("/api/accounts/{account_id}"), s.handleAccountDelete)
+	mux.HandleFunc("OPTIONS "+route("/api/accounts"), s.handleOptions)
+	mux.HandleFunc("OPTIONS "+route("/api/accounts/{account_id}"), s.handleOptions)
 	mux.HandleFunc("GET "+route("/api/usage/analytics"), s.handleUsageAnalytics)
 	mux.HandleFunc("GET "+route("/api/prediction"), s.handlePrediction)
 	mux.HandleFunc("GET "+route("/api/config"), s.handleConfigGet)
@@ -88,12 +97,15 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 			response.Header().Set("Access-Control-Allow-Origin", middlewareConfig.CORSOrigin)
 			response.Header().Set("Vary", "Origin")
 			response.Header().Set("Access-Control-Allow-Headers", "Authorization, X-App-API-Key, Content-Type")
-			response.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+			response.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			response.Header().Set("Access-Control-Expose-Headers", "X-Codex-Meter-Version, X-Codex-Meter-Commit, X-Codex-Meter-Build-Time")
 		}
 		if s.isHealthPath(request.URL.Path) {
 			next.ServeHTTP(response, request)
 			return
+		}
+		if s.isAPIPath(request.URL.Path) {
+			response.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 		}
 		if middlewareConfig.BasicAuthEnabled && !authorizedBasic(request, middlewareConfig.BasicAuthUsername, middlewareConfig.BasicAuthPassword) {
 			response.Header().Set("WWW-Authenticate", `Basic realm="Codex Usage"`)
@@ -178,6 +190,9 @@ func (s *Server) handleIndex(response http.ResponseWriter, request *http.Request
 	config := s.cfg
 	if s.usage != nil {
 		config = s.usage.currentConfig()
+	}
+	if index := accountIndex(config, config.ActiveAccountID); index >= 0 {
+		config = configForAccount(config, config.Accounts[index])
 	}
 	if config.SetupRequired {
 		s.writeHTML(response, setupHTML)
@@ -302,11 +317,20 @@ func (s *Server) handleUsage(response http.ResponseWriter, request *http.Request
 		return
 	}
 
-	usage, err := s.usage.Get(request.Context(), force)
+	accountID := strings.TrimSpace(request.URL.Query().Get("account_id"))
+	usage, err := s.usage.GetForAccount(request.Context(), accountID, force)
 	if err != nil {
+		if accountID != "" && writeAccountError(response, err) {
+			return
+		}
 		slog.Error("usage request failed", "error", err)
 		writeJSON(response, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
+	}
+	if accountID == "" {
+		// Existing clients receive the original response schema. Account
+		// metadata is only exposed by an explicitly selected account request.
+		usage.AccountID, usage.AccountName = "", ""
 	}
 	writeJSON(response, http.StatusOK, usage)
 }
@@ -324,11 +348,18 @@ func (s *Server) handleUsageAnalytics(response http.ResponseWriter, request *htt
 		return
 	}
 
-	analytics, err := s.usage.GetAnalyticsRange(request.Context(), force, dateRange)
+	accountID := strings.TrimSpace(request.URL.Query().Get("account_id"))
+	analytics, err := s.usage.GetAnalyticsForAccount(request.Context(), accountID, force, dateRange)
 	if err != nil {
+		if accountID != "" && writeAccountError(response, err) {
+			return
+		}
 		slog.Error("usage analytics fetch failed", "error", err)
 		writeJSON(response, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
+	}
+	if accountID == "" {
+		analytics.AccountID, analytics.AccountName = "", ""
 	}
 	writeJSON(response, http.StatusOK, analytics)
 }
@@ -401,6 +432,9 @@ func (s *Server) handleConfigTest(response http.ResponseWriter, request *http.Re
 	}
 	result, err := s.usage.TestConfig(request.Context(), update)
 	if err != nil {
+		if writeAccountError(response, err) {
+			return
+		}
 		// The error intentionally contains only the upstream status or a safe
 		// network/validation message; credentials are never included.
 		writeJSON(response, http.StatusBadGateway, map[string]any{"ok": false, "error": err.Error()})
@@ -416,7 +450,16 @@ func (s *Server) handleProxyTest(response http.ResponseWriter, request *http.Req
 		writeJSON(response, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}
-	result, err := s.usage.TestProxy(request.Context(), input.ProxyURL)
+	cfg, err := s.usage.proxyTestConfig(input)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, errAccountNotFound) {
+			status = http.StatusNotFound
+		}
+		writeJSON(response, status, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	result, err := s.usage.testProxyWithConfig(request.Context(), cfg)
 	if err != nil {
 		writeJSON(response, http.StatusBadGateway, map[string]any{"ok": false, "error": err.Error()})
 		return
@@ -433,6 +476,9 @@ func (s *Server) handleConfigPut(response http.ResponseWriter, request *http.Req
 	}
 	view, err := s.usage.UpdateConfig(update)
 	if err != nil {
+		if writeAccountError(response, err) {
+			return
+		}
 		writeJSON(response, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}

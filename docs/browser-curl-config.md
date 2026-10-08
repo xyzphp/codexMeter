@@ -26,22 +26,24 @@ https://chatgpt.com/backend-api/wham/usage
 
 只从自己当前登录的浏览器会话抓取请求。不要把完整 cURL 粘贴到工单、聊天记录、公共仓库或在线转换网站中。
 
+在设置页先选择要更新的账号，或点击“新增账号”，然后粘贴抓包内容并点击“识别并保存账号”。多账号配置见 [多账号监控说明](multi-account.md)。
+
 ## 二、从 cURL 提取配置
 
 项目只需要 cURL 中与账户和浏览器会话相关的字段。不要把整段 cURL 原样放进 `config.json`。
 
 | 浏览器请求字段 | `config.json` 字段 | 是否建议配置 | 说明 |
 | --- | --- | --- | --- |
-| `Authorization: Bearer <token>` | `openai.access_token` | 必填 | 只复制 `<token>`，不要重复写 `Bearer ` |
-| `Cookie: ...` 或 `--cookie ...` | `openai.cookie` | 按需 | 复制完整 Cookie 串；仅服务端向 ChatGPT Web 发送 |
-| `chatgpt-account-id` | `openai.chatgpt_account_id` | 通常必填 | 必须与 OAuth Token 属于同一账户 |
-| `oai-client-build-number` | `openai.client_build_number` | 推荐 | ChatGPT Web 当前构建号 |
-| `oai-client-version` | `openai.client_version` | 推荐 | ChatGPT Web 当前版本标识 |
-| `oai-device-id` | `openai.device_id` | 推荐 | 当前浏览器设备标识 |
-| `oai-session-id` | `openai.session_id` | 推荐 | 当前浏览器会话标识 |
-| `x-oai-is-client-observation` | `openai.client_observation` | 推荐 | 当前客户端观察标识 |
-| `Referer` | `openai.referer` | 推荐 | 通常是 ChatGPT 使用情况页面 |
-| `User-Agent` | `openai.user_agent` | 推荐 | 浏览器 User-Agent |
+| `Authorization: Bearer <token>` | `accounts[].openai.access_token` | 必填 | 只复制 `<token>`，不要重复写 `Bearer ` |
+| `Cookie: ...` 或 `--cookie ...` | `accounts[].openai.cookie` | 按需 | 复制完整 Cookie 串；仅服务端向 ChatGPT Web 发送 |
+| `chatgpt-account-id` | `accounts[].openai.chatgpt_account_id` | 通常必填 | 必须与 OAuth Token 属于同一账户 |
+| `oai-client-build-number` | `accounts[].openai.client_build_number` | 推荐 | ChatGPT Web 当前构建号 |
+| `oai-client-version` | `accounts[].openai.client_version` | 推荐 | ChatGPT Web 当前版本标识 |
+| `oai-device-id` | `accounts[].openai.device_id` | 推荐 | 当前浏览器设备标识 |
+| `oai-session-id` | `accounts[].openai.session_id` | 推荐 | 当前浏览器会话标识 |
+| `x-oai-is-client-observation` | `accounts[].openai.client_observation` | 推荐 | 当前客户端观察标识 |
+| `Referer` | `accounts[].openai.referer` | 推荐 | 通常是 ChatGPT 使用情况页面 |
+| `User-Agent` | `accounts[].openai.user_agent` | 推荐 | 浏览器 User-Agent |
 
 以下字段由项目自动补充或不需要写入配置：`Accept`、`Cache-Control`、`Pragma`、`Priority`、`Sec-Fetch-*`、`x-openai-target-path` 和 `x-openai-target-route`。项目会根据实际请求路径自动生成 target path/route，避免不同 Wham 接口之间配置错位。
 
@@ -54,11 +56,12 @@ Copy-Item config.json config.json.bak
 notepad config.json
 ```
 
-在 `openai` 节点中更新字段：
+在所选账号的 `accounts[].openai` 节点中更新字段（旧的顶层 `openai` 仍兼容为 `default`）：
 
 ```json
 {
-  "openai": {
+  "active_account_id": "default",
+  "accounts": [{"id":"default","name":"主账号","openai": {
     "access_token": "从 Authorization 中去掉 Bearer 前缀后的 Token",
     "cookie": "浏览器 cURL 中的完整 Cookie",
     "chatgpt_account_id": "与 Token 对应的 ChatGPT Account ID",
@@ -69,7 +72,7 @@ notepad config.json
     "client_observation": "浏览器 x-oai-is-client-observation",
     "referer": "浏览器 Referer",
     "user_agent": "浏览器 User-Agent"
-  }
+  }}]
 }
 ```
 
@@ -139,8 +142,8 @@ curl.exe -u "用户名:密码" "http://127.0.0.1:8123/codex/api/usage/analytics?
 3. 确认 `access_token` 没有包含 `Bearer ` 前缀，也没有多余引号或换行。
 4. 确认 `chatgpt_account_id` 与 Token 属于同一账户。
 5. 同步更新 `client_build_number`、`client_version`、`device_id`、`session_id`、`client_observation`、`referer` 和 `user_agent`。
-6. 如果浏览器请求依赖 Cookie，将当前 cURL 中的完整 Cookie 更新到 `openai.cookie`。
-7. 检查项目使用的代理与浏览器网络出口是否一致。代理 URL 必须包含协议和端口，支持 HTTP、HTTPS 和 SOCKS5，例如：
+6. 如果浏览器请求依赖 Cookie，将当前 cURL 中的完整 Cookie 更新到 `accounts[].openai.cookie`。
+7. 先在设置页选择目标账号，再检查该账号使用的代理与浏览器网络出口是否一致。每个账号可设置独立代理；带认证的代理可在页面填写用户名和密码，已保存的密码留空保留。代理 URL 必须包含协议和端口，支持 HTTP、HTTPS 和 SOCKS5，例如：
 
    ```text
    http://192.168.0.21:7890

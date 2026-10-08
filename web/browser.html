@@ -42,6 +42,20 @@
     .action:active { transform:translateY(1px); }
     .action.primary { border-color:var(--accent); background:var(--accent); color:#fff; }
     .card { background:var(--card); border:1px solid var(--border); border-radius:24px; box-shadow:var(--shadow); }
+    .accounts-card { padding:18px 22px; margin-bottom:20px; }
+    .account-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:12px; }
+    .account-toolbar label { color:var(--muted); font-size:14px; }
+    .account-select { min-height:38px; max-width:280px; min-width:160px; padding:0 12px; border:1px solid var(--border); border-radius:10px; background:var(--card); color:var(--text); font:inherit; }
+    .account-toolbar .action { margin-left:auto; }
+    .accounts-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-top:14px; }
+    .account-summary { min-width:0; padding:13px 15px; border:1px solid var(--border); border-radius:12px; background:var(--soft); }
+    .account-summary.active { border-color:var(--accent); }
+    .account-summary-head { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .account-summary-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:650; }
+    .account-summary-values { display:flex; justify-content:space-between; gap:10px; margin-top:10px; font-size:13px; }
+    .account-summary-meta { margin-top:8px; color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+    .account-summary-meta.error { color:var(--danger); }
+    @media (max-width:600px) { .accounts-card { padding:14px; margin-bottom:12px; } .account-select { flex:1; min-width:0; } .accounts-grid { grid-template-columns:1fr; } }
     .quota-card { padding:30px 32px 26px; }
     .card-head { display:flex; align-items:baseline; justify-content:space-between; gap:16px; }
     .card-title { font-size:22px; font-weight:700; letter-spacing:-.2px; }
@@ -379,6 +393,10 @@
       </div>
     </header>
 
+    <section class="card accounts-card" aria-label="多账号监控">
+      <div class="account-toolbar"><label for="accountSelect">当前账号</label><select id="accountSelect" class="account-select" disabled><option>读取中…</option></select><a class="action" href="settings#accounts">管理账号</a></div>
+      <div id="accountsOverview" class="accounts-grid" aria-live="polite"></div>
+    </section>
     <section id="quotaSection" class="card quota-card" aria-label="额度概览">
       <div class="card-head"><div class="card-title">额度概览</div><div id="usageUpdated" class="card-meta">读取中…</div></div>
       <div class="quota-grid">
@@ -486,6 +504,7 @@
       var refreshRemaining = refreshTotal;
       var refreshEnabled = true;
       var refreshBusy = false;
+      var selectedAccount = '';
       var resetWindows = {};
       var scheduledReset = null;
       var analyticsRange = {startDate:'', endDate:''};
@@ -812,29 +831,70 @@
       function headers() { var result = {'Accept':'application/json'}; try { var key = sessionStorage.getItem('codex-admin-key') || ''; if (key) result['X-App-API-Key'] = key; } catch (_) {} return result; }
       function apiURL(path) { var result = new URL(path, window.location.href); result.username = ''; result.password = ''; return result.toString(); }
       function getJSON(path) { return fetch(apiURL(path), {headers:headers(), credentials:'same-origin', cache:'no-store'}).then(function (response) { if (!response.ok) throw new Error(response.status === 401 ? '认证失败，请检查 Basic Auth' : 'API ' + response.status); return response.json(); }); }
+      function accountPath(path) { return path + (path.indexOf('?') < 0 ? '?' : '&') + 'account_id=' + encodeURIComponent(selectedAccount); }
+      function renderAccountSelect(view) {
+        selectedAccount = view.active_account_id;
+        var select = byId('accountSelect'); select.textContent = '';
+        (view.accounts || []).forEach(function (account) { var option = document.createElement('option'); option.value = account.id; option.textContent = account.name + (account.primary ? ' · 主账号' : '') + (account.active ? ' · 当前' : ''); option.disabled = !!account.setup_required; select.appendChild(option); });
+        select.value = selectedAccount;
+      }
+      function renderAccountsOverview(view) {
+        var html = '';
+        (view.accounts || []).forEach(function (account) {
+          var usage = account.usage || {};
+          function left(window) { return window && isFinite(number(window.used_percent)) ? percent(clamp(100 - number(window.used_percent), 0, 100)) + '%' : '—'; }
+          html += '<article class="account-summary' + (account.id === selectedAccount ? ' active' : '') + '"><div class="account-summary-head"><span class="account-summary-name" title="' + escaped(account.name) + '">' + escaped(account.name) + '</span><button class="action" type="button" data-switch-account="' + escaped(account.id) + '"' + (account.id === selectedAccount ? ' disabled' : '') + '>' + (account.id === selectedAccount ? '当前' : '切换') + '</button></div><div class="account-summary-values"><span>5 小时剩余 <strong>' + left(usage.five_hour) + '</strong></span><span>本周 <strong>' + left(usage.seven_day) + '</strong></span></div><div class="account-summary-meta' + (account.error ? ' error' : '') + '">' + escaped(account.error ? (account.stale ? '最近快照 · ' : '') + account.error : (usage.plan_type || '') + ' · ' + date(usage.fetched_at)) + '</div></article>';
+        });
+        byId('accountsOverview').innerHTML = html;
+      }
+      function clearAccountData() {
+        resetWindows = {}; analyticsCalendarData = null; analyticsCalendarRange = null; selectedAnalyticsDate = '';
+        renderUsage({}); renderAnalyticsSummary({});
+        byId('dailyTokenChart').textContent = '读取中…'; byId('yesterdayModelPieChart').textContent = '读取中…';
+        byId('fiveHourHistoryChart').textContent = '读取中…'; byId('weeklyHistoryChart').textContent = '读取中…';
+      }
+      function switchAccount(id) {
+        if (refreshBusy || id === selectedAccount) return;
+        refreshBusy = true; byId('accountSelect').disabled = true; byId('refreshButton').disabled = true;
+        fetch(apiURL('api/accounts/active'), {method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify({account_id:id})}).then(function (response) { return response.json().then(function (view) { if (!response.ok) throw new Error(view.error || '切换失败'); return view; }); }).then(function (view) {
+          renderAccountSelect(view); clearAccountData(); refreshBusy = false; loadAll(false);
+        }).catch(function (error) { refreshBusy = false; byId('accountSelect').value = selectedAccount; byId('accountSelect').disabled = false; byId('refreshButton').disabled = false; setError(error); });
+      }
       function setError(error) { classes('statusDot', 'status-dot error'); text('statusText', '连接失败'); text('usageUpdated', error && error.message ? error.message : '请求失败'); }
       function loadAll(force, refreshCalendar) {
         if (refreshBusy) return; if (refreshCalendar === undefined) refreshCalendar = Boolean(force); refreshBusy = true; var suffix = force ? '?force=true' : ''; var button = byId('refreshButton'); if (button) button.disabled = true;
+        byId('accountSelect').disabled = true;
+        getJSON('api/accounts').then(function (view) {
+          if (selectedAccount && selectedAccount !== view.active_account_id) clearAccountData();
+          renderAccountSelect(view);
         var fixedRange = fixedCalendarRange();
-        var summaryRequest = getJSON(analyticsPath(force)).then(function (data) { renderAnalyticsSummary(data); return data; });
+        var summaryRequest = getJSON(accountPath(analyticsPath(force))).then(function (data) { renderAnalyticsSummary(data); return data; });
         var calendarRequest;
         if (refreshCalendar || !analyticsCalendarData || !sameAnalyticsRange(analyticsCalendarRange, fixedRange)) {
           if (sameAnalyticsRange(analyticsRange, fixedRange)) {
             calendarRequest = summaryRequest.then(function (data) { analyticsCalendarData = data; analyticsCalendarRange = fixedRange; renderAnalyticsCalendar(data); });
           } else {
-            calendarRequest = getJSON(analyticsPathForRange(fixedRange, refreshCalendar ? force : false)).then(function (data) { analyticsCalendarData = data; analyticsCalendarRange = fixedRange; renderAnalyticsCalendar(data); });
+            calendarRequest = getJSON(accountPath(analyticsPathForRange(fixedRange, refreshCalendar ? force : false))).then(function (data) { analyticsCalendarData = data; analyticsCalendarRange = fixedRange; renderAnalyticsCalendar(data); });
           }
         } else {
           renderAnalyticsCalendar(analyticsCalendarData);
           calendarRequest = Promise.resolve();
         }
         var requests = [
-          getJSON('api/usage' + suffix).then(renderUsage),
+          getJSON('api/accounts/usage' + suffix).then(function (data) {
+            renderAccountsOverview(data);
+            var account = (data.accounts || []).filter(function (item) { return item.id === selectedAccount; })[0];
+            if (account && account.usage) { renderUsage(account.usage); if (account.error) setError(new Error('最近快照 · ' + account.error)); }
+            else { clearAccountData(); setError(new Error(account && account.error || '账号数据不可用')); }
+          }),
           summaryRequest,
           calendarRequest,
           getJSON('api/prediction' + suffix).then(renderPrediction).catch(showPredictionError)
         ];
-        Promise.all(requests).then(function () { resetRefreshCountdown(); }).catch(setError).then(function () { refreshBusy = false; if (button) button.disabled = false; });
+        // Wait for every account request before enabling switching, including
+        // requests that continue after another endpoint has failed.
+        return Promise.all(requests.map(function (request) { return request.catch(function (error) { setError(error); }); }));
+        }).then(function () { resetRefreshCountdown(); }).catch(setError).then(function () { refreshBusy = false; if (button) button.disabled = false; byId('accountSelect').disabled = false; });
       }
       function getRefreshPolicy() { var hour = new Date().getHours(); if (hour < 8) return {enabled:false, seconds:0, label:'自动刷新暂停 · 00:00–08:00'}; if (hour < 9) return {enabled:true, seconds:15 * 60, label:'每 15 分钟自动刷新'}; if (hour < 18) return {enabled:true, seconds:5 * 60, label:'每 5 分钟自动刷新'}; return {enabled:true, seconds:15 * 60, label:'每 15 分钟自动刷新'}; }
       function resetRefreshCountdown() { var policy = getRefreshPolicy(); refreshEnabled = policy.enabled; refreshTotal = policy.seconds; refreshRemaining = policy.enabled ? policy.seconds : 0; renderRefresh(); }
@@ -844,6 +904,8 @@
       var savedTheme = null; try { savedTheme = localStorage.getItem('codex-theme'); } catch (_) {} setTheme(savedTheme || (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light'));
       byId('themeButton').addEventListener('click', function () { setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); });
       byId('refreshButton').addEventListener('click', function () { loadAll(true); });
+      byId('accountSelect').addEventListener('change', function () { switchAccount(this.value); });
+      byId('accountsOverview').addEventListener('click', function (event) { var button = event.target.closest('[data-switch-account]'); if (button) switchAccount(button.getAttribute('data-switch-account')); });
       byId('applyRange').addEventListener('click', applyCustomRange);
       byId('analyticsStart').addEventListener('change', applyAnalyticsRangeWhenValid);
       byId('analyticsEnd').addEventListener('change', applyAnalyticsRangeWhenValid);

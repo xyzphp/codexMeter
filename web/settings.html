@@ -239,6 +239,7 @@
     .step-card-copy { margin-top:4px; color:var(--muted); font-size:13px; line-height:19px; }
     .proxy-form-grid { display:grid; grid-template-columns:minmax(120px,.85fr) minmax(0,2fr) minmax(100px,.8fr); gap:12px; }
     .proxy-form-actions { display:flex; align-items:center; gap:9px; margin-top:12px; }
+    .proxy-auth-options, .proxy-auth-fields { margin-top:12px; }
     .state-badge { display:inline-flex; align-items:center; flex:0 0 auto; min-height:28px; padding:0 11px; border:1px solid var(--border); border-radius:999px; background:var(--card); color:var(--muted); font-size:12px; font-weight:700; }
     .state-badge.ready { border-color:rgba(16,163,127,.35); background:rgba(16,163,127,.10); color:var(--accent); }
     .state-badge.error { border-color:rgba(194,65,59,.35); background:rgba(194,65,59,.08); color:var(--danger); }
@@ -258,6 +259,10 @@
     .config-file-card { padding:16px; }
     .config-file-path { max-width:52%; overflow:hidden; color:var(--muted); font:12px/18px ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace; text-overflow:ellipsis; white-space:nowrap; }
     .config-file-editor { display:block; min-height:420px; }
+    .account-manager { margin-bottom:18px; padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--soft); }
+    .account-manager-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .account-manager-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    @media (max-width:600px) { .account-manager-fields { grid-template-columns:1fr; } }
     .config-file-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px; }
     .config-file-actions .proxy-status { flex:1 1 280px; margin-top:0; }
 
@@ -364,7 +369,7 @@
           <span class="step-number">1</span><span class="step-tab-copy"><span class="step-tab-title">网络代理</span></span>
         </button>
         <button id="tabCredentials" class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="credentialsSection" disabled>
-          <span class="step-number">2</span><span class="step-tab-copy"><span class="step-tab-title">账号凭证</span></span>
+          <span class="step-number">2</span><span class="step-tab-copy"><span class="step-tab-title">账号管理</span></span>
         </button>
         <button id="tabPageAccess" class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="pageAccessSection">
           <span class="step-number">3</span><span class="step-tab-copy"><span class="step-tab-title">页面访问</span></span>
@@ -378,11 +383,16 @@
       </div>
 
       <form id="configForm" class="form">
+        <div class="account-manager">
+          <div class="account-manager-fields"><div class="field"><label for="managedAccount">选择账号</label><select id="managedAccount"></select></div><div class="field"><label for="accountName">账号名称</label><input id="accountName" maxlength="80" autocomplete="off" placeholder="例如：工作账号"></div></div>
+          <div class="account-manager-actions"><button id="newAccount" class="secondary" type="button">新增账号</button><button id="renameAccount" class="secondary" type="button">保存名称</button><button id="activateAccount" class="secondary" type="button">设为展示账号</button><button id="deleteAccount" class="secondary" type="button">删除账号</button></div>
+          <span class="hint">所选账号的代理、凭证、额度和历史各自独立。旧应用 API 默认使用主账号，页面切换只改变展示；主账号可更新凭证，需保留。</span>
+        </div>
         <section id="proxySection" class="form-section tab-panel" role="tabpanel" aria-labelledby="tabProxy">
           <div class="section-head"><div class="section-title">配置上游连接</div><div class="section-hint">步骤 1</div></div>
           <div class="step-card">
             <div class="step-card-header">
-              <div><div class="step-card-title">先确认服务端网络</div><div class="step-card-copy">关闭开关使用直连；开启后填写代理并测试保存，账号凭证页会自动解锁。</div></div>
+              <div><div class="step-card-title">配置所选账号的网络</div><div class="step-card-copy">每个账号可使用不同的代理。关闭开关使用直连；开启后填写代理并测试保存。</div></div>
               <span id="proxyStateBadge" class="state-badge">待确认</span>
             </div>
             <div class="proxy-mode-row">
@@ -410,6 +420,11 @@
                   <label for="proxyPort">端口</label>
                   <input id="proxyPort" type="number" inputmode="numeric" min="1" max="65535" value="7890" placeholder="7890">
                 </div>
+              </div>
+              <label class="check-row proxy-auth-options" for="proxyAuthEnabled"><input id="proxyAuthEnabled" type="checkbox"> 代理需要用户名和密码</label>
+              <div id="proxyAuthFields" class="account-manager-fields proxy-auth-fields" hidden>
+                <div class="field"><label for="proxyUsername">代理用户名</label><input id="proxyUsername" autocomplete="off" placeholder="填写代理服务提供的用户名"></div>
+                <div class="field"><label for="proxyPassword">代理密码</label><input id="proxyPassword" type="password" autocomplete="new-password" placeholder="填写代理密码"><span id="proxyPasswordHint" class="hint">密码仅保存在服务端。</span></div>
               </div>
               <input id="proxyUrl" class="config-hidden" type="hidden">
               <div class="proxy-form-actions">
@@ -443,10 +458,10 @@
               <span class="capture-format">FETCH / CURL</span>
             </div>
             <textarea id="captureInput" spellcheck="false" placeholder="打开上方抓包入口，在开发者工具 → Network 中右键 usage 请求 → Copy as cURL 或 Copy fetch，然后粘贴到这里"></textarea>
-            <span class="hint">只需填写这一项。系统会自动识别 Authorization、Cookie、Account ID、请求上下文和 User-Agent，并覆盖当前账号配置。</span>
+            <span class="hint">系统会识别 Authorization、Cookie、Account ID、请求上下文和 User-Agent，测试成功后保存到上方选择的账号。</span>
             <div class="wizard-actions">
               <button id="parseCapture" class="secondary" type="button">解析请求</button>
-              <button id="testConnection" class="primary" type="button">识别并覆盖保存</button>
+              <button id="testConnection" class="primary" type="button">识别并保存账号</button>
             </div>
             <div id="wizardStatus" class="wizard-status" role="status" aria-live="polite"></div>
             <div id="credentialSummary" class="credential-summary" aria-live="polite"></div>
@@ -568,6 +583,11 @@
       var tokenInput = document.getElementById('accessToken');
       var cookieInput = document.getElementById('upstreamCookie');
       var captureInput = document.getElementById('captureInput');
+      var managedAccount = document.getElementById('managedAccount');
+      var accountName = document.getElementById('accountName');
+      var accountList = [];
+      var editingAccount = null;
+      var accountBusy = false;
       var wizardStatus = document.getElementById('wizardStatus');
       var credentialSummary = document.getElementById('credentialSummary');
       var proxyInput = document.getElementById('proxyUrl');
@@ -576,6 +596,12 @@
       var proxySchemeInput = document.getElementById('proxyScheme');
       var proxyHostInput = document.getElementById('proxyHost');
       var proxyPortInput = document.getElementById('proxyPort');
+      var proxyAuthEnabledInput = document.getElementById('proxyAuthEnabled');
+      var proxyAuthFields = document.getElementById('proxyAuthFields');
+      var proxyUsernameInput = document.getElementById('proxyUsername');
+      var proxyPasswordInput = document.getElementById('proxyPassword');
+      var proxyPasswordHint = document.getElementById('proxyPasswordHint');
+      var draftProxyConfig = null;
       var proxySection = document.getElementById('proxySection');
       var credentialsSection = document.getElementById('credentialsSection');
       var pageAccessSection = document.getElementById('pageAccessSection');
@@ -734,7 +760,7 @@
           var scheme = (parsed.protocol || 'http:').replace(':', '').toLowerCase();
           if (scheme === 'socket5' || scheme === 'socks5h') scheme = 'socks5';
           if (scheme !== 'http' && scheme !== 'https' && scheme !== 'socks5') scheme = 'http';
-          return { scheme:scheme, host:(parsed.hostname || '').replace(/^\[|\]$/g, ''), port:parsed.port || '7890' };
+          return { scheme:scheme, host:(parsed.hostname || '').replace(/^\[|\]$/g, ''), port:parsed.port || (scheme === 'https' ? '443' : (scheme === 'socks5' ? '1080' : '80')) };
         } catch (_) {
           var match = raw.match(/^([a-z][a-z0-9+.-]*):\/\/([^/:]+|\[[^\]]+\])(?::(\d+))?/i);
           if (!match) return { scheme:'http', host:'', port:'7890' };
@@ -749,13 +775,19 @@
         proxySchemeInput.value = parts.scheme;
         proxyHostInput.value = parts.host;
         proxyPortInput.value = parts.port;
+        proxyUsernameInput.value = '';
+        proxyPasswordInput.value = '';
+        try { proxyUsernameInput.value = decodeURIComponent(new URL(raw).username || ''); } catch (_) {}
+        proxyAuthEnabledInput.checked = !!proxyUsernameInput.value;
+        proxyAuthFields.hidden = !proxyAuthEnabledInput.checked;
         proxyInput.value = (raw || '').trim();
       }
       function proxyURLValue() {
         if (!proxyEnabledInput.checked) return { url:'', error:'' };
         var host = proxyHostInput.value.trim().replace(/^\[|\]$/g, '');
         var port = proxyPortInput.value.trim() || '7890';
-        if (!host) return { url:'', error:'' };
+        if (!host) return { url:'', error:'请填写代理 IP / 主机。' };
+        if (/[\s/@?#]/.test(host)) return { url:'', error:'IP / 主机只需填写域名或 IP 地址。' };
         if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
           return { url:'', error:'端口需为 1～65535 的数字。' };
         }
@@ -769,16 +801,33 @@
       }
       function markProxyDraft() {
         var result = syncProxyURL();
-        if (confirmedProxyValue !== null && (result.error || result.url !== confirmedProxyValue)) {
+        if (confirmedProxyValue !== null && (result.error || proxyDraftSignature() !== confirmedProxyValue || proxyPasswordInput.value)) {
+          draftProxyConfig = null;
           setProxyState('待验证', '');
           setCredentialAccess(false);
           setProxyStatus(result.error || '代理配置已变更，请重新测试并保存。', result.error ? 'error' : '');
         }
       }
+      function proxyDraftSignature() {
+        return JSON.stringify([proxyInput.value, proxyAuthEnabledInput.checked, proxyUsernameInput.value]);
+      }
       function proxyPayload() {
         var result = syncProxyURL();
         if (result.error) throw new Error(result.error);
-        return { proxy_url:result.url };
+        var payload = { account_id:editingAccount || '', proxy_url:result.url };
+        if (result.url && proxyAuthEnabledInput.checked) {
+          if (!proxyUsernameInput.value) throw new Error('请填写代理用户名。');
+          payload.proxy_username = proxyUsernameInput.value;
+          var account = accountList.filter(function (item) { return item.id === editingAccount; })[0] || {};
+          if (!editingAccount && draftProxyConfig && !proxyPasswordInput.value) {
+            if (draftProxyConfig.proxy_password !== undefined) payload.proxy_password = draftProxyConfig.proxy_password;
+          } else if (proxyPasswordInput.value || !account.proxy_password_configured) {
+            payload.proxy_password = proxyPasswordInput.value;
+          }
+        } else {
+          payload.proxy_clear_auth = true;
+        }
+        return payload;
       }
       function parseResponse(response, fallback) {
         return response.json().then(function (data) {
@@ -792,7 +841,7 @@
         });
       }
       function testProxy(saveAfterTest, directMode) {
-        if (proxyBusy) return;
+        if (proxyBusy || accountBusy) return;
         var payload;
         try { payload = proxyPayload(); } catch (error) {
           setProxyState('格式错误', 'error');
@@ -800,6 +849,7 @@
           return;
         }
         proxyBusy = true;
+        setAccountBusy(true);
         setProxyButtonsDisabled(true);
         setProxyState('测试中…', '');
         setProxyStatus(saveAfterTest ? (directMode ? '正在测试直连，成功后自动保存…' : '正在测试代理，成功后自动保存…') : '正在测试代理连通性…');
@@ -811,14 +861,20 @@
               setProxyStatus(result.message + '；请点击“测试并保存，继续配置”。', 'ok');
               return;
             }
-            return fetch('api/config', { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(payload) })
-              .then(function (response) { return parseResponse(response, '代理保存失败'); })
-              .then(function () {
-                confirmedProxyValue = payload.proxy_url;
+            var save = editingAccount ? fetch('api/config', { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(payload) }).then(function (response) { return parseResponse(response, '代理保存失败'); }) : Promise.resolve(null);
+            return save
+              .then(function (view) {
+                if (view) {
+                  renderAccountManager(view, editingAccount);
+                } else {
+                  draftProxyConfig = payload;
+                  proxyPasswordInput.value = '';
+                }
+                confirmedProxyValue = proxyDraftSignature();
                 setProxyState('已保存', 'ready');
                 setCredentialAccess(true);
-                setProxyStatus(result.message + '，' + (directMode ? '直连配置已保存。' : '代理配置已保存。'), 'ok');
-                setStatus((directMode ? '直连已保存' : '代理已保存') + '，请继续配置账号凭证', 'ok');
+                setProxyStatus(result.message + '，' + (view ? '所选账号的网络配置已保存。' : '网络配置将在新增账号时一起保存。'), 'ok');
+                setStatus('网络配置已确认，请继续配置账号凭证', 'ok');
                 showTab('credentials');
                 credentialsSection.scrollIntoView({ behavior:'smooth', block:'start' });
               });
@@ -830,6 +886,7 @@
           })
           .then(function () {
             proxyBusy = false;
+            setAccountBusy(false);
             setProxyButtonsDisabled(false);
           });
       }
@@ -846,6 +903,63 @@
           if (item.ready) element.className = 'ready';
           credentialSummary.appendChild(element);
         });
+      }
+      function renderAccountEditor(id) {
+        editingAccount = id;
+        var account = accountList.filter(function (item) { return item.id === id; })[0] || {};
+        accountName.value = account.name || '';
+        tokenInput.value = ''; cookieInput.value = ''; captureInput.value = '';
+        draftProxyConfig = null;
+        setProxyFieldsFromURL(account.proxy_url || '');
+        setProxyMode(!!account.proxy_url);
+        syncProxyURL();
+        proxyPasswordInput.placeholder = account.proxy_password_configured ? '已保存；留空保留，输入新密码可替换' : '填写代理密码';
+        proxyPasswordHint.textContent = account.proxy_password_configured ? '密码已保存。取消代理认证并保存可清除。' : '密码仅保存在服务端。';
+        confirmedProxyValue = proxyDraftSignature();
+        setProxyState(account.proxy_url ? '已保存' : '直连', 'ready');
+        setCredentialAccess(true);
+        setProxyStatus(id ? '当前网络配置属于“' + account.name + '”。' : '新账号默认使用直连，也可先配置独立代理。', 'ok');
+        var fields = {chatgpt_account_id:'accountId',user_agent:'userAgent',client_build_number:'clientBuildNumber',client_version:'clientVersion',device_id:'deviceId',session_id:'sessionId',client_observation:'clientObservation',referer:'referer'};
+        Object.keys(fields).forEach(function (key) { setValue(fields[key], account[key]); });
+        document.getElementById('fedramp').checked = !!account.fedramp;
+        renderCredentialSummary(account);
+        document.getElementById('renameAccount').disabled = !id || accountBusy;
+        document.getElementById('activateAccount').disabled = !id || account.active || account.setup_required || accountBusy;
+        document.getElementById('deleteAccount').disabled = !id || account.primary || accountList.length <= 1 || accountBusy;
+        setWizardStatus(id ? '正在编辑：' + account.name : '填写名称并粘贴新账号的 Fetch / cURL 请求。');
+      }
+      function renderAccountManager(view, preferred) {
+        accountList = view.accounts || []; managedAccount.textContent = '';
+        accountList.forEach(function (account) { var option = document.createElement('option'); option.value = account.id; option.textContent = account.name + (account.primary ? ' · 主账号' : '') + (account.active ? ' · 当前展示' : ''); managedAccount.appendChild(option); });
+        var draft = document.createElement('option'); draft.value = ''; draft.textContent = '＋ 新增账号'; managedAccount.appendChild(draft);
+        var id = preferred === undefined ? editingAccount : preferred;
+        if (id === null || (id && !accountList.some(function (item) { return item.id === id; }))) id = view.active_account_id;
+        managedAccount.value = id || ''; renderAccountEditor(id || '');
+      }
+      function setAccountBusy(busy) {
+        accountBusy = busy; managedAccount.disabled = busy; accountName.disabled = busy;
+        document.getElementById('reload').disabled = busy;
+        ['newAccount','renameAccount','activateAccount','deleteAccount','testConnection','parseCapture'].forEach(function (id) { document.getElementById(id).disabled = busy; });
+        [proxyEnabledInput,proxySchemeInput,proxyHostInput,proxyPortInput,proxyAuthEnabledInput,proxyUsernameInput,proxyPasswordInput].forEach(function (input) { input.disabled = busy; });
+        setProxyButtonsDisabled(busy);
+        if (!busy) {
+          var account = accountList.filter(function (item) { return item.id === editingAccount; })[0] || {};
+          document.getElementById('renameAccount').disabled = !editingAccount;
+          document.getElementById('activateAccount').disabled = !editingAccount || account.active || account.setup_required;
+          document.getElementById('deleteAccount').disabled = !editingAccount || account.primary || accountList.length <= 1;
+        }
+      }
+      function accountRequest(path, method, body) {
+        return fetch(path, {method:method, headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:body === undefined ? undefined : JSON.stringify(body)}).then(function (response) { return parseResponse(response, '账号操作失败'); });
+      }
+      function manageAccount(action) {
+        if (accountBusy || !editingAccount) return;
+        if (action === 'delete' && !window.confirm('删除账号“' + accountName.value + '”？已有历史记录会保留。')) return;
+        var path = 'api/accounts/' + encodeURIComponent(editingAccount); var method = 'PUT'; var body = {name:accountName.value.trim()};
+        if (action === 'activate') { path = 'api/accounts/active'; body = {account_id:editingAccount}; }
+        if (action === 'delete') { method = 'DELETE'; body = undefined; }
+        setAccountBusy(true); setWizardStatus('正在保存…');
+        accountRequest(path, method, body).then(function (view) { renderAccountManager(view, action === 'delete' ? view.active_account_id : editingAccount); setWizardStatus(action === 'activate' ? '页面展示账号已切换，旧应用 API 仍使用主账号。' : (action === 'delete' ? '账号已删除，历史记录已保留。' : '账号名称已保存。'), 'ok'); }).catch(function (error) { setWizardStatus(error.message, 'error'); }).then(function () { setAccountBusy(false); });
       }
       function renderParsedSummary(values) {
         var found = [];
@@ -909,7 +1023,7 @@
         var values = {
           access_token: token,
           cookie: readCapturedCookie(source),
-          chatgpt_account_id: authClaims.chatgpt_account_id || claims.chatgpt_account_id || '',
+          chatgpt_account_id: readCapturedHeader(source, 'chatgpt-account-id') || authClaims.chatgpt_account_id || claims.chatgpt_account_id || '',
           client_build_number: readCapturedHeader(source, 'oai-client-build-number'),
           client_version: readCapturedHeader(source, 'oai-client-version'),
           device_id: readCapturedHeader(source, 'oai-device-id'),
@@ -925,10 +1039,8 @@
         };
         var found = [];
         Object.keys(fields).forEach(function (key) {
-          if (values[key]) {
-            setValue(fields[key], values[key]);
-            found.push(key);
-          }
+          setValue(fields[key], values[key]);
+          if (values[key]) found.push(key);
         });
         if (!values.access_token && !values.cookie) {
           setWizardStatus('没有识别到 Authorization 或 Cookie，请确认粘贴的是 usage 请求。', 'error');
@@ -936,29 +1048,28 @@
           return null;
         }
         renderParsedSummary(values);
-        setWizardStatus('已识别 ' + found.length + ' 项，点击“识别并覆盖保存”即可更新账号配置。', 'ok');
+        setWizardStatus('已识别 ' + found.length + ' 项，点击“识别并保存账号”即可保存。', 'ok');
         return values;
       }
       function collectConfigBody() {
-        var body = {
-          user_agent: document.getElementById('userAgent').value.trim(),
-          chatgpt_account_id: document.getElementById('accountId').value.trim(),
-          proxy_url: document.getElementById('proxyUrl').value.trim()
-        };
+        var body = {name:accountName.value.trim(), account_id:editingAccount || '', user_agent:document.getElementById('userAgent').value.trim(), chatgpt_account_id:document.getElementById('accountId').value.trim(), fedramp:!!document.getElementById('fedramp').checked};
         if (!body.user_agent) delete body.user_agent;
         if (!body.chatgpt_account_id) delete body.chatgpt_account_id;
         var token = tokenInput.value.trim();
         if (token) body.access_token = token;
         var cookie = cookieInput.value.trim();
-        if (cookie) body.cookie = cookie;
+        body.cookie = cookie;
         [
           ['clientBuildNumber', 'client_build_number'], ['clientVersion', 'client_version'],
           ['deviceId', 'device_id'], ['sessionId', 'session_id'],
           ['clientObservation', 'client_observation'], ['referer', 'referer']
         ].forEach(function (pair) {
           var value = document.getElementById(pair[0]).value.trim();
-          if (value) body[pair[1]] = value;
+          body[pair[1]] = value;
         });
+        if (!editingAccount) {
+          Object.assign(body, draftProxyConfig || {proxy_url:'',proxy_clear_auth:true});
+        }
         return body;
       }
       function setCacheTTLValue(value) {
@@ -968,10 +1079,7 @@
           if (option.value === value) known = true;
         });
         if (!known) {
-          var option = document.createElement('option');
-          option.value = value;
-          option.textContent = '当前值（' + value + '）';
-          cacheTTLInput.appendChild(option);
+          value = '10m0s';
         }
         cacheTTLInput.value = value;
       }
@@ -1104,39 +1212,23 @@
           if (!response.ok) throw new Error(response.status === 401 ? '需要填写管理接口密钥' : '读取失败：API ' + response.status);
           return response.json();
         }).then(function (config) {
-          document.getElementById('userAgent').value = config.user_agent || '';
-          document.getElementById('accountId').value = config.chatgpt_account_id || '';
-          var savedProxyURL = (config.proxy_url || '').trim();
-          setProxyFieldsFromURL(savedProxyURL);
-          setProxyMode(!!savedProxyURL);
-          syncProxyURL();
-          confirmedProxyValue = proxyInput.value.trim();
           setCacheTTLValue(config.cache_ttl || '10m0s');
-          document.getElementById('fedramp').checked = !!config.fedramp;
-          setValue('clientBuildNumber', config.client_build_number);
-          setValue('clientVersion', config.client_version);
-          setValue('deviceId', config.device_id);
-          setValue('sessionId', config.session_id);
-          setValue('clientObservation', config.client_observation);
-          setValue('referer', config.referer);
-          cookieInput.value = '';
-          renderCredentialSummary(config);
+          renderAccountManager(config);
           renderPageAccess(config);
-          if (confirmedProxyValue) {
-            setProxyState('已保存', 'ready');
-            setCredentialAccess(true);
-            setProxyStatus('已加载保存的代理，可继续配置账号凭证。', 'ok');
-          } else {
-            setProxyState('直连已保存', 'ready');
-            setCredentialAccess(true);
-            setProxyStatus('当前使用直连，可继续配置账号凭证。', 'ok');
-          }
           setStatus('配置已读取', 'ok');
+          if (window.location.hash === '#accounts') showTab('credentials');
         }).catch(function (error) { setStatus(error.message, 'error'); });
       }
       proxySchemeInput.addEventListener('change', markProxyDraft);
       proxyHostInput.addEventListener('input', markProxyDraft);
       proxyPortInput.addEventListener('input', markProxyDraft);
+      proxyUsernameInput.addEventListener('input', markProxyDraft);
+      proxyPasswordInput.addEventListener('input', markProxyDraft);
+      proxyAuthEnabledInput.addEventListener('change', function () {
+        proxyAuthFields.hidden = !this.checked;
+        if (!this.checked) proxyPasswordInput.value = '';
+        markProxyDraft();
+      });
       proxyEnabledInput.addEventListener('change', function () {
         if (proxyBusy) return;
         if (proxyEnabledInput.checked) {
@@ -1191,29 +1283,37 @@
         });
       });
       document.getElementById('parseCapture').addEventListener('click', parseCapture);
+      managedAccount.addEventListener('change', function () { renderAccountEditor(this.value); });
+      document.getElementById('newAccount').addEventListener('click', function () { managedAccount.value = ''; renderAccountEditor(''); showTab('proxy'); accountName.focus(); });
+      document.getElementById('renameAccount').addEventListener('click', function () { manageAccount('rename'); });
+      document.getElementById('activateAccount').addEventListener('click', function () { manageAccount('activate'); });
+      document.getElementById('deleteAccount').addEventListener('click', function () { manageAccount('delete'); });
       document.getElementById('testConnection').addEventListener('click', function () {
+        if (accountBusy) return;
         var parsed = parseCapture();
         if (!parsed) return;
         var body = collectConfigBody();
-        var button = document.getElementById('testConnection');
-        button.disabled = true;
-        setWizardStatus('正在测试账号连接，成功后自动覆盖保存…');
-        fetch('api/config/test', { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(body) })
+        if (!body.name) { setWizardStatus('请填写账号名称。', 'error'); return; }
+        var savedID = editingAccount; var previousIDs = accountList.map(function (item) { return item.id; });
+        var testBody = Object.assign({}, body); delete testBody.name;
+        var saveBody = Object.assign({}, body); delete saveBody.account_id;
+        setAccountBusy(true);
+        setWizardStatus('正在测试账号连接，成功后自动保存…');
+        fetch('api/config/test', { method:'POST', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(testBody) })
           .then(function (response) { return parseResponse(response, '账号连接测试失败'); })
           .then(function (result) {
-            return fetch('api/config', { method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(body) })
+            return fetch('api/accounts' + (savedID ? '/' + encodeURIComponent(savedID) : ''), { method:savedID ? 'PUT' : 'POST', headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:JSON.stringify(saveBody) })
               .then(function (response) { return parseResponse(response, '账号凭证保存失败'); })
               .then(function (config) {
-                tokenInput.value = '';
-                cookieInput.value = '';
-                renderCredentialSummary(config);
+                var newAccount = (config.accounts || []).filter(function (item) { return previousIDs.indexOf(item.id) < 0; })[0];
+                renderAccountManager(config, savedID || (newAccount && newAccount.id));
                 var detail = result.plan_type ? '（套餐：' + result.plan_type + '）' : '';
-                setWizardStatus('已识别并覆盖保存账号配置' + detail + '。', 'ok');
+                setWizardStatus('账号已保存' + detail + '。', 'ok');
                 setStatus('账号凭证已更新并立即生效', 'ok');
               });
           })
           .catch(function (error) { setWizardStatus(error.message, 'error'); })
-          .then(function () { button.disabled = false; });
+          .then(function () { setAccountBusy(false); });
       });
       form.addEventListener('submit', function (event) {
         event.preventDefault();

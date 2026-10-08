@@ -10,12 +10,17 @@ OpenAI/ChatGPT OAuth 凭证的准备、Account ID 的确认和 `config.json` 填
 
 本项目的接口不是 OpenAI 官方 API，也不提供聊天补全或 Responses 代理，主要用于：
 
-- 查询当前五小时和七天额度窗口；
+- 查询指定账号或主账号的五小时和七天额度窗口；
+- 管理多个监控账号、读取账号总览和切换页面展示账号；
 - 查询近七天 token、额度、工作区和模型使用统计；
 - 查询公开的 Codex Reset 预测信息；
 - 读取或更新服务端运行配置；
 - 获取前端内置提示音；
 - 在受保护的接口文档页面中调试上述接口。
+
+新增的 `/api/accounts`、`/api/accounts/usage`、`/api/accounts/active` 和账号更新/删除接口，以及 `account_id` 查询参数，见 [多账号监控说明](multi-account.md)。单个账号失败时总览返回逐账号错误，整体仍返回 200。
+
+旧应用调用 `/api/usage`、`/api/usage/analytics` 时无需新增参数，默认固定读取主账号，页面切换不会影响账号或响应格式。主账号优先为 `id=default`，自定义列表没有该 id 时使用第一项。显式传 `account_id` 才选择其他账号并返回账号信息；配置读写和测试省略账号时也使用主账号。
 
 ## 2. 导入 OpenAPI 文件
 
@@ -219,17 +224,17 @@ curl -X POST \
 
 ### 先测试代理
 
-设置页面会先调用这个接口测试代理，再保存代理配置并解锁账号凭证区域。请求体只需要提供代理地址；留空表示测试直连。支持 `http://`、`https://`、`socks5://`，也兼容 `socket5://`。
+设置页面会先调用这个接口测试代理，再保存代理配置并解锁账号凭证区域。请求体可通过 `account_id` 指定账号；省略使用主账号，显式空字符串测试新账号网络草稿。`proxy_url` 省略测试该账号已保存的代理，空字符串测试直连。`proxy_username`、`proxy_password` 可设置认证，省略密码保留该账号已保存的密码，`proxy_clear_auth=true` 清除认证。支持 `http://`、`https://`、`socks5://`，也兼容 `socket5://`。
 
 ```bash
 curl -X POST \
   -u '用户名:密码' \
   -H 'Content-Type: application/json' \
-  -d '{"proxy_url":"http://127.0.0.1:7890"}' \
+  -d '{"account_id":"default","proxy_url":"http://127.0.0.1:7890"}' \
   'http://127.0.0.1:8123/api/config/test-proxy'
 ```
 
-测试成功后，设置页面再通过 `PUT /api/config` 保存 `proxy_url`，之后才进入账号凭证配置步骤。该测试不会写入配置文件。
+测试成功后，设置页面通过 `PUT /api/config` 连同 `account_id` 保存该账号代理；新账号草稿的代理会随 `POST /api/accounts` 一起保存。测试不会写入配置文件或发送 OAuth/Cookie。ChatGPT 返回任意 HTTP 状态（包括 403、429、5xx）均表示网络已连通，响应中的 `status_code` 保留该状态；连接失败返回 502，未知账号返回 404，格式错误返回 400。代理密码仅写入，不在配置和账号列表回显。
 
 ### 获取提示音
 

@@ -1,10 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1689,5 +1694,1147 @@ func TestMiddlewareUsesUpdatedBasicAuthConfig(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("new Basic Auth credentials returned HTTP %d after update, want %d", response.Code, http.StatusNoContent)
+	}
+}
+
+func multiAccountFixture(t *testing.T, transport http.RoundTripper) *UsageService {
+	t.Helper()
+	cfg := Config{ConfigPath: filepath.Join(t.TempDir(), "config.json"), CacheTTL: time.Minute, Accounts: []AccountConfig{
+		{ID: "one", Name: "工作账号", OpenAI: OpenAIConfig{AccessToken: "fixture-oauth-one", Cookie: "fixture-cookie-one", ChatGPTAccountID: "upstream-one"}},
+		{ID: "two", Name: "个人账号", OpenAI: OpenAIConfig{AccessToken: "fixture-oauth-two", Cookie: "fixture-cookie-two", ChatGPTAccountID: "upstream-two"}},
+	}, ActiveAccountID: "one"}
+	if err := normalizeAccounts(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	store, err := OpenUsageHistoryStore(filepath.Join(t.TempDir(), "history.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if transport == nil {
+		transport = roundTripFunc(func(request *http.Request) (*http.Response, error) { return multiAccountUpstreamResponse(request), nil })
+	}
+	return &UsageService{cfg: cfg, historyStore: store, client: &http.Client{Transport: transport}}
+}
+
+func multiAccountUpstreamResponse(request *http.Request) *http.Response {
+	value := 10
+	if request.Header.Get("ChatGPT-Account-Id") == "upstream-two" {
+		value = 70
+	}
+	body := fmt.Sprintf(`{"plan_type":"plus","rate_limit":{"allowed":true,"primary_window":{"used_percent":%d,"limit_window_seconds":18000},"secondary_window":{"used_percent":%d,"limit_window_seconds":604800}}}`, value, value)
+	switch request.URL.Path {
+	case "/backend-api/wham/usage/daily-token-usage-breakdown":
+		body = fmt.Sprintf(`{"data":[{"date":"2026-10-01","product_surface_usage_values":{"codex":%d}}]}`, value)
+	case "/backend-api/wham/analytics/daily-workspace-usage-counts":
+		body = fmt.Sprintf(`{"data":[{"date":"2026-10-01","totals":{"turns":%d,"text_total_tokens":%d}}]}`, value, value*100)
+	}
+	return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}
+}
+
+func TestMultiAccountConfigurationMigrationAndValidation(t *testing.T) {
+	t.Setenv("OPENAI_ACCESS_TOKEN", "")
+	t.Setenv("CHATGPT_ACCOUNT_ID", "")
+	t.Setenv("BASIC_AUTH_ENABLED", "false")
+	tests := []struct {
+		name, content, active string
+		wantError             bool
+	}{
+		{"legacy", `{"openai":{"access_token":"fixture-oauth","chatgpt_account_id":"upstream-one"}}`, "default", false},
+		{"multiple", `{"active_account_id":"two","accounts":[{"id":"one","name":"工作","openai":{"access_token":"fixture-one","chatgpt_account_id":"one"}},{"id":"two","name":"个人","openai":{"access_token":"fixture-two","chatgpt_account_id":"two"}}]}`, "two", false},
+		{"duplicate", `{"accounts":[{"id":"one"},{"id":"one"}]}`, "", true},
+		{"unknown active", `{"active_account_id":"missing","accounts":[{"id":"one"}]}`, "", true},
+		{"invalid id", `{"accounts":[{"id":"../one"}]}`, "", true},
+		{"reserved id", `{"accounts":[{"id":"usage"}]}`, "", true},
+		{"invalid basic auth in setup", `{"basic_auth":{"enabled":true},"accounts":[{"id":"one"}]}`, "", true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.json")
+			if test.name == "invalid basic auth in setup" {
+				t.Setenv("BASIC_AUTH_ENABLED", "")
+				t.Setenv("BASIC_AUTH_USER", "")
+				t.Setenv("BASIC_AUTH_PASSWORD", "")
+			}
+			if err := os.WriteFile(path, []byte(test.content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := loadConfigFile(path, false)
+			if (err != nil) != test.wantError {
+				t.Fatalf("error = %v, wantError %v", err, test.wantError)
+			}
+			if err == nil && cfg.ActiveAccountID != test.active {
+				t.Fatalf("active = %q", cfg.ActiveAccountID)
+			}
+			if err == nil {
+				for _, account := range cfg.Accounts {
+					if account.OpenAI.UserAgent != defaultUserAgent {
+						t.Fatal("missing per-account user agent default")
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestMultiAccountEnvironmentOverrideStaysOnDefault(t *testing.T) {
+	t.Setenv("OPENAI_ACCESS_TOKEN", "fixture-env-token")
+	cfg := Config{Accounts: []AccountConfig{
+		{ID: "default", OpenAI: OpenAIConfig{AccessToken: "fixture-original", ChatGPTAccountID: "original"}},
+		{ID: "two", OpenAI: OpenAIConfig{AccessToken: "fixture-second", ChatGPTAccountID: "second"}},
+	}, ActiveAccountID: "two"}
+	if err := normalizeAccounts(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyEnvironmentConfig(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := normalizeAccounts(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AccessToken != "fixture-env-token" || cfg.Accounts[0].OpenAI.AccessToken != "fixture-env-token" || cfg.ActiveAccountID != "two" {
+		t.Fatal("environment override corrupted the active profile")
+	}
+}
+
+func TestMultiAccountUsageAnalyticsAndCacheIsolation(t *testing.T) {
+	var mu sync.Mutex
+	counts := make(map[string]int)
+	service := multiAccountFixture(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		id := strings.TrimPrefix(request.Header.Get("ChatGPT-Account-Id"), "upstream-")
+		if request.Header.Get("Authorization") != "Bearer fixture-oauth-"+id || request.Header.Get("Cookie") != "fixture-cookie-"+id {
+			t.Error("upstream credential context crossed accounts")
+		}
+		mu.Lock()
+		counts[id+request.URL.Path]++
+		mu.Unlock()
+		return multiAccountUpstreamResponse(request), nil
+	}))
+	dateRange := analyticsDateRange{StartDate: "2026-10-01", EndDate: "2026-10-01"}
+	for _, test := range []struct {
+		id   string
+		used float64
+	}{{"one", 10}, {"two", 70}} {
+		t.Run(test.id, func(t *testing.T) {
+			for index := 0; index < 2; index++ {
+				usage, err := service.GetForAccount(context.Background(), test.id, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if usage.AccountID != test.id || usage.SevenDay.UsedPercent != test.used || usage.FromCache != (index == 1) {
+					t.Fatalf("usage = %+v", usage)
+				}
+				analytics, err := service.GetAnalyticsForAccount(context.Background(), test.id, false, dateRange)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if analytics.AccountID != test.id || analytics.Summary.Turns != int64(test.used) {
+					t.Fatal("analytics crossed accounts")
+				}
+			}
+		})
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	for _, count := range counts {
+		if count != 1 {
+			t.Fatalf("cache missed: counts = %v", counts)
+		}
+	}
+}
+
+func TestMultiAccountHistoryMigrationAndIdenticalTimestamps(t *testing.T) {
+	store, err := OpenUsageHistoryStore(filepath.Join(t.TempDir(), "history.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	at := "2026-10-01T01:00:00Z"
+	if err := store.Insert(ctx, HistoryPoint{At: at, UsedPercent: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ClaimLegacyHistory(ctx, "one"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ClaimLegacyHistory(ctx, "two"); err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.LoadAccount(ctx, "two")
+	if err != nil || len(second) != 0 {
+		t.Fatal("legacy history migrated to another account")
+	}
+	if err := store.InsertAccount(ctx, "two", HistoryPoint{At: at, UsedPercent: 70}); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		id   string
+		used float64
+	}{{"one", 10}, {"two", 70}} {
+		t.Run(test.id, func(t *testing.T) {
+			points, err := store.LoadAccount(ctx, test.id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(points) != 1 || points[0].UsedPercent != test.used {
+				t.Fatalf("points=%+v", points)
+			}
+		})
+	}
+}
+
+func TestMultiAccountCollectorSamplesInactiveAccountsAndIsolatesFallback(t *testing.T) {
+	var mu sync.Mutex
+	failed := false
+	service := multiAccountFixture(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		mu.Lock()
+		fail := failed && request.Header.Get("ChatGPT-Account-Id") == "upstream-one"
+		mu.Unlock()
+		if fail {
+			return &http.Response{StatusCode: 401, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+		}
+		return multiAccountUpstreamResponse(request), nil
+	}))
+	at := time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC)
+	service.collectAllAccountsHistoryAt(context.Background(), at)
+	mu.Lock()
+	failed = true
+	mu.Unlock()
+	service.collectAllAccountsHistoryAt(context.Background(), at.Add(usageHistorySampleInterval))
+	for _, test := range []struct {
+		id    string
+		used  float64
+		stale bool
+	}{{"one", 10, true}, {"two", 70, false}} {
+		t.Run(test.id, func(t *testing.T) {
+			cfg := service.currentConfig()
+			points, err := service.historyStore.LoadAccount(context.Background(), accountHistoryKey(cfg.Accounts[accountIndex(cfg, test.id)]))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(points) != 2 || points[1].UsedPercent != test.used || points[1].Stale != test.stale {
+				t.Fatalf("points=%+v", points)
+			}
+		})
+	}
+	view := service.GetAccountsUsage(context.Background(), true)
+	if view.Accounts[0].Error == "" || !view.Accounts[0].Stale || view.Accounts[0].Usage.SevenDay.UsedPercent != 10 || view.Accounts[1].Error != "" {
+		t.Fatalf("partial failure=%+v", view)
+	}
+}
+
+func TestMultiAccountSwitchDoesNotMixInflightResponse(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	service := multiAccountFixture(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.Header.Get("ChatGPT-Account-Id") == "upstream-one" {
+			once.Do(func() { close(started); <-release })
+		}
+		return multiAccountUpstreamResponse(request), nil
+	}))
+	result := make(chan *UsageResponse, 1)
+	failures := make(chan error, 1)
+	go func() { usage, err := service.Get(context.Background(), false); result <- usage; failures <- err }()
+	<-started
+	if _, err := service.SwitchAccount("two"); err != nil {
+		close(release)
+		t.Fatal(err)
+	}
+	second, err := service.GetForAccount(context.Background(), "two", false)
+	close(release)
+	first := <-result
+	firstErr := <-failures
+	if err != nil || firstErr != nil {
+		t.Fatalf("errors=%v,%v", err, firstErr)
+	}
+	if first.AccountID != "one" || second.AccountID != "two" || second.SevenDay.UsedPercent != 70 {
+		t.Fatal("in-flight response crossed accounts")
+	}
+	cached, err := service.GetForAccount(context.Background(), "two", false)
+	if err != nil || cached.AccountID != "two" || cached.SevenDay.UsedPercent != 70 || !cached.FromCache {
+		t.Fatal("active cache was overwritten")
+	}
+}
+
+func TestMultiAccountManagementPreservesOtherCredentialsAndPersistsSwitch(t *testing.T) {
+	t.Setenv("OPENAI_ACCESS_TOKEN", "")
+	t.Setenv("CHATGPT_ACCOUNT_ID", "")
+	t.Setenv("BASIC_AUTH_ENABLED", "false")
+	service := multiAccountFixture(t, nil)
+	name, token, upstreamID := "备用账号", "fixture-oauth-three", "upstream-three"
+	created, err := service.SaveAccount("", AccountUpdate{Name: &name, ConfigUpdate: ConfigUpdate{AccessToken: &token, ChatGPTAccountID: &upstreamID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created.Accounts) != 3 || created.ActiveAccountID != "one" {
+		t.Fatalf("created=%+v", created)
+	}
+	id := created.Accounts[2].ID
+	if _, err := service.SwitchAccount(id); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := loadConfigFile(service.currentConfig().ConfigPath, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.ActiveAccountID != id || loaded.AccessToken != "fixture-oauth-one" || loaded.Accounts[accountIndex(loaded, id)].OpenAI.AccessToken != token {
+		t.Fatal("switch did not persist all profiles")
+	}
+	name = "已改名"
+	if _, err := service.SaveAccount("two", AccountUpdate{Name: &name}); err != nil {
+		t.Fatal(err)
+	}
+	view, err := service.DeleteAccount(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.ActiveAccountID != "one" || view.Accounts[1].Name != name {
+		t.Fatalf("deleted=%+v", view)
+	}
+	data, _ := json.Marshal(service.ConfigView())
+	for _, secret := range []string{"fixture-oauth-one", "fixture-oauth-two", "fixture-cookie-one", "fixture-cookie-two"} {
+		if strings.Contains(string(data), secret) {
+			t.Fatal("credentials leaked through masked config view")
+		}
+	}
+}
+
+func TestMultiAccountDraftDoesNotInheritActiveCredentials(t *testing.T) {
+	service := multiAccountFixture(t, nil)
+	empty, token := "", "fixture-new-token"
+	for _, test := range []ConfigUpdate{{AccountID: &empty}, {AccountID: &empty, AccessToken: &token}} {
+		if _, err := service.TestConfig(context.Background(), test); err == nil {
+			t.Fatal("incomplete draft inherited active credentials")
+		}
+	}
+}
+
+func TestMultiAccountRoutesAuthenticationAndErrors(t *testing.T) {
+	for _, prefix := range []string{"", "/codex"} {
+		t.Run(prefix, func(t *testing.T) {
+			tests := []struct {
+				method, path, body string
+				status             int
+			}{
+				{"GET", "/api/accounts", "", 200},
+				{"GET", "/api/accounts/usage", "", 200},
+				{"GET", "/api/accounts/usage?force=invalid", "", 400},
+				{"GET", "/api/usage?account_id=missing", "", 404},
+				{"GET", "/api/usage/analytics?account_id=missing", "", 404},
+				{"POST", "/api/config/test", `{"account_id":"missing"}`, 404},
+				{"PUT", "/api/config", `{"account_id":"missing"}`, 404},
+				{"POST", "/api/accounts", `{"name":"备用","access_token":"fixture-three","chatgpt_account_id":"third"}`, 201},
+				{"PUT", "/api/accounts/two", `{"name":"已改名"}`, 200},
+				{"PUT", "/api/accounts/active", `{"account_id":"two"}`, 200},
+				{"PUT", "/api/accounts/active", `{"account_id":"missing"}`, 404},
+				{"DELETE", "/api/accounts/two", "", 200},
+				{"DELETE", "/api/accounts/missing", "", 404},
+			}
+			for _, test := range tests {
+				t.Run(test.method+test.path, func(t *testing.T) {
+					service := multiAccountFixture(t, nil)
+					service.cfg.AppAPIKey = "fixture-management-key"
+					service.cfg.BasePath = prefix
+					server := NewServer(service.cfg, service)
+					for _, authenticate := range []bool{false, true} {
+						request := httptest.NewRequest(test.method, prefix+test.path, strings.NewReader(test.body))
+						if authenticate {
+							request.Header.Set("X-App-API-Key", "fixture-management-key")
+						}
+						response := httptest.NewRecorder()
+						server.handler.ServeHTTP(response, request)
+						want := 401
+						if authenticate {
+							want = test.status
+						}
+						if response.Code != want {
+							t.Fatalf("authenticated=%v status=%d want=%d body=%s", authenticate, response.Code, want, response.Body.String())
+						}
+						if !strings.Contains(response.Header().Get("Cache-Control"), "no-store") {
+							t.Fatal("account API can be cached")
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestMultiAccountCredentialUpdateInvalidatesOnlyTargetCache(t *testing.T) {
+	service := multiAccountFixture(t, nil)
+	for _, id := range []string{"one", "two"} {
+		if _, err := service.GetForAccount(context.Background(), id, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	id, token := "two", "fixture-renewed-token"
+	if _, err := service.UpdateConfig(ConfigUpdate{AccountID: &id, AccessToken: &token}); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		id        string
+		fromCache bool
+	}{{"one", true}, {"two", false}} {
+		t.Run(test.id, func(t *testing.T) {
+			usage, err := service.GetForAccount(context.Background(), test.id, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if usage.FromCache != test.fromCache {
+				t.Fatal("wrong account cache invalidated")
+			}
+		})
+	}
+	if service.currentConfig().ActiveAccountID != "one" {
+		t.Fatal("targeted credential edit changed active account")
+	}
+}
+
+func TestMultiAccountRejectsIdentityChangeAndLastDeletion(t *testing.T) {
+	service := multiAccountFixture(t, nil)
+	upstreamID := "different-upstream"
+	if _, err := service.SaveAccount("two", AccountUpdate{ConfigUpdate: ConfigUpdate{ChatGPTAccountID: &upstreamID}}); err == nil {
+		t.Fatal("identity replacement allowed mixed history")
+	}
+	if _, err := service.UpdateConfig(ConfigUpdate{ChatGPTAccountID: &upstreamID}); err == nil {
+		t.Fatal("legacy config update allowed mixed history")
+	}
+	if _, err := service.DeleteAccount("two"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.DeleteAccount("one"); err != errLastAccount {
+		t.Fatalf("last deletion error=%v", err)
+	}
+}
+
+func TestMultiAccountHistoryRemainsScopedAfterOfflineIdentityChange(t *testing.T) {
+	service := multiAccountFixture(t, nil)
+	service.collectAllAccountsHistoryAt(context.Background(), time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC))
+	cfg := service.currentConfig()
+	cfg.Accounts[0].OpenAI.ChatGPTAccountID = "different-upstream"
+	if err := normalizeAccounts(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a restart with an offline-edited config and the same database.
+	restarted := &UsageService{cfg: cfg, client: service.currentClient(), historyStore: service.historyStore}
+	usage, err := restarted.GetForAccount(context.Background(), "one", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(usage.History) != 0 {
+		t.Fatal("new upstream identity inherited the old timeline")
+	}
+	points, err := service.historyStore.LoadAccount(context.Background(), "one:upstream-one")
+	if err != nil || len(points) != 1 {
+		t.Fatal("old timeline was lost")
+	}
+}
+
+func TestMultiAccountValidationLimits(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		count     int
+		label     string
+		wantError bool
+	}{
+		{"maximum", 32, "账号", false}, {"too many", 33, "账号", true}, {"maximum name", 1, strings.Repeat("账", 80), false}, {"name too long", 1, strings.Repeat("账", 81), true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := Config{}
+			for index := 0; index < test.count; index++ {
+				cfg.Accounts = append(cfg.Accounts, AccountConfig{ID: fmt.Sprintf("profile-%d", index), Name: test.label})
+			}
+			err := normalizeAccounts(&cfg)
+			if (err != nil) != test.wantError {
+				t.Fatalf("error=%v wantError=%v", err, test.wantError)
+			}
+		})
+	}
+}
+
+func TestMultiAccountCanRenameIncompleteSetupProfile(t *testing.T) {
+	cfg := Config{ConfigPath: filepath.Join(t.TempDir(), "config.json"), CacheTTL: defaultCacheTTL}
+	if err := normalizeAccounts(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	service := &UsageService{cfg: cfg}
+	name := "待配置的工作账号"
+	view, err := service.SaveAccount("default", AccountUpdate{Name: &name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.ActiveAccountID != "default" || view.Accounts[0].Name != name || !view.Accounts[0].SetupRequired {
+		t.Fatal("renaming setup account changed its credentials")
+	}
+}
+
+func stringPointer(value string) *string { return &value }
+
+func TestAccountProxyMigrationAndValidation(t *testing.T) {
+	t.Setenv("UPSTREAM_PROXY", "")
+	for _, test := range []struct {
+		name, content string
+		want          []string
+		invalid       bool
+	}{
+		{"legacy single", `{"openai":{},"proxy":{"url":"http://proxy.example:8080"}}`, []string{"http://proxy.example:8080"}, false},
+		{"legacy multiple with explicit direct", `{"active_account_id":"two","proxy":{"url":"http://proxy.example:8080"},"accounts":[{"id":"one"},{"id":"two","proxy":{"url":""}},{"id":"three","proxy":{"url":"socks5://other.example:1080"}}]}`, []string{"http://proxy.example:8080", "", "socks5://other.example:1080"}, false},
+		{"invalid inactive proxy", `{"accounts":[{"id":"one","proxy":{"url":""}},{"id":"two","proxy":{"url":"ftp://invalid.example:21"}}]}`, nil, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.json")
+			if err := os.WriteFile(path, []byte(test.content), 0600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := loadConfigFile(path, false)
+			if (err != nil) != test.invalid {
+				t.Fatalf("load error = %v", err)
+			}
+			if err != nil {
+				return
+			}
+			for i, want := range test.want {
+				if cfg.Accounts[i].Proxy == nil || cfg.Accounts[i].Proxy.URL != want {
+					t.Fatalf("proxy %d = %#v", i, cfg.Accounts[i].Proxy)
+				}
+			}
+			raw, err := marshalConfig(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var stored map[string]json.RawMessage
+			if err := json.Unmarshal(raw, &stored); err != nil {
+				t.Fatal(err)
+			}
+			if _, exists := stored["proxy"]; exists {
+				t.Fatal("new configuration still saves a shared proxy")
+			}
+			if err := persistConfig(cfg); err != nil {
+				t.Fatal(err)
+			}
+			reloaded, err := loadConfigFile(path, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i, want := range test.want {
+				if reloaded.Accounts[i].Proxy.URL != want {
+					t.Fatal("migration did not survive reload")
+				}
+			}
+		})
+	}
+}
+
+func TestProxyAuthenticationUpdates(t *testing.T) {
+	old := "http://alice:fixture-secret@proxy.example:8080"
+	for _, test := range []struct {
+		name, current      string
+		update             ConfigUpdate
+		username, password string
+		direct, invalid    bool
+	}{
+		{name: "omitted preserves", current: old, update: ConfigUpdate{ProxyURL: stringPointer("http://other.example:8081")}, username: "alice", password: "fixture-secret"},
+		{name: "masked round trip preserves", current: old, update: ConfigUpdate{ProxyURL: stringPointer(maskedProxyURL(old))}, username: "alice", password: "fixture-secret"},
+		{name: "special characters", current: old, update: ConfigUpdate{ProxyUsername: stringPointer("test@name"), ProxyPassword: stringPointer(" fixture@:#%/密码 ")}, username: "test@name", password: " fixture@:#%/密码 "},
+		{name: "empty password explicit", current: old, update: ConfigUpdate{ProxyPassword: stringPointer("")}, username: "alice", password: ""},
+		{name: "clear authentication", current: old, update: ConfigUpdate{ProxyClearAuth: true}},
+		{name: "direct", current: old, update: ConfigUpdate{ProxyURL: stringPointer("")}, direct: true},
+		{name: "embedded URL", current: old, update: ConfigUpdate{ProxyURL: stringPointer("socks5://bob:new-fixture@other.example:1080")}, username: "bob", password: "new-fixture"},
+		{name: "new user requires replacement", current: old, update: ConfigUpdate{ProxyUsername: stringPointer("bob")}, invalid: true},
+		{name: "new draft cannot borrow masked password", update: ConfigUpdate{ProxyURL: stringPointer(maskedProxyURL(old))}, invalid: true},
+		{name: "no address", update: ConfigUpdate{ProxyPassword: stringPointer("fixture")}, invalid: true},
+		{name: "conflicting clear", current: old, update: ConfigUpdate{ProxyClearAuth: true, ProxyPassword: stringPointer("fixture")}, invalid: true},
+		{name: "invalid port", update: ConfigUpdate{ProxyURL: stringPointer("http://alice:fixture@proxy.example:99999")}, invalid: true},
+		{name: "invalid path", update: ConfigUpdate{ProxyURL: stringPointer("http://alice:fixture@proxy.example:8080/private")}, invalid: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			raw, err := applyProxyUpdate(test.current, test.update)
+			if (err != nil) != test.invalid {
+				t.Fatalf("error = %v", err)
+			}
+			if err != nil {
+				if strings.Contains(err.Error(), "fixture") {
+					t.Fatal("validation leaked proxy credentials")
+				}
+				return
+			}
+			parsed, err := parseProxyURL(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if test.direct {
+				if parsed != nil {
+					t.Fatal("direct retained proxy")
+				}
+				return
+			}
+			if test.username == "" {
+				if parsed.User != nil {
+					t.Fatal("clear retained authentication")
+				}
+				return
+			}
+			password, _ := parsed.User.Password()
+			if parsed.User.Username() != test.username || password != test.password {
+				t.Fatal("proxy authentication changed unexpectedly")
+			}
+			if test.password != "" && strings.Contains(maskedProxyURL(raw), url.QueryEscape(test.password)) {
+				t.Fatal("masked URL leaked proxy password")
+			}
+		})
+	}
+}
+
+func TestPerAccountProxyUpdatesAndCacheIsolation(t *testing.T) {
+	service := multiAccountFixture(t, nil)
+	for _, id := range []string{"one", "two"} {
+		if _, err := service.GetForAccount(context.Background(), id, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oneBefore, twoBefore := service.accounts["one"], service.accounts["two"]
+	raw := "http://alice:fixture-one@127.0.0.1:18081"
+	view, err := service.UpdateConfig(ConfigUpdate{AccountID: stringPointer("one"), ProxyURL: &raw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !view.ProxyPasswordConfigured || strings.Contains(view.ProxyURL, "fixture-one") {
+		t.Fatal("proxy view is not safely masked")
+	}
+	cfg := service.currentConfig()
+	if cfg.Accounts[1].Proxy.URL != "" {
+		t.Fatal("proxy update leaked to second account")
+	}
+	two, _, err := service.accountService(cfg, "two")
+	if err != nil || two != twoBefore || two.cached == nil {
+		t.Fatal("unrelated account cache invalidated")
+	}
+	one, _, err := service.accountService(cfg, "one")
+	if err != nil || one == oneBefore || one.cached != nil {
+		t.Fatal("changed account kept old runtime/cache")
+	}
+	transport := one.currentClient().Transport.(*http.Transport)
+	chosen, err := transport.Proxy(httptest.NewRequest(http.MethodGet, "https://chatgpt.com/", nil))
+	if err != nil || chosen.String() != raw {
+		t.Fatal("first account did not use its proxy")
+	}
+	twoProxy := "socks5://bob:fixture-two@127.0.0.1:18082"
+	if _, err := service.SaveAccount("two", AccountUpdate{ConfigUpdate: ConfigUpdate{ProxyURL: &twoProxy}}); err != nil {
+		t.Fatal(err)
+	}
+	if service.currentConfig().UpstreamProxy != raw {
+		t.Fatal("editing inactive account changed active proxy")
+	}
+	if _, err := service.SwitchAccount("two"); err != nil {
+		t.Fatal(err)
+	}
+	if service.currentConfig().UpstreamProxy != raw || configForAccount(service.currentConfig(), service.currentConfig().Accounts[1]).UpstreamProxy != twoProxy {
+		t.Fatal("display switch changed the primary proxy or lost the selected proxy")
+	}
+	oneAfter, _, err := service.accountService(service.currentConfig(), "one")
+	if err != nil || oneAfter != one {
+		t.Fatal("switch discarded unchanged proxy runtime")
+	}
+	if _, err := service.SaveAccount("", AccountUpdate{Name: stringPointer("新账号"), ConfigUpdate: ConfigUpdate{AccessToken: stringPointer("fixture-new"), ChatGPTAccountID: stringPointer("upstream-new")}}); err != nil {
+		t.Fatal(err)
+	}
+	cfg = service.currentConfig()
+	if cfg.Accounts[len(cfg.Accounts)-1].Proxy.URL != "" {
+		t.Fatal("new account inherited another account proxy")
+	}
+	persisted, err := loadConfigFile(cfg.ConfigPath, false)
+	if err != nil || persisted.Accounts[0].Proxy.URL != raw || persisted.Accounts[1].Proxy.URL != twoProxy {
+		t.Fatal("account proxies did not persist independently")
+	}
+}
+
+func TestProxyDraftScopeAndRoutes(t *testing.T) {
+	service := multiAccountFixture(t, nil)
+	service.cfg.Accounts[0].Proxy = &ProxyConfig{URL: "http://alice:fixture-one@proxy.example:8080"}
+	service.cfg.Accounts[1].Proxy = &ProxyConfig{URL: "socks5://bob:fixture-two@other.example:1080"}
+	if err := normalizeAccounts(&service.cfg); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name, id, address, username, password string
+		invalid                               bool
+	}{
+		{"inactive saved authentication", "two", "socks5://other.example:1080", "bob", "fixture-two", false},
+		{"active saved authentication", "one", "http://proxy.example:8080", "alice", "fixture-one", false},
+		{"new draft", "", "http://new.example:8080", "", "", false},
+		{"unknown", "missing", "", "", "", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg, err := service.proxyTestConfig(ProxyTestRequest{AccountID: &test.id, ProxyURL: &test.address})
+			if (err != nil) != test.invalid {
+				t.Fatalf("error = %v", err)
+			}
+			if err != nil {
+				return
+			}
+			parsed, _ := parseProxyURL(cfg.UpstreamProxy)
+			if test.username == "" {
+				if parsed.User != nil {
+					t.Fatal("new draft inherited authentication")
+				}
+				return
+			}
+			password, _ := parsed.User.Password()
+			if parsed.User.Username() != test.username || password != test.password {
+				t.Fatal("test uses another account's authentication")
+			}
+		})
+	}
+	raw, _ := json.Marshal(service.AccountsView())
+	if strings.Contains(string(raw), "fixture-one") || strings.Contains(string(raw), "fixture-two") {
+		t.Fatal("account list leaks proxy password")
+	}
+	service.cfg.AppAPIKey = "fixture-admin-key"
+	service.cfg.BasePath = "/codex"
+	server := NewServer(service.cfg, service)
+	for _, test := range []struct {
+		name, body, key string
+		status          int
+	}{
+		{"protected", `{"account_id":"one"}`, "", 401},
+		{"unknown", `{"account_id":"missing"}`, "fixture-admin-key", 404},
+		{"invalid", `{"account_id":"two","proxy_url":"ftp://invalid.example:21"}`, "fixture-admin-key", 400},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/codex/api/config/test-proxy", strings.NewReader(test.body))
+			req.Header.Set("X-App-API-Key", test.key)
+			response := httptest.NewRecorder()
+			server.handler.ServeHTTP(response, req)
+			if response.Code != test.status {
+				t.Fatalf("status = %d, want %d", response.Code, test.status)
+			}
+		})
+	}
+}
+
+func TestProxyEnvironmentOverrideOnlyDefaultAccount(t *testing.T) {
+	t.Setenv("UPSTREAM_PROXY", "http://env.example:8080")
+	cfg := Config{ActiveAccountID: "two", Accounts: []AccountConfig{
+		{ID: "default", Proxy: &ProxyConfig{URL: "http://first.example:8080"}},
+		{ID: "two", Proxy: &ProxyConfig{URL: "socks5://second.example:1080"}},
+	}}
+	if err := normalizeAccounts(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyEnvironmentConfig(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := normalizeAccounts(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Accounts[0].Proxy.URL != "http://env.example:8080" || cfg.UpstreamProxy != "http://env.example:8080" || cfg.Accounts[1].Proxy.URL != "socks5://second.example:1080" {
+		t.Fatal("environment proxy changed the active account instead of default")
+	}
+}
+
+func TestDirectProxyIgnoresProcessProxyEnvironment(t *testing.T) {
+	t.Setenv("HTTPS_PROXY", "http://process.example:8080")
+	client, err := newUpstreamClient("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.Transport.(*http.Transport).Proxy != nil {
+		t.Fatal("direct account uses process-wide proxy")
+	}
+}
+
+func TestProxyConnectivityAcceptsUpstreamBusinessStatus(t *testing.T) {
+	for _, status := range []int{200, 403, 429, 500, 503} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			result := proxyTestResult("http://proxy.example:8080", status)
+			if !result.OK || result.StatusCode != status {
+				t.Fatal("reachable upstream was misreported as proxy failure")
+			}
+		})
+	}
+}
+
+func TestProxyClientsSendAuthentication(t *testing.T) {
+	username, password := "fixture@user", "fixture p@ss:#%"
+	for _, scheme := range []string{"http", "https", "socks5"} {
+		t.Run(scheme, func(t *testing.T) {
+			captured := make(chan string, 1)
+			var address string
+			var certificates *x509.CertPool
+			if scheme == "socks5" {
+				listener, err := net.Listen("tcp", "127.0.0.1:0")
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = listener.Close() })
+				address = "socks5://" + listener.Addr().String()
+				go func() {
+					conn, err := listener.Accept()
+					if err != nil {
+						captured <- "accept failed"
+						return
+					}
+					defer conn.Close()
+					_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+					reader := bufio.NewReader(conn)
+					greeting := make([]byte, 2)
+					if _, err = io.ReadFull(reader, greeting); err != nil {
+						captured <- "greeting failed"
+						return
+					}
+					methods := make([]byte, int(greeting[1]))
+					_, _ = io.ReadFull(reader, methods)
+					_, _ = conn.Write([]byte{5, 2})
+					auth := make([]byte, 2)
+					_, _ = io.ReadFull(reader, auth)
+					user := make([]byte, int(auth[1]))
+					_, _ = io.ReadFull(reader, user)
+					length, _ := reader.ReadByte()
+					pass := make([]byte, int(length))
+					_, _ = io.ReadFull(reader, pass)
+					if string(user) != username || string(pass) != password {
+						captured <- "incorrect SOCKS5 credentials"
+						return
+					}
+					_, _ = conn.Write([]byte{1, 0})
+					command := make([]byte, 4)
+					_, _ = io.ReadFull(reader, command)
+					if command[3] != 3 {
+						captured <- "expected proxy-side hostname resolution"
+						return
+					}
+					hostLength, _ := reader.ReadByte()
+					target := make([]byte, int(hostLength)+2)
+					_, _ = io.ReadFull(reader, target)
+					_, _ = conn.Write([]byte{5, 0, 0, 1, 127, 0, 0, 1, 0, 80})
+					request, err := http.ReadRequest(reader)
+					if err != nil {
+						captured <- "read request failed"
+						return
+					}
+					if request.Header.Get("Proxy-Authorization") != "" {
+						captured <- "proxy credentials forwarded to upstream"
+						return
+					}
+					_, _ = io.WriteString(conn, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK")
+					captured <- "ok"
+				}()
+			} else {
+				handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					expected := "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
+					if r.Header.Get("Proxy-Authorization") != expected {
+						captured <- "incorrect HTTP proxy credentials"
+						w.WriteHeader(407)
+						return
+					}
+					captured <- "ok"
+					_, _ = io.WriteString(w, "OK")
+				})
+				var server *httptest.Server
+				if scheme == "https" {
+					server = httptest.NewTLSServer(handler)
+					certificates = x509.NewCertPool()
+					certificates.AddCert(server.Certificate())
+				} else {
+					server = httptest.NewServer(handler)
+				}
+				t.Cleanup(server.Close)
+				address = server.URL
+			}
+			parsed, _ := url.Parse(address)
+			parsed.User = url.UserPassword(username, password)
+			client, err := newUpstreamClient(parsed.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(client.CloseIdleConnections)
+			if certificates != nil {
+				client.Transport.(*http.Transport).TLSClientConfig = &tls.Config{RootCAs: certificates}
+			}
+			response, err := client.Get("http://upstream.invalid/usage")
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, _ := io.ReadAll(response.Body)
+			_ = response.Body.Close()
+			if response.StatusCode != 200 || string(body) != "OK" {
+				t.Fatal("authenticated proxy request failed")
+			}
+			select {
+			case result := <-captured:
+				if result != "ok" {
+					t.Fatal(result)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("proxy did not receive authenticated request")
+			}
+		})
+	}
+}
+
+func TestInactiveAccountRequestsUseItsAuthenticatedProxy(t *testing.T) {
+	for _, test := range []struct{ name, method, path, body string }{
+		{"credential test", http.MethodPost, "/api/config/test", `{"account_id":"two"}`},
+		{"proxy test", http.MethodPost, "/api/config/test-proxy", `{"account_id":"two"}`},
+		{"usage", http.MethodGet, "/api/usage?account_id=two", ""},
+		{"analytics", http.MethodGet, "/api/usage/analytics?account_id=two", ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var seen []int
+			makeProxy := func(number int) *httptest.Server {
+				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					expected := "Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("fixture-user-%d:fixture-password-%d", number, number)))
+					mu.Lock()
+					if r.Method != http.MethodConnect || r.Host != "chatgpt.com:443" || r.Header.Get("Proxy-Authorization") != expected {
+						seen = append(seen, -1)
+					} else {
+						seen = append(seen, number)
+					}
+					mu.Unlock()
+					// Stop at the local tunnel endpoint: no external connection.
+					w.WriteHeader(http.StatusProxyAuthRequired)
+				}))
+			}
+			first, second := makeProxy(1), makeProxy(2)
+			defer first.Close()
+			defer second.Close()
+			service := multiAccountFixture(t, nil)
+			for i, server := range []*httptest.Server{first, second} {
+				parsed, _ := url.Parse(server.URL)
+				parsed.User = url.UserPassword(fmt.Sprintf("fixture-user-%d", i+1), fmt.Sprintf("fixture-password-%d", i+1))
+				service.cfg.Accounts[i].Proxy = &ProxyConfig{URL: parsed.String()}
+			}
+			if err := normalizeAccounts(&service.cfg); err != nil {
+				t.Fatal(err)
+			}
+			handler := NewServer(service.cfg, service).handler
+			request := httptest.NewRequest(test.method, test.path, strings.NewReader(test.body))
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusBadGateway {
+				t.Fatalf("status = %d, expected local proxy rejection", response.Code)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if len(seen) == 0 {
+				t.Fatal("account request did not reach its proxy")
+			}
+			for _, number := range seen {
+				if number != 2 {
+					t.Fatal("inactive account used the active account proxy or wrong authentication")
+				}
+			}
+			if strings.Contains(response.Body.String(), "fixture-password") {
+				t.Fatal("connection failure leaked proxy password")
+			}
+		})
+	}
+}
+
+func TestPrimaryAccountSelectionIsIndependentOfDisplayedAccount(t *testing.T) {
+	for _, test := range []struct {
+		name            string
+		ids             []string
+		active, primary string
+	}{
+		{"legacy default wins over ordering", []string{"two", "default"}, "two", "default"},
+		{"custom file uses first", []string{"one", "two"}, "two", "one"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := Config{ActiveAccountID: test.active}
+			for _, id := range test.ids {
+				cfg.Accounts = append(cfg.Accounts, AccountConfig{ID: id, OpenAI: OpenAIConfig{AccessToken: "fixture-" + id, ChatGPTAccountID: "upstream-" + id}, Proxy: &ProxyConfig{URL: "http://" + id + ".example:8080"}})
+			}
+			if err := normalizeAccounts(&cfg); err != nil {
+				t.Fatal(err)
+			}
+			if primaryAccountID(cfg) != test.primary || cfg.AccessToken != "fixture-"+test.primary || cfg.UpstreamProxy != "http://"+test.primary+".example:8080" || cfg.ActiveAccountID != test.active {
+				t.Fatal("displayed profile replaced primary runtime")
+			}
+		})
+	}
+}
+
+func TestLegacyApplicationAPIsRemainOnPrimaryAfterDisplaySwitch(t *testing.T) {
+	for _, prefix := range []string{"", "/codex"} {
+		for _, auth := range []string{"app key", "bearer", "basic"} {
+			t.Run(prefix+"/"+auth, func(t *testing.T) {
+				var mu sync.Mutex
+				counts := map[string]int{}
+				service := multiAccountFixture(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+					mu.Lock()
+					counts[r.Header.Get("ChatGPT-Account-Id")+r.URL.Path]++
+					mu.Unlock()
+					return multiAccountUpstreamResponse(r), nil
+				}))
+				service.cfg.Accounts[0].ID = defaultAccountID
+				service.cfg.ActiveAccountID = defaultAccountID
+				service.cfg.BasePath = prefix
+				service.cfg.AppAPIKey = "fixture-legacy-app-key"
+				service.cfg.BasicAuthEnabled = auth == "basic"
+				service.cfg.BasicAuthUsername = "fixture-admin"
+				service.cfg.BasicAuthPassword = "fixture-admin-password"
+				if err := normalizeAccounts(&service.cfg); err != nil {
+					t.Fatal(err)
+				}
+				handler := NewServer(service.cfg, service).handler
+				requestJSON := func(method, path, body string) map[string]json.RawMessage {
+					t.Helper()
+					request := httptest.NewRequest(method, prefix+path, strings.NewReader(body))
+					switch auth {
+					case "app key":
+						request.Header.Set("X-App-API-Key", "fixture-legacy-app-key")
+					case "bearer":
+						request.Header.Set("Authorization", "Bearer fixture-legacy-app-key")
+					case "basic":
+						request.SetBasicAuth("fixture-admin", "fixture-admin-password")
+					}
+					response := httptest.NewRecorder()
+					handler.ServeHTTP(response, request)
+					if response.Code != 200 {
+						t.Fatalf("%s returned HTTP %d", path, response.Code)
+					}
+					var payload map[string]json.RawMessage
+					if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+						t.Fatal(err)
+					}
+					return payload
+				}
+				legacyKeys := map[string]bool{}
+				for _, key := range []string{"source", "plan_type", "email", "rate_limit_allowed", "rate_limit_reached", "rate_limit_reached_type", "credits", "spend_control", "rate_limit_reset_credits", "fetched_at", "from_cache", "five_hour", "seven_day", "history", "weekly_history", "five_hour_history"} {
+					legacyKeys[key] = true
+				}
+				checkUsage := func(path string, want float64, metadata bool) {
+					t.Helper()
+					payload := requestJSON(http.MethodGet, path, "")
+					var window Window
+					if err := json.Unmarshal(payload["seven_day"], &window); err != nil {
+						t.Fatal(err)
+					}
+					if window.UsedPercent != want {
+						t.Fatal("old application request followed displayed account")
+					}
+					if !metadata {
+						for key := range payload {
+							if !legacyKeys[key] {
+								t.Fatalf("legacy usage schema gained field %s", key)
+							}
+						}
+						for _, key := range []string{"source", "fetched_at", "from_cache", "five_hour", "seven_day", "rate_limit_allowed", "rate_limit_reached"} {
+							if _, exists := payload[key]; !exists {
+								t.Fatalf("legacy field %s disappeared", key)
+							}
+						}
+					} else {
+						if _, exists := payload["account_id"]; !exists {
+							t.Fatal("explicit profile response lacks account metadata")
+						}
+					}
+				}
+				checkUsage("/api/usage", 10, false)
+				rootClient := service.currentClient()
+				prediction := &ResetPrediction{}
+				service.resetCached = prediction
+				service.resetCachedAt = time.Now()
+				switched := requestJSON(http.MethodPut, "/api/accounts/active", `{"account_id":"two"}`)
+				if string(switched["primary_account_id"]) != `"default"` || string(switched["active_account_id"]) != `"two"` {
+					t.Fatal("primary or display identity changed unexpectedly")
+				}
+				if service.currentClient() != rootClient || service.resetCached != prediction {
+					t.Fatal("display switch invalidated primary transport or public prediction cache")
+				}
+				checkUsage("/api/usage", 10, false)
+				checkUsage("/api/usage?account_id=", 10, false)
+				checkUsage("/api/usage?force=true", 10, false)
+				checkUsage("/api/usage?account_id=two", 70, true)
+				analytics := requestJSON(http.MethodGet, "/api/usage/analytics?start_date=2026-10-01&end_date=2026-10-01", "")
+				if _, exists := analytics["account_id"]; exists {
+					t.Fatal("legacy analytics gained profile metadata")
+				}
+				if _, exists := analytics["account_name"]; exists {
+					t.Fatal("legacy analytics gained profile metadata")
+				}
+				var summary UsageAnalyticsSummary
+				if err := json.Unmarshal(analytics["summary"], &summary); err != nil {
+					t.Fatal(err)
+				}
+				if summary.Turns != 10 {
+					t.Fatal("legacy analytics followed displayed account")
+				}
+				explicit := requestJSON(http.MethodGet, "/api/usage/analytics?account_id=two&start_date=2026-10-01&end_date=2026-10-01", "")
+				if string(explicit["account_id"]) != `"two"` {
+					t.Fatal("explicit analytics lost account selection")
+				}
+				config := requestJSON(http.MethodGet, "/api/config", "")
+				if string(config["chatgpt_account_id"]) != `"upstream-one"` {
+					t.Fatal("legacy config view followed displayed account")
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				if counts["upstream-one/backend-api/wham/usage"] != 2 || counts["upstream-two/backend-api/wham/usage"] != 1 {
+					t.Fatal("legacy cache/force behavior changed or crossed profiles")
+				}
+			})
+		}
+	}
+}
+
+func TestLegacyDefaultConfigurationUpdatesOnlyPrimary(t *testing.T) {
+	service := multiAccountFixture(t, nil)
+	if _, err := service.SwitchAccount("two"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.UpdateConfig(ConfigUpdate{UserAgent: stringPointer("fixture-primary-agent"), ProxyURL: stringPointer("http://primary.example:8080")}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := service.currentConfig()
+	if cfg.ActiveAccountID != "two" || cfg.Accounts[0].OpenAI.UserAgent != "fixture-primary-agent" || cfg.Accounts[1].OpenAI.UserAgent == "fixture-primary-agent" || cfg.Accounts[1].Proxy.URL != "" {
+		t.Fatal("old config update changed displayed profile instead of primary")
+	}
+	draft, err := service.proxyTestConfig(ProxyTestRequest{})
+	if err != nil || draft.UpstreamProxy != "http://primary.example:8080" || draft.ChatGPTAccountID != "upstream-one" {
+		t.Fatal("old proxy test does not use primary configuration")
+	}
+	if _, err := service.DeleteAccount("one"); err != errPrimaryAccount {
+		t.Fatal("primary account can be silently removed")
+	}
+}
+
+func TestLegacyApplicationErrorStatusAndDisplaySetupRemainCompatible(t *testing.T) {
+	service := multiAccountFixture(t, nil)
+	service.cfg.Accounts[0].ID = defaultAccountID
+	service.cfg.Accounts[0].OpenAI = OpenAIConfig{}
+	service.cfg.ActiveAccountID = "two"
+	if err := normalizeAccounts(&service.cfg); err != nil {
+		t.Fatal(err)
+	}
+	server := NewServer(service.cfg, service)
+	for _, test := range []struct {
+		method, path, body string
+		status             int
+	}{
+		{http.MethodGet, "/api/usage", "", 502},
+		{http.MethodGet, "/api/usage/analytics", "", 502},
+		{http.MethodGet, "/api/usage?force=invalid", "", 400},
+		{http.MethodGet, "/api/usage/analytics?start_date=invalid", "", 400},
+		{http.MethodGet, "/api/usage?account_id=missing", "", 404},
+		{http.MethodGet, "/api/usage?account_id=default", "", 409},
+		{http.MethodDelete, "/api/accounts/default", "", 409},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			request := httptest.NewRequest(test.method, test.path, strings.NewReader(test.body))
+			response := httptest.NewRecorder()
+			server.handler.ServeHTTP(response, request)
+			if response.Code != test.status {
+				t.Fatalf("status=%d want %d", response.Code, test.status)
+			}
+		})
+	}
+	response := httptest.NewRecorder()
+	server.handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
+	if response.Code != 200 || !strings.Contains(response.Body.String(), `id="accountSelect"`) {
+		t.Fatal("ready displayed account was replaced by primary setup wizard")
 	}
 }

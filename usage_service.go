@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,11 @@ import (
 )
 
 type UsageService struct {
+	configUpdateMu        sync.Mutex
+	accountsMu            sync.Mutex
+	accounts              map[string]*UsageService
+	accountID             string
+	historyAccountID      string
 	cfgMu                 sync.RWMutex
 	cfg                   Config
 	clientMu              sync.RWMutex
@@ -42,6 +48,9 @@ type UsageService struct {
 }
 
 func NewUsageService(cfg Config) (*UsageService, error) {
+	if err := normalizeAccounts(&cfg); err != nil {
+		return nil, err
+	}
 	client, err := newUpstreamClient(cfg.UpstreamProxy)
 	if err != nil {
 		return nil, err
@@ -86,6 +95,13 @@ func NewUsageService(cfg Config) (*UsageService, error) {
 		lastSuccessfulHistory = &point
 	}
 	slog.Info("usage history loaded", "database", historyStore.Path(), "raw_points", len(rawHistory), "points", len(history), "weekly_points", len(weeklyHistory), "five_hour_points", len(fiveHourHistory))
+	legacyOwner := primaryAccountID(cfg)
+	legacyAccount := cfg.Accounts[accountIndex(cfg, legacyOwner)]
+	if legacyAccount.OpenAI.ChatGPTAccountID != "" {
+		if err := historyStore.ClaimLegacyHistory(context.Background(), accountHistoryKey(legacyAccount)); err != nil {
+			return nil, fmt.Errorf("assign legacy usage history: %w", err)
+		}
+	}
 	storeReady = true
 	return &UsageService{
 		cfg:                   cfg,
@@ -110,7 +126,7 @@ func newUpstreamClient(proxyURL string) (*http.Client, error) {
 		IdleConnTimeout:       30 * time.Second,
 	}
 	if parsedProxy == nil {
-		transport.Proxy = http.ProxyFromEnvironment
+		transport.Proxy = nil
 	} else if isSOCKS5Proxy(parsedProxy) {
 		var auth *proxy.Auth
 		if parsedProxy.User != nil {
@@ -136,7 +152,7 @@ func buildProxyFunc(raw string) (func(*http.Request) (*url.URL, error), error) {
 		return nil, err
 	}
 	if proxyURL == nil {
-		return http.ProxyFromEnvironment, nil
+		return func(*http.Request) (*url.URL, error) { return nil, nil }, nil
 	}
 	if isSOCKS5Proxy(proxyURL) {
 		// SOCKS5 is installed through Transport.Dial, not Transport.Proxy.
@@ -157,14 +173,26 @@ func parseProxyURL(raw string) (*url.URL, error) {
 		return nil, fmt.Errorf("invalid UPSTREAM_PROXY: use http://, https:// or socks5://host:port")
 	}
 	proxyURL.Scheme = strings.ToLower(proxyURL.Scheme)
+	if proxyURL.Hostname() == "" || proxyURL.Path != "" && proxyURL.Path != "/" || proxyURL.RawQuery != "" || proxyURL.Fragment != "" {
+		return nil, fmt.Errorf("invalid proxy URL: provide only the protocol, host, port and optional credentials")
+	}
+	if port := proxyURL.Port(); port != "" {
+		number, err := strconv.Atoi(port)
+		if err != nil || number < 1 || number > 65535 {
+			return nil, fmt.Errorf("invalid proxy port: use 1–65535")
+		}
+	}
 	switch proxyURL.Scheme {
 	case "http", "https":
 		return proxyURL, nil
 	case "socks5", "socks5h", "socket5":
+		if proxyURL.Port() == "" {
+			return nil, fmt.Errorf("SOCKS5 proxy requires a port")
+		}
 		proxyURL.Scheme = "socks5"
 		return proxyURL, nil
 	default:
-		return nil, fmt.Errorf("invalid UPSTREAM_PROXY scheme %q: use http://, https:// or socks5://host:port", proxyURL.Scheme)
+		return nil, fmt.Errorf("invalid proxy protocol: use http://, https:// or socks5://host:port")
 	}
 }
 
@@ -176,6 +204,9 @@ func isSOCKS5Proxy(proxyURL *url.URL) bool {
 }
 
 func (s *UsageService) Get(ctx context.Context, force bool) (*UsageResponse, error) {
+	if len(s.currentConfig().Accounts) > 0 {
+		return s.GetForAccount(ctx, "", force)
+	}
 	requestStartedAt := time.Now()
 	if !force {
 		if cached := s.getFreshCache(); cached != nil {
@@ -232,9 +263,7 @@ func (s *UsageService) StartHistoryCollector(ctx context.Context) {
 				}
 				return
 			case <-timer.C:
-				if !s.currentConfig().SetupRequired {
-					s.collectUsageHistoryAt(ctx, nextSampleAt)
-				}
+				s.collectAllAccountsHistoryAt(ctx, nextSampleAt)
 			}
 		}
 	}()

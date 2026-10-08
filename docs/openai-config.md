@@ -29,17 +29,17 @@
 2. 按 `F12` 打开开发者工具，切换到 **Network/网络** 面板，在过滤框输入 `usage`。
 3. 刷新页面，在请求列表中找到 `/backend-api/wham/usage`，确认状态码为 `200`。
 4. 右键该请求，选择 **Copy → Copy as cURL (bash)**；也可以选择当前终端对应的 CMD 或 PowerShell 格式。
-5. 将复制的 cURL 粘贴到项目设置页的“粘贴浏览器 Fetch / cURL 请求”编辑框，点击识别并覆盖保存。项目会自动提取 `Authorization`、Cookie、Account ID 和客户端上下文。
+5. 将复制的 cURL 粘贴到项目设置页的“粘贴浏览器 Fetch / cURL 请求”编辑框，点击识别并保存账号。项目会自动提取 `Authorization`、Cookie、Account ID 和客户端上下文。
 6. 如果需要手动核对字段，在 **Headers → Request Headers** 中找到 `Authorization`。它通常形如 `Bearer <token>`，项目配置时只复制 `Bearer ` 后面的 Token，不要把 `Bearer ` 前缀再次写入 `access_token`。
 
 字段对应关系：
 
 | Network 请求字段 | 项目配置字段 | 处理方式 |
 | --- | --- | --- |
-| `Authorization: Bearer <token>` | `openai.access_token` | 只复制 `<token>`，不要复制 `Bearer ` |
-| `chatgpt-account-id: <id>` | `openai.chatgpt_account_id` | 复制 `<id>` 原值 |
+| `Authorization: Bearer <token>` | `accounts[].openai.access_token` | 只复制 `<token>`，不要复制 `Bearer ` |
+| `chatgpt-account-id: <id>` | `accounts[].openai.chatgpt_account_id` | 复制 `<id>` 原值 |
 
-默认情况下只需要上述两个账户字段。如果浏览器中的同一个 `/backend-api/wham/usage` 请求在服务端返回 `401`，而浏览器请求依赖 `credentials: include` 携带 Cookie，可以把浏览器 Network 请求中的完整 Cookie 串配置到 `openai.cookie`。项目只会在服务端向上游发送该 Cookie，不会返回给前端或写入普通请求日志。
+默认情况下只需要上述两个账户字段。如果浏览器中的同一个 `/backend-api/wham/usage` 请求在服务端返回 `401`，而浏览器请求依赖 `credentials: include` 携带 Cookie，可以把浏览器 Network 请求中的完整 Cookie 串配置到 `accounts[].openai.cookie`。项目只会在服务端向上游发送该 Cookie，不会返回给前端或写入普通请求日志。
 
 如果浏览器请求返回 `200`，但项目请求返回 `401` 或 `403`，需要同步当前浏览器请求中的客户端上下文。字段提取和更新步骤见[ChatGPT Web cURL 配置更新指南](browser-curl-config.md)。不要把 `oai-*` 字段拼接进 Cookie，也不要把整段 cURL 原样写入配置文件。
 
@@ -99,37 +99,42 @@ chmod 600 config.json
     "password": "管理密码"
   },
   "cache_ttl": "10m",
-  "openai": {
-    "access_token": "你的 ChatGPT OAuth Access Token",
-    "cookie": "浏览器 Request Headers 中的完整 Cookie（可选）",
-    "chatgpt_account_id": "你的 ChatGPT Account ID",
-    "user_agent": "codex-tui/0.146.0",
-    "fedramp": false
-  },
-  "proxy": {
-    "url": "http://127.0.0.1:7890"
-  }
+  "active_account_id": "default",
+  "accounts": [{
+    "id": "default",
+    "name": "主账号",
+    "proxy": {"url": "http://127.0.0.1:7890"},
+    "openai": {
+      "access_token": "<oauth-access-token>",
+      "cookie": "",
+      "chatgpt_account_id": "<chatgpt-account-id>",
+      "user_agent": "codex-tui/0.146.0 (Ubuntu 22.4.0; x86_64) xterm-256color",
+      "fedramp": false
+    }
+  }]
 }
 ```
 
 上面使用 `0.0.0.0:8123` 是为了演示服务器部署场景；如果不填写 `bind_addr`，项目默认监听 `127.0.0.1:8080`。端口和监听地址请按实际 Nginx、容器或防火墙配置调整。
 
+账号凭证位于 `accounts[].openai`；旧的顶层 `openai` 仍兼容读取为 `default`。旧应用 API 默认固定读取主账号（优先 id=default），不跟随页面展示切换；账号的增删、独立历史与页面切换见 [多账号监控说明](multi-account.md)。环境变量凭证固定覆盖 `default`，其余账号不会被默认展示切换影响。
+
 字段说明：
 
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
-| `openai.access_token` | 是 | ChatGPT OAuth Access Token；服务端保存，前端不读取原文 |
-| `openai.cookie` | 否 | 浏览器 Request Headers 中的完整 Cookie；仅在上游要求浏览器会话时配置 |
-| `openai.chatgpt_account_id` | 是 | 与 Token 对应的 ChatGPT Account ID |
-| `openai.client_build_number` | 否 | 浏览器 `oai-client-build-number` |
-| `openai.client_version` | 否 | 浏览器 `oai-client-version` |
-| `openai.device_id` | 否 | 浏览器 `oai-device-id` |
-| `openai.session_id` | 否 | 当前浏览器会话的 `oai-session-id` |
-| `openai.client_observation` | 否 | 浏览器 `x-oai-is-client-observation` |
-| `openai.referer` | 否 | 上游请求 Referer，例如 ChatGPT 使用情况页面 |
-| `openai.user_agent` | 否 | 上游请求 User-Agent；留空时使用项目默认值 |
-| `openai.fedramp` | 否 | 仅在明确需要 FedRAMP 请求头时设为 `true` |
-| `proxy.url` | 否 | 代理 URL，支持 `http://`、`https://`、`socks5://`；也兼容 `socket5://`。URL 中可以内嵌 `user:password@` 凭证；`GET /api/config` 返回时密码会脱敏为 `****`，完整凭证只保存在配置文件里 |
+| `accounts[].openai.access_token` | 是 | ChatGPT OAuth Access Token；服务端保存，前端不读取原文 |
+| `accounts[].openai.cookie` | 否 | 浏览器 Request Headers 中的完整 Cookie；仅在上游要求浏览器会话时配置 |
+| `accounts[].openai.chatgpt_account_id` | 是 | 与 Token 对应的 ChatGPT Account ID |
+| `accounts[].openai.client_build_number` | 否 | 浏览器 `oai-client-build-number` |
+| `accounts[].openai.client_version` | 否 | 浏览器 `oai-client-version` |
+| `accounts[].openai.device_id` | 否 | 浏览器 `oai-device-id` |
+| `accounts[].openai.session_id` | 否 | 当前浏览器会话的 `oai-session-id` |
+| `accounts[].openai.client_observation` | 否 | 浏览器 `x-oai-is-client-observation` |
+| `accounts[].openai.referer` | 否 | 上游请求 Referer，例如 ChatGPT 使用情况页面 |
+| `accounts[].openai.user_agent` | 否 | 上游请求 User-Agent；留空时使用项目默认值 |
+| `accounts[].openai.fedramp` | 否 | 仅在明确需要 FedRAMP 请求头时设为 `true` |
+| `accounts[].proxy.url` | 否 | 账号独立代理，支持 HTTP、HTTPS、SOCKS5，空字符串表示直连。设置页可单独填写代理用户名和密码；API 返回时密码脱敏，原文仅保存在服务端。旧顶层 `proxy.url` 兼容迁入已有账号 |
 | `bind_addr` | 否 | 服务监听地址，仅通过配置文件或 `BIND_ADDR` 设置；设置页面不提供此项，修改后需重启服务生效 |
 | `base_path` | 否 | 反向代理前缀，仅通过配置文件或 `BASE_PATH` 设置；设置页面不提供此项，修改后需重启服务生效 |
 | `cache_ttl` | 否 | 缓存时长，例如 `10m`、`30s` 或 `0` |
@@ -140,18 +145,18 @@ chmod 600 config.json
 
 | 环境变量 | JSON 配置项 | 说明 |
 | --- | --- | --- |
-| `OPENAI_ACCESS_TOKEN` | `openai.access_token` | ChatGPT OAuth Access Token |
-| `OPENAI_COOKIE` | `openai.cookie` | ChatGPT Web 完整 Cookie 串；服务端仅用于上游请求 |
-| `CHATGPT_ACCOUNT_ID` | `openai.chatgpt_account_id` | ChatGPT Account ID |
-| `OPENAI_CLIENT_BUILD_NUMBER` | `openai.client_build_number` | ChatGPT Web 客户端构建号 |
-| `OPENAI_CLIENT_VERSION` | `openai.client_version` | ChatGPT Web 客户端版本 |
-| `OPENAI_DEVICE_ID` | `openai.device_id` | ChatGPT Web 设备 ID |
-| `OPENAI_SESSION_ID` | `openai.session_id` | 当前 ChatGPT Web 会话 ID |
-| `OPENAI_CLIENT_OBSERVATION` | `openai.client_observation` | ChatGPT Web 客户端观察标识 |
-| `OPENAI_REFERER` | `openai.referer` | 上游请求 Referer |
-| `OPENAI_USER_AGENT` | `openai.user_agent` | 上游请求 User-Agent |
-| `OPENAI_FEDRAMP` | `openai.fedramp` | 是否发送 FedRAMP 请求头 |
-| `UPSTREAM_PROXY` | `proxy.url` | HTTP/HTTPS/SOCKS5 代理地址 |
+| `OPENAI_ACCESS_TOKEN` | `accounts[].openai.access_token` | ChatGPT OAuth Access Token |
+| `OPENAI_COOKIE` | `accounts[].openai.cookie` | ChatGPT Web 完整 Cookie 串；服务端仅用于上游请求 |
+| `CHATGPT_ACCOUNT_ID` | `accounts[].openai.chatgpt_account_id` | ChatGPT Account ID |
+| `OPENAI_CLIENT_BUILD_NUMBER` | `accounts[].openai.client_build_number` | ChatGPT Web 客户端构建号 |
+| `OPENAI_CLIENT_VERSION` | `accounts[].openai.client_version` | ChatGPT Web 客户端版本 |
+| `OPENAI_DEVICE_ID` | `accounts[].openai.device_id` | ChatGPT Web 设备 ID |
+| `OPENAI_SESSION_ID` | `accounts[].openai.session_id` | 当前 ChatGPT Web 会话 ID |
+| `OPENAI_CLIENT_OBSERVATION` | `accounts[].openai.client_observation` | ChatGPT Web 客户端观察标识 |
+| `OPENAI_REFERER` | `accounts[].openai.referer` | 上游请求 Referer |
+| `OPENAI_USER_AGENT` | `accounts[].openai.user_agent` | 上游请求 User-Agent |
+| `OPENAI_FEDRAMP` | `accounts[].openai.fedramp` | 是否发送 FedRAMP 请求头 |
+| `UPSTREAM_PROXY` | `accounts[id=default].proxy.url` | 仅覆盖 default 账号的 HTTP/HTTPS/SOCKS5 代理地址 |
 | `APP_API_KEY` | `app_api_key` | 保护本地 API 接口的管理密钥 |
 | `BASIC_AUTH_ENABLED` | `basic_auth.enabled` | 是否启用 HTTP Basic Auth |
 | `BASIC_AUTH_USER` | `basic_auth.username` | Basic Auth 用户名 |
@@ -162,15 +167,15 @@ chmod 600 config.json
 | `CORS_ORIGIN` | `cors_origin` | 允许的跨域来源，按需设置 |
 | `CONFIG_FILE` | — | 指定 JSON 配置文件路径 |
 
-配置页面按五个标签操作：在“网络代理”页关闭“使用代理”开关即可使用直连并自动保存；开启开关后填写代理协议、IP/主机和端口，再点击“测试并保存，继续配置”。代理 IP 默认是 `127.0.0.1`，端口默认是 `7890`，页面会自动把三项组合成后端使用的代理 URL。连接测试通过后才会解锁账号凭证页；测试失败不会保存代理配置。页面访问 Tab 可以独立配置管理页面的 Basic Auth、App API Key 和缓存时间，其中缓存时间使用预设下拉选项，App API Key 可点击随机生成 `sk-` 前缀密钥并直接复制；提示音 Tab 用于直接试听额度提醒音，配置文件 Tab 用于查看和编辑原始 JSON。这些标签都不受代理步骤限制。
+配置页面上方先选择要编辑的账号，再按五个标签操作：在“网络代理”页关闭“使用代理”开关即可使用直连并自动保存；开启开关后填写代理协议、IP/主机和端口，需要认证时勾选认证选项并填写用户名和密码，再点击“测试并保存，继续配置”。代理 IP 默认是 `127.0.0.1`，端口默认是 `7890`，页面会自动组合代理地址，认证由服务端编码到所选账号的代理 URL。连接测试通过后才会解锁账号凭证页；测试失败不会保存代理配置。页面访问 Tab 可以独立配置管理页面的 Basic Auth、App API Key 和缓存时间，其中缓存时间使用预设下拉选项，App API Key 可点击随机生成 `sk-` 前缀密钥并直接复制；提示音 Tab 用于直接试听额度提醒音，配置文件 Tab 用于查看和编辑原始 JSON。这些标签都不受代理步骤限制。
 
-账号凭证页只保留一个 Fetch/cURL 输入框：把浏览器 Network 中成功的 `/backend-api/wham/usage` 请求复制为 Fetch 或 cURL，粘贴后点击“识别并覆盖保存”。页面会在本机浏览器中解析 `Authorization`、Cookie、Account ID、客户端上下文和 User-Agent，先用临时配置测试额度接口，成功后自动覆盖保存。测试阶段不会写入 `config.json`，页面也不会回显完整 Token 或 Cookie。
+账号凭证页只保留一个 Fetch/cURL 输入框：把浏览器 Network 中成功的 `/backend-api/wham/usage` 请求复制为 Fetch 或 cURL，粘贴后点击“识别并保存账号”。页面会在本机浏览器中解析 `Authorization`、Cookie、Account ID、客户端上下文和 User-Agent，先用临时配置测试额度接口，成功后保存到所选账号。测试阶段不会写入 `config.json`，页面也不会回显完整 Token 或 Cookie。
 
 页面访问 Tab 用于配置管理端的 HTTP Basic Auth：勾选“启用页面 Basic Auth”，填写访问用户名和密码后保存。用户名会显示为当前配置，密码不会返回到浏览器；密码框留空表示保持已有密码不变。启用后，面板、设置页和 API 都需要使用该账号访问；如果刚启用或修改了账号，请刷新页面并使用新的凭证重新认证。
 
 页面不再展示 Token、账号 ID、User-Agent、Cookie 或其他请求上下文表单；这些字段全部以粘贴的 Fetch/cURL 为来源并自动覆盖。User-Agent 也从请求内容中自动识别；如果抓包没有携带该字段，服务端会继续使用已有值或默认值。服务端固定读取额度和统计接口，不提供查询模式切换。保存配置时，在支持的系统上会使用 `0600` 文件权限。
 
-设置页面的代理表单由“使用代理”开关和三项代理参数组成：协议下拉框（HTTP、HTTPS、SOCKS5）、IP/主机和端口。关闭开关时使用直连；开启后 IP 默认 `127.0.0.1`、端口默认 `7890`，保存时会生成类似下面的代理 URL：
+设置页面的代理表单属于当前选择的账号，包含“使用代理”开关、协议下拉框（HTTP、HTTPS、SOCKS5）、IP/主机、端口，以及可选的认证用户名、密码。已保存的密码留空保留，修改用户名时需同时填写新密码；取消认证并保存可清除旧认证。关闭开关时该账号使用直连，并忽略进程级 HTTP_PROXY / HTTPS_PROXY；开启后 IP 默认 `127.0.0.1`、端口默认 `7890`，保存时会生成类似下面的代理 URL：
 
 ```text
 http://192.168.0.21:7890
@@ -204,7 +209,7 @@ http://127.0.0.1:8123/settings
 https://你的域名/codex/settings
 ```
 
-在设置页面按以下顺序操作：测试并保存代理（或确认直连）→ 粘贴成功请求 → 识别并覆盖保存。需要时可切换到“页面访问”配置 Basic Auth，或切换到“提示音”直接试听提醒音。保存接口只返回脱敏后的 `token_hint` 和 Cookie 配置状态，不会回显完整 Token 或 Cookie。
+在设置页面按以下顺序操作：测试并保存代理（或确认直连）→ 粘贴成功请求 → 识别并保存账号。需要时可切换到“页面访问”配置 Basic Auth，或切换到“提示音”直接试听提醒音。保存接口只返回脱敏后的 `token_hint` 和 Cookie 配置状态，不会回显完整 Token 或 Cookie。
 
 浏览器只会把点击“测试连接”或“保存配置”时的字段发送到当前服务端；请确保设置页本身通过 HTTPS、Basic Auth 或管理接口密钥保护。
 
@@ -269,7 +274,7 @@ curl -X POST -u '管理用户名:管理密码' \
 
 ### 返回 401 或 403
 
-通常是 OAuth Token 过期、被撤销、Account ID 不匹配、缺少浏览器 Cookie，或者误填了普通 OpenAI API Key。请确认浏览器请求本身为 `200`，必要时复制完整 Cookie 到 `openai.cookie`，并核对 Account ID。
+通常是 OAuth Token 过期、被撤销、Account ID 不匹配、缺少浏览器 Cookie，或者误填了普通 OpenAI API Key。请确认浏览器请求本身为 `200`，必要时复制完整 Cookie 到 `accounts[].openai.cookie`，并核对 Account ID。
 
 ### 返回 502
 

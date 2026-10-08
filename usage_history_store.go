@@ -69,6 +69,15 @@ CREATE TABLE IF NOT EXISTS quota_history (
     stale INTEGER NOT NULL DEFAULT 0 CHECK (stale IN (0, 1))
 );
 CREATE INDEX IF NOT EXISTS idx_quota_history_sampled_at ON quota_history(sampled_at);
+CREATE TABLE IF NOT EXISTS account_quota_history (
+    account_id TEXT NOT NULL,
+    sampled_at TEXT NOT NULL,
+    used_percent REAL NOT NULL CHECK (used_percent >= 0 AND used_percent <= 100),
+    five_hour_used_percent REAL CHECK (five_hour_used_percent IS NULL OR (five_hour_used_percent >= 0 AND five_hour_used_percent <= 100)),
+    stale INTEGER NOT NULL DEFAULT 0 CHECK (stale IN (0, 1)),
+    PRIMARY KEY (account_id, sampled_at)
+);
+CREATE TABLE IF NOT EXISTS history_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 `); err != nil {
 		return fmt.Errorf("initialize sqlite schema: %w", err)
 	}
@@ -76,14 +85,18 @@ CREATE INDEX IF NOT EXISTS idx_quota_history_sampled_at ON quota_history(sampled
 }
 
 func (s *UsageHistoryStore) Load(ctx context.Context) ([]HistoryPoint, error) {
+	return s.loadHistory(ctx, `SELECT sampled_at, used_percent, five_hour_used_percent, stale FROM quota_history ORDER BY sampled_at ASC, id ASC`)
+}
+
+func (s *UsageHistoryStore) LoadAccount(ctx context.Context, id string) ([]HistoryPoint, error) {
+	return s.loadHistory(ctx, `SELECT sampled_at, used_percent, five_hour_used_percent, stale FROM account_quota_history WHERE account_id = ? ORDER BY sampled_at ASC`, id)
+}
+
+func (s *UsageHistoryStore) loadHistory(ctx context.Context, query string, args ...any) ([]HistoryPoint, error) {
 	if s == nil || s.db == nil {
 		return nil, errors.New("usage history database is not open")
 	}
-	rows, err := s.db.QueryContext(ctx, `
-SELECT sampled_at, used_percent, five_hour_used_percent, stale
-FROM quota_history
-ORDER BY sampled_at ASC, id ASC
-`)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query quota history: %w", err)
 	}
@@ -135,6 +148,56 @@ ON CONFLICT(sampled_at) DO UPDATE SET
 		return fmt.Errorf("insert quota history: %w", err)
 	}
 	return nil
+}
+
+func (s *UsageHistoryStore) InsertAccount(ctx context.Context, id string, point HistoryPoint) error {
+	if s == nil || s.db == nil {
+		return errors.New("usage history database is not open")
+	}
+	if id == "" || strings.TrimSpace(point.At) == "" {
+		return errors.New("account id and history timestamp are required")
+	}
+	var fiveHour any
+	if point.FiveHourUsedPercent != nil {
+		fiveHour = *point.FiveHourUsedPercent
+	}
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO account_quota_history (account_id, sampled_at, used_percent, five_hour_used_percent, stale)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(account_id, sampled_at) DO UPDATE SET
+    used_percent = excluded.used_percent,
+    five_hour_used_percent = excluded.five_hour_used_percent,
+    stale = excluded.stale
+`, id, point.At, point.UsedPercent, fiveHour, boolToSQLiteInt(point.Stale))
+	if err != nil {
+		return fmt.Errorf("insert account quota history: %w", err)
+	}
+	return nil
+}
+
+// ClaimLegacyHistory runs once per database. Subsequent switches, restarts and
+// newly added accounts must never inherit the installation's old timeline.
+func (s *UsageHistoryStore) ClaimLegacyHistory(ctx context.Context, id string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var owner string
+	err = tx.QueryRowContext(ctx, `SELECT value FROM history_metadata WHERE key = 'legacy_account'`).Scan(&owner)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO account_quota_history (account_id, sampled_at, used_percent, five_hour_used_percent, stale) SELECT ?, sampled_at, used_percent, five_hour_used_percent, stale FROM quota_history`, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO history_metadata (key, value) VALUES ('legacy_account', ?)`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *UsageHistoryStore) Import(ctx context.Context, history []HistoryPoint) error {

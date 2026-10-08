@@ -18,6 +18,8 @@ type Window struct {
 }
 
 type UsageResponse struct {
+	AccountID             string         `json:"account_id,omitempty"`
+	AccountName           string         `json:"account_name,omitempty"`
 	Source                string         `json:"source"`
 	PlanType              string         `json:"plan_type,omitempty"`
 	Email                 string         `json:"email,omitempty"`
@@ -74,13 +76,15 @@ const (
 // breakdowns; keeping only the fields needed by the dashboard makes the
 // Android WebView page faster and avoids exposing the raw upstream payload.
 type UsageAnalytics struct {
-	Source    string                `json:"source"`
-	FetchedAt string                `json:"fetched_at"`
-	FromCache bool                  `json:"from_cache"`
-	StartDate string                `json:"start_date"`
-	EndDate   string                `json:"end_date"`
-	Days      []UsageAnalyticsDay   `json:"days"`
-	Summary   UsageAnalyticsSummary `json:"summary"`
+	AccountID   string                `json:"account_id,omitempty"`
+	AccountName string                `json:"account_name,omitempty"`
+	Source      string                `json:"source"`
+	FetchedAt   string                `json:"fetched_at"`
+	FromCache   bool                  `json:"from_cache"`
+	StartDate   string                `json:"start_date"`
+	EndDate     string                `json:"end_date"`
+	Days        []UsageAnalyticsDay   `json:"days"`
+	Summary     UsageAnalyticsSummary `json:"summary"`
 }
 
 const analyticsDateLayout = "2006-01-02"

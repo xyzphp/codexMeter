@@ -45,6 +45,17 @@
     .brand-title { display:block; margin-left:14px; font-size:16px; font-weight:650; letter-spacing:-.2px; }
     .build-badge { display:inline-flex; align-items:center; min-height:22px; margin-left:auto; padding:0 7px; border:1px solid var(--border); border-radius:999px; background:var(--card-muted); color:var(--muted); font:600 8px/1 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:nowrap; }
     .connection { display:none; }
+    .device-account-select { width:150px; max-width:26vw; min-height:30px; margin-left:14px; padding:0 7px; border:1px solid var(--border); border-radius:8px; background:var(--card-muted); color:var(--text); font:inherit; font-size:12px; overflow:hidden; }
+    .device-accounts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:14px; }
+    .device-account { min-width:0; padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--card-muted); }
+    .device-account.active { border-color:var(--accent); }
+    .device-account-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .device-account-head strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .device-account button, .device-accounts-refresh { padding:6px 10px; border:1px solid var(--border); border-radius:8px; background:var(--card); cursor:pointer; }
+    .device-accounts-refresh { margin-left:auto; }
+    .device-account-values { display:flex; justify-content:space-between; gap:8px; margin-top:10px; font-size:12px; }
+    .device-account-meta { margin-top:8px; color:var(--muted); font-size:10px; overflow-wrap:anywhere; }
+    .device-account-meta.error { color:var(--danger); }
     .dot { width:7px; height:7px; border-radius:50%; background:var(--accent); }
     .dot.error { background:var(--danger); }
     .hero { display:flex; align-items:center; justify-content:space-between; gap:12px; flex:0 0 auto; min-height:0; padding:3px 1px 3px; }
@@ -475,6 +486,7 @@
             </svg>
             <span class="brand-title">ChatGPT &amp; Codex</span>
           </button>
+          <select id="accountSelect" class="device-account-select" aria-label="切换监控账号" disabled><option>读取中…</option></select>
           <span class="build-badge" title="版本 {{CODEX_METER_VERSION}} · 完整提交 {{CODEX_METER_COMMIT}} · 构建时间 {{CODEX_METER_BUILD_TIME}}">版本 {{CODEX_METER_VERSION}} · {{CODEX_METER_COMMIT_SHORT}}</span>
           <div class="connection"><i id="statusDot" class="dot"></i><span id="statusText">已连接</span></div>
         </header>
@@ -595,10 +607,12 @@
         <div class="prediction-foot">数据来源：<a href="https://codex-resets.com/" target="_blank" rel="noopener noreferrer">codex-resets.com ↗</a> · 公共预测仅供参考</div>
       </div>
     </section>
+    <section id="accounts" class="screen" aria-label="多账号监控"><div class="card detail-card"><div class="detail-head"><div class="detail-title">多账号监控</div><button id="refreshAccounts" class="device-accounts-refresh" type="button">刷新</button></div><div id="accountsOverview" class="device-accounts" aria-live="polite">读取中…</div></div></section>
     <nav class="nav" aria-label="页面导航">
       <button class="nav-button active" data-screen="overview" type="button">额度</button>
       <button class="nav-button" data-screen="detail" type="button">详情</button>
       <button class="nav-button" data-screen="prediction" type="button">预测</button>
+      <button class="nav-button" data-screen="accounts" type="button">账号</button>
     </nav>
   </main>
   <script>
@@ -614,6 +628,8 @@
       var loading = false;
       var analyticsLoading = false;
       var predictionLoading = false;
+      var selectedAccount = '';
+      var accountsLoading = false;
       var scheduledReset = null;
       var lastAudioAlertBand = null;
       var audioAlertPending = false;
@@ -731,10 +747,9 @@
           return;
         }
         if (!refreshEnabled) return;
-        if (loading) return;
+        if (loading || accountsLoading || analyticsLoading) return;
         if (refreshRemaining <= 0) {
-          loadUsage(true);
-          loadAnalytics(true);
+          refreshAccounts(true);
           loadPrediction(true);
           return;
         }
@@ -1079,8 +1094,8 @@
       function loadAnalytics(force) {
         if (analyticsLoading) return;
         analyticsLoading = true;
-        var endpoint = 'api/usage/analytics' + (force ? '?force=true' : '');
-        fetch(endpoint, { headers: apiHeaders(), credentials:'same-origin', cache:'no-store' }).then(function (response) {
+        var endpoint = accountPath('api/usage/analytics' + (force ? '?force=true' : ''));
+        return fetch(endpoint, { headers: apiHeaders(), credentials:'same-origin', cache:'no-store' }).then(function (response) {
           if (!response.ok) throw new Error(response.status === 401 ? '认证失败，请重新输入 Basic Auth 用户名和密码' : 'API ' + response.status);
           return response.json();
         }).then(function (analytics) {
@@ -1298,7 +1313,7 @@
       function loadUsage(force) {
         if (loading) return;
         loading = true;
-        var endpoint = 'api/usage' + (force ? '?force=true' : '');
+        var endpoint = accountPath('api/usage' + (force ? '?force=true' : ''));
         fetch(endpoint, { headers: apiHeaders(), credentials:'same-origin', cache:'no-store' }).then(function (response) {
           if (!response.ok) throw new Error(response.status === 401 ? '\u8ba4\u8bc1\u5931\u8d25\uff0c\u8bf7\u91cd\u65b0\u8f93\u5165 Basic Auth \u7528\u6237\u540d\u548c\u5bc6\u7801' : 'API ' + response.status); return response.json();
         }).then(function (usage) {
@@ -1311,6 +1326,41 @@
           resetRefreshCountdown();
         });
       }
+      function accountPath(path) { return path + (path.indexOf('?') < 0 ? '?' : '&') + 'account_id=' + encodeURIComponent(selectedAccount); }
+      function clearAccountData() {
+        resetAtMs = 0; fiveHourResetAtMs = 0; resetDurationMs = 0; fiveHourResetDurationMs = 0; lastAudioAlertBand = null; audioAlertPending = false;
+        renderUsage({}, false);
+        showAnalyticsError(new Error('正在读取所选账号…'));
+      }
+      function renderAccounts(view) {
+        var select = byId('accountSelect'); select.textContent = ''; var html = '';
+        (view.accounts || []).forEach(function (account) {
+          var option = document.createElement('option'); option.value = account.id; option.textContent = account.name + (account.primary ? ' · 主账号' : ''); select.appendChild(option);
+          var usage = account.usage || {};
+          function left(window) { return window && isFinite(Number(window.used_percent)) ? formatPercent(clamp(100 - Number(window.used_percent), 0, 100)) + '%' : '—'; }
+          html += '<article class="device-account' + (account.id === selectedAccount ? ' active' : '') + '"><div class="device-account-head"><strong>' + escapeHTML(account.name) + '</strong><button type="button" data-switch-account="' + escapeHTML(account.id) + '"' + (account.id === selectedAccount ? ' disabled' : '') + '>' + (account.id === selectedAccount ? '当前' : '切换') + '</button></div><div class="device-account-values"><span>5 小时剩余 ' + left(usage.five_hour) + '</span><span>本周 ' + left(usage.seven_day) + '</span></div><div class="device-account-meta' + (account.error ? ' error' : '') + '">' + escapeHTML(account.error ? (account.stale ? '最近快照 · ' : '') + account.error : (usage.plan_type || '') + ' · ' + (usage.fetched_at ? formatDate(usage.fetched_at) : '等待数据')) + '</div></article>';
+        });
+        select.value = selectedAccount; byId('accountsOverview').innerHTML = html;
+      }
+      function refreshAccounts(force) {
+        if (accountsLoading || loading || analyticsLoading) return;
+        accountsLoading = true; byId('accountSelect').disabled = true; byId('refreshAccounts').disabled = true;
+        return fetch('api/accounts/usage' + (force ? '?force=true' : ''), {headers:apiHeaders(), credentials:'same-origin', cache:'no-store'}).then(function (response) { if (!response.ok) throw new Error('API ' + response.status); return response.json(); }).then(function (view) {
+          if (selectedAccount && selectedAccount !== view.active_account_id) clearAccountData();
+          selectedAccount = view.active_account_id; renderAccounts(view);
+          var account = (view.accounts || []).filter(function (item) { return item.id === selectedAccount; })[0];
+          if (account && account.usage) { renderUsage(account.usage, force); if (account.error) showError(new Error('最近快照 · ' + account.error)); }
+          else { clearAccountData(); showError(new Error(account && account.error || '账号数据不可用')); }
+          return loadAnalytics(force);
+        }).catch(showError).then(function () { accountsLoading = false; byId('accountSelect').disabled = false; byId('refreshAccounts').disabled = false; resetRefreshCountdown(); });
+      }
+      function switchAccount(id) {
+        if (accountsLoading || loading || analyticsLoading || id === selectedAccount) return;
+        accountsLoading = true; byId('accountSelect').disabled = true; byId('refreshAccounts').disabled = true;
+        fetch('api/accounts/active', {method:'PUT', headers:Object.assign({'Content-Type':'application/json'}, apiHeaders()), credentials:'same-origin', cache:'no-store', body:JSON.stringify({account_id:id})}).then(function (response) { return response.json().then(function (view) { if (!response.ok) throw new Error(view.error || '切换失败'); return view; }); }).then(function (view) {
+          selectedAccount = view.active_account_id; clearAccountData(); accountsLoading = false; refreshAccounts(false);
+        }).catch(function (error) { accountsLoading = false; byId('accountSelect').value = selectedAccount; byId('accountSelect').disabled = false; byId('refreshAccounts').disabled = false; showError(error); });
+      }
       function setTheme(theme) { document.documentElement.setAttribute('data-theme', theme); try { localStorage.setItem('codex-theme', theme); } catch (_) {} }
       function initTheme() {
         var saved = null; try { saved = localStorage.getItem('codex-theme'); } catch (_) {}
@@ -1321,6 +1371,9 @@
       document.getElementById('themeButton').addEventListener('click', function () {
         setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
       });
+      byId('accountSelect').addEventListener('change', function () { switchAccount(this.value); });
+      byId('refreshAccounts').addEventListener('click', function () { refreshAccounts(true); });
+      byId('accountsOverview').addEventListener('click', function (event) { var button = event.target.closest('[data-switch-account]'); if (button) switchAccount(button.getAttribute('data-switch-account')); });
       Array.prototype.forEach.call(document.querySelectorAll('.nav-button'), function (button) {
         function activateScreen() {
           var target = button.getAttribute('data-screen');
@@ -1335,7 +1388,7 @@
         }, false);
         button.addEventListener('click', activateScreen, false);
       });
-      initTheme(); resetRefreshCountdown(); runAudioPreview(); loadUsage(false); loadAnalytics(false); loadPrediction(false); window.setInterval(tickRefreshCountdown, 1000);
+      initTheme(); resetRefreshCountdown(); runAudioPreview(); refreshAccounts(false); loadPrediction(false); window.setInterval(tickRefreshCountdown, 1000);
     }());
   </script>
 </body>

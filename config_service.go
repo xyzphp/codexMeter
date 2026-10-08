@@ -15,28 +15,32 @@ import (
 )
 
 type ConfigView struct {
-	AppAPIKeyConfigured         bool   `json:"app_api_key_configured"`
-	AppAPIKeyHint               string `json:"app_api_key_hint,omitempty"`
-	BasicAuthEnabled            bool   `json:"basic_auth_enabled"`
-	BasicAuthUsername           string `json:"basic_auth_username,omitempty"`
-	BasicAuthPasswordConfigured bool   `json:"basic_auth_password_configured"`
-	ChatGPTAccountID            string `json:"chatgpt_account_id"`
-	UserAgent                   string `json:"user_agent"`
-	FedRAMP                     bool   `json:"fedramp"`
-	TokenConfigured             bool   `json:"token_configured"`
-	TokenHint                   string `json:"token_hint,omitempty"`
-	CookieConfigured            bool   `json:"cookie_configured"`
-	CookieHint                  string `json:"cookie_hint,omitempty"`
-	ClientBuildNumber           string `json:"client_build_number,omitempty"`
-	ClientVersion               string `json:"client_version,omitempty"`
-	DeviceID                    string `json:"device_id,omitempty"`
-	SessionID                   string `json:"session_id,omitempty"`
-	ClientObservation           string `json:"client_observation,omitempty"`
-	Referer                     string `json:"referer,omitempty"`
-	ProxyURL                    string `json:"proxy_url,omitempty"`
-	CacheTTL                    string `json:"cache_ttl"`
-	ConfigFile                  string `json:"config_file"`
-	SetupRequired               bool   `json:"setup_required"`
+	ActiveAccountID             string        `json:"active_account_id"`
+	PrimaryAccountID            string        `json:"primary_account_id"`
+	Accounts                    []AccountView `json:"accounts"`
+	AppAPIKeyConfigured         bool          `json:"app_api_key_configured"`
+	AppAPIKeyHint               string        `json:"app_api_key_hint,omitempty"`
+	BasicAuthEnabled            bool          `json:"basic_auth_enabled"`
+	BasicAuthUsername           string        `json:"basic_auth_username,omitempty"`
+	BasicAuthPasswordConfigured bool          `json:"basic_auth_password_configured"`
+	ChatGPTAccountID            string        `json:"chatgpt_account_id"`
+	UserAgent                   string        `json:"user_agent"`
+	FedRAMP                     bool          `json:"fedramp"`
+	TokenConfigured             bool          `json:"token_configured"`
+	TokenHint                   string        `json:"token_hint,omitempty"`
+	CookieConfigured            bool          `json:"cookie_configured"`
+	CookieHint                  string        `json:"cookie_hint,omitempty"`
+	ClientBuildNumber           string        `json:"client_build_number,omitempty"`
+	ClientVersion               string        `json:"client_version,omitempty"`
+	DeviceID                    string        `json:"device_id,omitempty"`
+	SessionID                   string        `json:"session_id,omitempty"`
+	ClientObservation           string        `json:"client_observation,omitempty"`
+	Referer                     string        `json:"referer,omitempty"`
+	ProxyURL                    string        `json:"proxy_url,omitempty"`
+	ProxyPasswordConfigured     bool          `json:"proxy_password_configured"`
+	CacheTTL                    string        `json:"cache_ttl"`
+	ConfigFile                  string        `json:"config_file"`
+	SetupRequired               bool          `json:"setup_required"`
 }
 
 const maxConfigFileSize = 256 << 10
@@ -59,6 +63,7 @@ func secretHint(raw string) string {
 }
 
 type ConfigUpdate struct {
+	AccountID         *string `json:"account_id"`
 	AppAPIKey         *string `json:"app_api_key"`
 	AccessToken       *string `json:"access_token"`
 	UpstreamCookie    *string `json:"cookie"`
@@ -72,6 +77,9 @@ type ConfigUpdate struct {
 	UserAgent         *string `json:"user_agent"`
 	FedRAMP           *bool   `json:"fedramp"`
 	ProxyURL          *string `json:"proxy_url"`
+	ProxyUsername     *string `json:"proxy_username"`
+	ProxyPassword     *string `json:"proxy_password"`
+	ProxyClearAuth    bool    `json:"proxy_clear_auth"`
 	CacheTTL          *string `json:"cache_ttl"`
 	BasicAuthEnabled  *bool   `json:"basic_auth_enabled"`
 	BasicAuthUsername *string `json:"basic_auth_username"`
@@ -89,7 +97,11 @@ type ConfigTestResult struct {
 }
 
 type ProxyTestRequest struct {
-	ProxyURL string `json:"proxy_url"`
+	AccountID      *string `json:"account_id"`
+	ProxyURL       *string `json:"proxy_url"`
+	ProxyUsername  *string `json:"proxy_username"`
+	ProxyPassword  *string `json:"proxy_password"`
+	ProxyClearAuth bool    `json:"proxy_clear_auth"`
 }
 
 type ProxyTestResult struct {
@@ -101,7 +113,9 @@ type ProxyTestResult struct {
 func (s *UsageService) currentConfig() Config {
 	s.cfgMu.RLock()
 	defer s.cfgMu.RUnlock()
-	return s.cfg
+	cfg := s.cfg
+	cfg.Accounts = append([]AccountConfig(nil), cfg.Accounts...)
+	return cfg
 }
 
 func (s *UsageService) currentClient() *http.Client {
@@ -114,6 +128,9 @@ func (s *UsageService) ConfigView() ConfigView {
 	cfg := s.currentConfig()
 	tokenHint := secretHint(cfg.AccessToken)
 	return ConfigView{
+		ActiveAccountID:             cfg.ActiveAccountID,
+		PrimaryAccountID:            primaryAccountID(cfg),
+		Accounts:                    accountViews(cfg),
 		AppAPIKeyConfigured:         cfg.AppAPIKey != "",
 		AppAPIKeyHint:               secretHint(cfg.AppAPIKey),
 		BasicAuthEnabled:            cfg.BasicAuthEnabled,
@@ -133,6 +150,7 @@ func (s *UsageService) ConfigView() ConfigView {
 		ClientObservation:           cfg.ClientObservation,
 		Referer:                     cfg.UpstreamReferer,
 		ProxyURL:                    maskedProxyURL(cfg.UpstreamProxy),
+		ProxyPasswordConfigured:     proxyPasswordConfigured(cfg.UpstreamProxy),
 		CacheTTL:                    cfg.CacheTTL.String(),
 		ConfigFile:                  cfg.ConfigPath,
 		SetupRequired:               cfg.SetupRequired,
@@ -140,6 +158,8 @@ func (s *UsageService) ConfigView() ConfigView {
 }
 
 func (s *UsageService) UpdateConfig(update ConfigUpdate) (ConfigView, error) {
+	s.configUpdateMu.Lock()
+	defer s.configUpdateMu.Unlock()
 	old := s.currentConfig()
 	next, err := applyConfigUpdateForSave(old, update)
 	if err != nil {
@@ -158,19 +178,34 @@ func (s *UsageService) UpdateConfig(update ConfigUpdate) (ConfigView, error) {
 }
 
 func (s *UsageService) activateConfig(old, next Config) error {
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+	s.analyticsRefreshMu.Lock()
+	defer s.analyticsRefreshMu.Unlock()
+	s.resetRefreshMu.Lock()
+	defer s.resetRefreshMu.Unlock()
+	var client *http.Client
 	if next.UpstreamProxy != old.UpstreamProxy {
-		client, err := newUpstreamClient(next.UpstreamProxy)
+		var err error
+		client, err = newUpstreamClient(next.UpstreamProxy)
 		if err != nil {
 			return err
 		}
-		s.clientMu.Lock()
-		s.client = client
-		s.clientMu.Unlock()
 	}
 
 	s.cfgMu.Lock()
+	s.clientMu.Lock()
+	if client != nil {
+		s.client = client
+	}
 	s.cfg = next
+	s.clientMu.Unlock()
 	s.cfgMu.Unlock()
+	if openAIConfigFromConfig(old) == openAIConfigFromConfig(next) && old.UpstreamProxy == next.UpstreamProxy && old.CacheTTL == next.CacheTTL {
+		// Switching the displayed account or editing another profile must not
+		// replace the primary client's public prediction cache.
+		return nil
+	}
 
 	// A changed credential, request context, proxy, or cache policy must not
 	// reuse an earlier account snapshot.
@@ -204,11 +239,36 @@ func applyConfigUpdate(old Config, update ConfigUpdate) (Config, error) {
 }
 
 func applyConfigUpdateForSave(old Config, update ConfigUpdate) (Config, error) {
-	return applyConfigUpdateWithMode(old, update, old.SetupRequired)
+	allowIncomplete := old.SetupRequired
+	id := primaryAccountID(old)
+	if update.AccountID != nil {
+		id = strings.TrimSpace(*update.AccountID)
+	}
+	if index := accountIndex(old, id); index >= 0 {
+		allowIncomplete = configForAccount(old, old.Accounts[index]).SetupRequired
+	}
+	return applyConfigUpdateWithMode(old, update, allowIncomplete)
 }
 
 func applyConfigUpdateWithMode(old Config, update ConfigUpdate, allowIncomplete bool) (Config, error) {
 	next := old
+	next.Accounts = append([]AccountConfig(nil), old.Accounts...)
+	selectedIndex := -1
+	if len(next.Accounts) > 0 {
+		id := primaryAccountID(next)
+		if update.AccountID != nil {
+			id = strings.TrimSpace(*update.AccountID)
+		}
+		selectedIndex = accountIndex(next, id)
+		if selectedIndex < 0 {
+			return Config{}, errAccountNotFound
+		}
+		setOpenAIConfig(&next, next.Accounts[selectedIndex].OpenAI)
+		if next.Accounts[selectedIndex].Proxy != nil {
+			next.UpstreamProxy = next.Accounts[selectedIndex].Proxy.URL
+		}
+		allowIncomplete = allowIncomplete && next.SetupRequired
+	}
 	if update.AppAPIKey != nil {
 		next.AppAPIKey = strings.TrimSpace(*update.AppAPIKey)
 	}
@@ -248,9 +308,11 @@ func applyConfigUpdateWithMode(old Config, update ConfigUpdate, allowIncomplete 
 	if update.FedRAMP != nil {
 		next.FedRAMP = *update.FedRAMP
 	}
-	if update.ProxyURL != nil {
-		next.UpstreamProxy = strings.TrimSpace(*update.ProxyURL)
+	proxyURL, err := applyProxyUpdate(next.UpstreamProxy, update)
+	if err != nil {
+		return Config{}, err
 	}
+	next.UpstreamProxy = proxyURL
 	if update.CacheTTL != nil {
 		ttl, err := time.ParseDuration(strings.TrimSpace(*update.CacheTTL))
 		if err != nil || ttl < 0 {
@@ -277,6 +339,19 @@ func applyConfigUpdateWithMode(old Config, update ConfigUpdate, allowIncomplete 
 		return Config{}, errors.New("basic_auth_username and basic_auth_password are required when Basic Auth is enabled")
 	}
 	next.SetupRequired = next.AccessToken == "" || next.ChatGPTAccountID == ""
+	if selectedIndex >= 0 {
+		previousID := old.Accounts[selectedIndex].OpenAI.ChatGPTAccountID
+		if previousID != "" && previousID != next.ChatGPTAccountID {
+			return Config{}, errors.New("Account ID 已改变，请新增账号以保留独立历史")
+		}
+		// Legacy config updates affect the selected profile, without changing
+		// the default account or discarding any of the other credentials.
+		next.Accounts[selectedIndex].OpenAI = openAIConfigFromConfig(next)
+		next.Accounts[selectedIndex].Proxy = &ProxyConfig{URL: next.UpstreamProxy}
+		if err := normalizeAccounts(&next); err != nil {
+			return Config{}, err
+		}
+	}
 	return next, nil
 }
 
@@ -289,37 +364,46 @@ func cookieHint(raw string) string {
 	return fmt.Sprintf("已配置（%d 项）", count)
 }
 
-// maskedProxyURL hides an embedded proxy password so the config view never
-// echoes proxy credentials. Scheme, host, port and username stay visible so
-// the settings page can still show the connection details; proxies with
-// credentials are maintained through the config file editor, which the
-// settings page already treats as the source of truth for the raw value.
+// maskedProxyURL hides passwords, including percent-encoded special characters.
 func maskedProxyURL(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ""
 	}
-	parsed, err := url.Parse(raw)
-	if err != nil || parsed.User == nil {
+	parsed, err := parseProxyURL(raw)
+	if err != nil {
+		return "****"
+	}
+	if parsed.User == nil {
 		return raw
 	}
 	if _, hasPassword := parsed.User.Password(); !hasPassword {
 		return raw
 	}
-	// url.UserPassword escapes the mask characters on String(), so splice the
-	// masked password into the original URL text instead of re-serializing.
-	prefix := parsed.Scheme + "://"
-	rest := strings.TrimPrefix(raw, prefix)
-	colonIndex := strings.Index(rest, ":")
-	atIndex := strings.LastIndex(rest, "@")
-	if colonIndex < 0 || atIndex < 0 || colonIndex > atIndex {
-		return raw
-	}
-	return prefix + rest[:colonIndex] + ":****" + rest[atIndex:]
+	username := url.User(parsed.User.Username()).String()
+	parsed.User = nil
+	return strings.Replace(parsed.String(), "://", "://"+username+":****@", 1)
 }
 
 func (s *UsageService) TestConfig(ctx context.Context, update ConfigUpdate) (ConfigTestResult, error) {
 	current := s.currentConfig()
+	if update.AccountID != nil && strings.TrimSpace(*update.AccountID) == "" {
+		// An explicitly empty account_id tests a new draft, with no inherited
+		// token, Cookie or browser context from the active account.
+		current.Accounts = nil
+		current.UpstreamProxy = ""
+		setOpenAIConfig(&current, OpenAIConfig{UserAgent: defaultUserAgent})
+	} else if len(current.Accounts) > 0 {
+		id := primaryAccountID(current)
+		if update.AccountID != nil {
+			id = strings.TrimSpace(*update.AccountID)
+		}
+		index := accountIndex(current, id)
+		if index < 0 {
+			return ConfigTestResult{}, errAccountNotFound
+		}
+		current = configForAccount(current, current.Accounts[index])
+	}
 	draft, err := applyConfigUpdate(current, update)
 	if err != nil {
 		return ConfigTestResult{}, err
@@ -328,6 +412,7 @@ func (s *UsageService) TestConfig(ctx context.Context, update ConfigUpdate) (Con
 	if err != nil {
 		return ConfigTestResult{}, err
 	}
+	defer client.CloseIdleConnections()
 	var upstream whamUsageResponse
 	if err := s.queryWhamJSONWithClient(ctx, draft, "https://chatgpt.com/backend-api/wham/usage", &upstream, client); err != nil {
 		return ConfigTestResult{}, fmt.Errorf("连接 OpenAI 失败：%w", err)
@@ -356,16 +441,54 @@ func (s *UsageService) TestConfig(ctx context.Context, update ConfigUpdate) (Con
 }
 
 func (s *UsageService) TestProxy(ctx context.Context, rawProxyURL string) (ProxyTestResult, error) {
-	client, err := newUpstreamClient(rawProxyURL)
+	cfg := s.currentConfig()
+	cfg.UpstreamProxy = rawProxyURL
+	return s.testProxyWithConfig(ctx, cfg)
+}
+
+func (s *UsageService) proxyTestConfig(input ProxyTestRequest) (Config, error) {
+	cfg := s.currentConfig()
+	if input.AccountID != nil && strings.TrimSpace(*input.AccountID) == "" {
+		cfg.Accounts = nil
+		cfg.UpstreamProxy = ""
+		setOpenAIConfig(&cfg, OpenAIConfig{UserAgent: defaultUserAgent})
+	} else if len(cfg.Accounts) > 0 {
+		id := primaryAccountID(cfg)
+		if input.AccountID != nil {
+			id = strings.TrimSpace(*input.AccountID)
+		}
+		index := accountIndex(cfg, id)
+		if index < 0 {
+			return Config{}, errAccountNotFound
+		}
+		cfg = configForAccount(cfg, cfg.Accounts[index])
+	} else if input.AccountID != nil && *input.AccountID != defaultAccountID {
+		return Config{}, errAccountNotFound
+	}
+	proxyURL, err := applyProxyUpdate(cfg.UpstreamProxy, ConfigUpdate{
+		ProxyURL: input.ProxyURL, ProxyUsername: input.ProxyUsername,
+		ProxyPassword: input.ProxyPassword, ProxyClearAuth: input.ProxyClearAuth,
+	})
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.UpstreamProxy = proxyURL
+	return cfg, nil
+}
+
+func (s *UsageService) testProxyWithConfig(ctx context.Context, cfg Config) (ProxyTestResult, error) {
+	client, err := newUpstreamClient(cfg.UpstreamProxy)
 	if err != nil {
 		return ProxyTestResult{}, err
 	}
+	defer client.CloseIdleConnections()
+	client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://chatgpt.com/", nil)
 	if err != nil {
 		return ProxyTestResult{}, fmt.Errorf("create proxy test request: %w", err)
 	}
-	request.Header.Set("User-Agent", s.currentConfig().UserAgent)
+	request.Header.Set("User-Agent", cfg.UserAgent)
 
 	response, err := client.Do(request)
 	if err != nil {
@@ -374,16 +497,19 @@ func (s *UsageService) TestProxy(ctx context.Context, rawProxyURL string) (Proxy
 	defer response.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
 
-	if response.StatusCode >= http.StatusInternalServerError {
-		return ProxyTestResult{}, fmt.Errorf("代理已连通，但上游返回 HTTP %d", response.StatusCode)
-	}
+	return proxyTestResult(cfg.UpstreamProxy, response.StatusCode), nil
+}
 
+func proxyTestResult(rawProxyURL string, statusCode int) ProxyTestResult {
 	message := proxyTestSuccessMessage(rawProxyURL)
+	if statusCode < 200 || statusCode >= 400 {
+		message = fmt.Sprintf("%s（ChatGPT 返回 HTTP %d）", message, statusCode)
+	}
 	return ProxyTestResult{
 		OK:         true,
 		Message:    message,
-		StatusCode: response.StatusCode,
-	}, nil
+		StatusCode: statusCode,
+	}
 }
 
 func proxyTestSuccessMessage(rawProxyURL string) string {
@@ -404,18 +530,16 @@ func fileConfigFromConfig(cfg Config) fileConfig {
 	stored.BasicAuth.Enabled = cfg.BasicAuthEnabled
 	stored.BasicAuth.Username = cfg.BasicAuthUsername
 	stored.BasicAuth.Password = cfg.BasicAuthPassword
-	stored.OpenAI.AccessToken = cfg.AccessToken
-	stored.OpenAI.Cookie = cfg.UpstreamCookie
-	stored.OpenAI.ChatGPTAccountID = cfg.ChatGPTAccountID
-	stored.OpenAI.ClientBuildNumber = cfg.ClientBuildNumber
-	stored.OpenAI.ClientVersion = cfg.ClientVersion
-	stored.OpenAI.DeviceID = cfg.DeviceID
-	stored.OpenAI.SessionID = cfg.SessionID
-	stored.OpenAI.ClientObservation = cfg.ClientObservation
-	stored.OpenAI.Referer = cfg.UpstreamReferer
-	stored.OpenAI.UserAgent = cfg.UserAgent
-	stored.OpenAI.FedRAMP = cfg.FedRAMP
-	stored.Proxy.URL = cfg.UpstreamProxy
+	if len(cfg.Accounts) > 0 {
+		stored.Accounts = append([]AccountConfig(nil), cfg.Accounts...)
+		stored.ActiveAccountID = cfg.ActiveAccountID
+	} else {
+		account := openAIConfigFromConfig(cfg)
+		stored.OpenAI = &account
+	}
+	if len(cfg.Accounts) == 0 {
+		stored.Proxy = &ProxyConfig{URL: cfg.UpstreamProxy}
+	}
 	return stored
 }
 
@@ -496,6 +620,8 @@ func (s *UsageService) ReadConfigFile() (ConfigFileView, error) {
 }
 
 func (s *UsageService) UpdateConfigFile(content string) (ConfigFileView, error) {
+	s.configUpdateMu.Lock()
+	defer s.configUpdateMu.Unlock()
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return ConfigFileView{}, errors.New("config content cannot be empty")
@@ -529,6 +655,12 @@ func (s *UsageService) UpdateConfigFile(content string) (ConfigFileView, error) 
 		return ConfigFileView{}, err
 	}
 	next.ConfigPath = current.ConfigPath
+	for _, account := range current.Accounts {
+		index := accountIndex(next, account.ID)
+		if index >= 0 && account.OpenAI.ChatGPTAccountID != "" && account.OpenAI.ChatGPTAccountID != next.Accounts[index].OpenAI.ChatGPTAccountID {
+			return ConfigFileView{}, errors.New("Account ID 已改变，请使用新的账号 id 以保留独立历史")
+		}
+	}
 	if _, err := buildProxyFunc(next.UpstreamProxy); err != nil {
 		return ConfigFileView{}, err
 	}

@@ -17,6 +17,9 @@ func (s *UsageService) GetAnalytics(ctx context.Context, force bool) (*UsageAnal
 }
 
 func (s *UsageService) GetAnalyticsRange(ctx context.Context, force bool, dateRange analyticsDateRange) (*UsageAnalytics, error) {
+	if len(s.currentConfig().Accounts) > 0 {
+		return s.GetAnalyticsForAccount(ctx, "", force, dateRange)
+	}
 	cacheKey := dateRange.key()
 	if !force {
 		if cached := s.getFreshAnalyticsCache(cacheKey); cached != nil {
@@ -226,6 +229,9 @@ func newWhamRequest(ctx context.Context, endpoint string, cfg Config) (*http.Req
 	// the path of the primary usage endpoint.
 	request.Host = "chatgpt.com"
 	request.Header.Set("Authorization", "Bearer "+cfg.AccessToken)
+	if cfg.ChatGPTAccountID != "" {
+		request.Header.Set("ChatGPT-Account-Id", cfg.ChatGPTAccountID)
+	}
 	if cfg.UpstreamCookie != "" {
 		request.Header.Set("Cookie", cfg.UpstreamCookie)
 	}

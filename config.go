@@ -12,6 +12,8 @@ import (
 )
 
 type Config struct {
+	Accounts          []AccountConfig
+	ActiveAccountID   string
 	BindAddr          string
 	BasePath          string
 	BasicAuthEnabled  bool
@@ -37,32 +39,20 @@ type Config struct {
 }
 
 type fileConfig struct {
-	BindAddr  string `json:"bind_addr"`
-	BasePath  string `json:"base_path"`
-	AppAPIKey string `json:"app_api_key"`
-	BasicAuth struct {
+	Accounts        []AccountConfig `json:"accounts,omitempty"`
+	ActiveAccountID string          `json:"active_account_id,omitempty"`
+	BindAddr        string          `json:"bind_addr"`
+	BasePath        string          `json:"base_path"`
+	AppAPIKey       string          `json:"app_api_key"`
+	BasicAuth       struct {
 		Enabled  bool   `json:"enabled"`
 		Username string `json:"username"`
 		Password string `json:"password"`
 	} `json:"basic_auth"`
-	CacheTTL   string `json:"cache_ttl"`
-	CORSOrigin string `json:"cors_origin"`
-	OpenAI     struct {
-		AccessToken       string `json:"access_token"`
-		Cookie            string `json:"cookie"`
-		ChatGPTAccountID  string `json:"chatgpt_account_id"`
-		ClientBuildNumber string `json:"client_build_number"`
-		ClientVersion     string `json:"client_version"`
-		DeviceID          string `json:"device_id"`
-		SessionID         string `json:"session_id"`
-		ClientObservation string `json:"client_observation"`
-		Referer           string `json:"referer"`
-		UserAgent         string `json:"user_agent"`
-		FedRAMP           bool   `json:"fedramp"`
-	} `json:"openai"`
-	Proxy struct {
-		URL string `json:"url"`
-	} `json:"proxy"`
+	CacheTTL   string        `json:"cache_ttl"`
+	CORSOrigin string        `json:"cors_origin"`
+	OpenAI     *OpenAIConfig `json:"openai,omitempty"`
+	Proxy      *ProxyConfig  `json:"proxy,omitempty"` // Legacy installation-wide proxy.
 }
 
 func loadConfig() (Config, error) {
@@ -99,6 +89,9 @@ func loadConfigFile(configPath string, requireComplete bool) (Config, error) {
 		}
 		configFileMissing = true
 	}
+	if err := normalizeAccounts(&cfg); err != nil {
+		return Config{}, err
+	}
 
 	// First-run containers mount an empty configuration directory. Create a
 	// credential-free file immediately so the settings page can update it in
@@ -112,13 +105,19 @@ func loadConfigFile(configPath string, requireComplete bool) (Config, error) {
 	if err := applyEnvironmentConfig(&cfg); err != nil {
 		return Config{}, err
 	}
+	if err := normalizeAccounts(&cfg); err != nil {
+		return Config{}, err
+	}
 	basePath, err := normalizeBasePath(cfg.BasePath)
 	if err != nil {
 		return Config{}, err
 	}
 	cfg.BasePath = basePath
 
-	if cfg.AccessToken == "" || cfg.ChatGPTAccountID == "" {
+	if cfg.BasicAuthEnabled && (cfg.BasicAuthUsername == "" || cfg.BasicAuthPassword == "") {
+		return Config{}, errors.New("BASIC_AUTH_USER and BASIC_AUTH_PASSWORD are required when Basic Auth is enabled")
+	}
+	if cfg.SetupRequired {
 		if requireComplete {
 			if cfg.AccessToken == "" {
 				return Config{}, errors.New("OPENAI_ACCESS_TOKEN is required")
@@ -127,9 +126,6 @@ func loadConfigFile(configPath string, requireComplete bool) (Config, error) {
 		}
 		cfg.SetupRequired = true
 		return cfg, nil
-	}
-	if cfg.BasicAuthEnabled && (cfg.BasicAuthUsername == "" || cfg.BasicAuthPassword == "") {
-		return Config{}, errors.New("BASIC_AUTH_USER and BASIC_AUTH_PASSWORD are required when Basic Auth is enabled")
 	}
 	return cfg, nil
 }
@@ -168,6 +164,8 @@ func resolveConfigPath(configPath string) (string, error) {
 }
 
 func applyFileConfig(cfg *Config, stored fileConfig) {
+	cfg.Accounts = append([]AccountConfig(nil), stored.Accounts...)
+	cfg.ActiveAccountID = strings.TrimSpace(stored.ActiveAccountID)
 	if stored.BindAddr != "" {
 		cfg.BindAddr = stored.BindAddr
 	}
@@ -189,40 +187,10 @@ func applyFileConfig(cfg *Config, stored fileConfig) {
 	if stored.CORSOrigin != "" {
 		cfg.CORSOrigin = strings.TrimSpace(stored.CORSOrigin)
 	}
-	if stored.OpenAI.FedRAMP {
-		cfg.FedRAMP = true
+	if stored.OpenAI != nil && len(stored.Accounts) == 0 {
+		setOpenAIConfig(cfg, *stored.OpenAI)
 	}
-	if stored.OpenAI.AccessToken != "" {
-		cfg.AccessToken = strings.TrimSpace(stored.OpenAI.AccessToken)
-	}
-	if stored.OpenAI.Cookie != "" {
-		cfg.UpstreamCookie = strings.TrimSpace(stored.OpenAI.Cookie)
-	}
-	if stored.OpenAI.ChatGPTAccountID != "" {
-		cfg.ChatGPTAccountID = strings.TrimSpace(stored.OpenAI.ChatGPTAccountID)
-	}
-	if stored.OpenAI.ClientBuildNumber != "" {
-		cfg.ClientBuildNumber = strings.TrimSpace(stored.OpenAI.ClientBuildNumber)
-	}
-	if stored.OpenAI.ClientVersion != "" {
-		cfg.ClientVersion = strings.TrimSpace(stored.OpenAI.ClientVersion)
-	}
-	if stored.OpenAI.DeviceID != "" {
-		cfg.DeviceID = strings.TrimSpace(stored.OpenAI.DeviceID)
-	}
-	if stored.OpenAI.SessionID != "" {
-		cfg.SessionID = strings.TrimSpace(stored.OpenAI.SessionID)
-	}
-	if stored.OpenAI.ClientObservation != "" {
-		cfg.ClientObservation = strings.TrimSpace(stored.OpenAI.ClientObservation)
-	}
-	if stored.OpenAI.Referer != "" {
-		cfg.UpstreamReferer = strings.TrimSpace(stored.OpenAI.Referer)
-	}
-	if stored.OpenAI.UserAgent != "" {
-		cfg.UserAgent = strings.TrimSpace(stored.OpenAI.UserAgent)
-	}
-	if stored.Proxy.URL != "" {
+	if stored.Proxy != nil && stored.Proxy.URL != "" {
 		cfg.UpstreamProxy = strings.TrimSpace(stored.Proxy.URL)
 	}
 	if stored.CacheTTL != "" {
@@ -233,6 +201,28 @@ func applyFileConfig(cfg *Config, stored fileConfig) {
 }
 
 func applyEnvironmentConfig(cfg *Config) error {
+	// Legacy OPENAI_* variables always belong to the stable default profile.
+	// Switching the active account must never overwrite another profile on restart.
+	previousActive := cfg.ActiveAccountID
+	environmentProxy := strings.TrimSpace(os.Getenv("UPSTREAM_PROXY")) != ""
+	environmentAccount := false
+	for _, name := range []string{"OPENAI_ACCESS_TOKEN", "OPENAI_COOKIE", "CHATGPT_ACCOUNT_ID", "OPENAI_USER_AGENT", "OPENAI_FEDRAMP", "OPENAI_CLIENT_BUILD_NUMBER", "OPENAI_CLIENT_VERSION", "OPENAI_DEVICE_ID", "OPENAI_SESSION_ID", "OPENAI_CLIENT_OBSERVATION", "OPENAI_REFERER"} {
+		if strings.TrimSpace(os.Getenv(name)) != "" {
+			environmentAccount = true
+			break
+		}
+	}
+	if (environmentAccount || environmentProxy) && len(cfg.Accounts) > 0 {
+		index := accountIndex(*cfg, defaultAccountID)
+		if index < 0 {
+			cfg.Accounts = append(cfg.Accounts, AccountConfig{ID: defaultAccountID, Name: "环境变量账号", OpenAI: OpenAIConfig{UserAgent: defaultUserAgent}})
+			index = len(cfg.Accounts) - 1
+		}
+		setOpenAIConfig(cfg, cfg.Accounts[index].OpenAI)
+		if cfg.Accounts[index].Proxy != nil {
+			cfg.UpstreamProxy = cfg.Accounts[index].Proxy.URL
+		}
+	}
 	overrideString := func(target *string, name string) {
 		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
 			*target = value
@@ -276,6 +266,16 @@ func applyEnvironmentConfig(cfg *Config) error {
 			return fmt.Errorf("invalid USAGE_CACHE_TTL %q", raw)
 		}
 		cfg.CacheTTL = ttl
+	}
+	if (environmentAccount || environmentProxy) && len(cfg.Accounts) > 0 {
+		index := accountIndex(*cfg, defaultAccountID)
+		if environmentAccount {
+			cfg.Accounts[index].OpenAI = openAIConfigFromConfig(*cfg)
+		}
+		if environmentProxy {
+			cfg.Accounts[index].Proxy = &ProxyConfig{URL: cfg.UpstreamProxy}
+		}
+		cfg.ActiveAccountID = previousActive
 	}
 	return nil
 }
