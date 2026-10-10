@@ -1140,7 +1140,7 @@ func TestDailyUsageAnalyticsUsesBothEndpoints(t *testing.T) {
 			queries = append(queries, request.URL.Query())
 			body := `{"data":[]}`
 			if request.URL.Path == "/backend-api/wham/usage/daily-token-usage-breakdown" {
-				body = fmt.Sprintf(`{"data":[{"date":"%s","product_surface_usage_values":{"desktop_app":12.5},"models":[{"model":"gpt-5.6-luna","speed":"standard","credits":10},{"model":"gpt-5.6-luna","speed":"fast","credits":2.5}]}]}`, testDate)
+				body = fmt.Sprintf(`{"group_by":"day","units":"percent","data":[{"date":"%s","product_surface_usage_values":{"desktop_app":12.5},"models":[{"model":"gpt-5.6-luna","speed":"standard","credits":10},{"model":"gpt-5.6-luna","speed":"fast","credits":2.5}],"attribution":[{"model":"gpt-5.6-luna","surface":"desktop_app","thread_source":"chat","turn_trigger":"manual","value":12.5}]}]}`, testDate)
 			}
 			if request.URL.Path == "/backend-api/wham/analytics/daily-workspace-usage-counts" {
 				body = fmt.Sprintf(`{"data":[{"date":"%s","totals":{"users":1,"threads":2,"turns":3,"credits":12.5,"uncached_text_input_tokens":10,"cached_text_input_tokens":20,"text_output_tokens":30,"text_total_tokens":60}}]}`, testDate)
@@ -1165,6 +1165,41 @@ func TestDailyUsageAnalyticsUsesBothEndpoints(t *testing.T) {
 	}
 	if len(analytics.Days) != 7 || analytics.Days[6].Date != testDate || analytics.Days[6].TokenUsagePercent != 12.5 || analytics.Days[6].Turns != 3 || analytics.Days[6].TextTotalTokens != 60 || len(analytics.Days[6].Models) != 1 || analytics.Days[6].Models[0].Model != "gpt-5.6-luna" || analytics.Days[6].Models[0].UsagePercent != 12.5 {
 		t.Fatalf("unexpected analytics payload: %#v", analytics)
+	}
+}
+
+func TestDailyTokenAttributionFallback(t *testing.T) {
+	raw := `{"group_by":"day","units":"percent","data":[{"date":"2026-10-03","product_surface_usage_values":{"desktop_app":0},"models":[{"model":"gpt-zero","speed":"standard","credits":0}],"attribution":[{"model":"gpt-5.6-luna","surface":"web","thread_source":"chat","turn_trigger":"manual","value":5},{"model":"gpt-5.6-luna","surface":"cli","thread_source":"terminal","turn_trigger":"manual","value":2.5},{"model":"gpt-5.7","surface":"vscode","thread_source":"ide","turn_trigger":"tool","value":4}]}]}`
+	var envelope dailyTokenUsageEnvelope
+	if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
+		t.Fatalf("decode current daily token usage response: %v", err)
+	}
+	if envelope.GroupBy != "day" || envelope.Units != "percent" || len(envelope.Data) != 1 || len(envelope.Data[0].Attribution) != 3 {
+		t.Fatalf("unexpected decoded daily token usage response: %#v", envelope)
+	}
+
+	dateRange := analyticsDateRange{StartDate: "2026-10-03", EndDate: "2026-10-03"}
+	analytics := mergeUsageAnalyticsAtRange(envelope.Data, nil, dateRange, time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC))
+	day := analytics.Days[0]
+	if day.TokenUsagePercent != 11.5 || day.Credits != 11.5 || len(day.Models) != 2 {
+		t.Fatalf("unexpected attribution fallback: %#v", day)
+	}
+	if day.Models[0].Model != "gpt-5.6-luna" || day.Models[0].UsagePercent != 7.5 || day.Models[1].Model != "gpt-5.7" || day.Models[1].UsagePercent != 4 {
+		t.Fatalf("unexpected attribution model aggregation: %#v", day.Models)
+	}
+}
+
+func TestDailyTokenUsageLegacyResponseStillDecodes(t *testing.T) {
+	var envelope dailyTokenUsageEnvelope
+	raw := `{"data":[{"date":"2026-10-03","product_surface_usage_values":{"desktop_app":12.5},"models":[{"model":"gpt-5.6-luna","speed":"standard","credits":12.5}]}]}`
+	if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
+		t.Fatalf("decode legacy daily token usage response: %v", err)
+	}
+	dateRange := analyticsDateRange{StartDate: "2026-10-03", EndDate: "2026-10-03"}
+	analytics := mergeUsageAnalyticsAtRange(envelope.Data, nil, dateRange, time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC))
+	day := analytics.Days[0]
+	if day.TokenUsagePercent != 12.5 || len(day.Models) != 1 || day.Models[0].Model != "gpt-5.6-luna" || day.Models[0].UsagePercent != 12.5 {
+		t.Fatalf("unexpected legacy analytics: %#v", day)
 	}
 }
 

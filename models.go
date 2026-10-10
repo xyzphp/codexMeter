@@ -168,19 +168,30 @@ type UsageAnalyticsSummary struct {
 }
 
 type dailyTokenUsageEnvelope struct {
-	Data []dailyTokenUsagePoint `json:"data"`
+	Data    []dailyTokenUsagePoint `json:"data"`
+	GroupBy string                 `json:"group_by,omitempty"`
+	Units   string                 `json:"units,omitempty"`
 }
 
 type dailyTokenUsagePoint struct {
-	Date                      string             `json:"date"`
-	ProductSurfaceUsageValues map[string]float64 `json:"product_surface_usage_values"`
-	Models                    []dailyTokenModel  `json:"models"`
+	Date                      string                  `json:"date"`
+	ProductSurfaceUsageValues map[string]float64      `json:"product_surface_usage_values"`
+	Models                    []dailyTokenModel       `json:"models"`
+	Attribution               []dailyTokenAttribution `json:"attribution,omitempty"`
 }
 
 type dailyTokenModel struct {
 	Model   string  `json:"model"`
 	Speed   string  `json:"speed"`
 	Credits float64 `json:"credits"`
+}
+
+type dailyTokenAttribution struct {
+	Model        string  `json:"model"`
+	Surface      string  `json:"surface"`
+	ThreadSource string  `json:"thread_source"`
+	TurnTrigger  string  `json:"turn_trigger"`
+	Value        float64 `json:"value"`
 }
 
 type dailyWorkspaceUsageEnvelope struct {

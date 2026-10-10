@@ -129,8 +129,21 @@ func mergeUsageAnalyticsAtRange(tokenUsage []dailyTokenUsagePoint, workspaceUsag
 	for _, date := range dates {
 		tokenPoint := tokenByDate[date]
 		workspacePoint := workspaceByDate[date]
+		attributionTotal := sumAttributionValues(tokenPoint.Attribution)
 		tokenPercent := sumUsagePercent(tokenPoint.ProductSurfaceUsageValues)
 		tokenCredits := sumTokenCredits(tokenPoint.Models)
+		if tokenPercent == 0 {
+			tokenPercent = attributionTotal
+		}
+		if tokenCredits == 0 {
+			tokenCredits = attributionTotal
+		}
+		models := aggregateTokenModels(tokenPoint.Models)
+		if sumTokenCredits(tokenPoint.Models) == 0 {
+			if attributionModels := aggregateAttributionModels(tokenPoint.Attribution); len(attributionModels) > 0 {
+				models = attributionModels
+			}
+		}
 		day := UsageAnalyticsDay{
 			Date:                    date,
 			TokenUsagePercent:       tokenPercent,
@@ -142,7 +155,7 @@ func mergeUsageAnalyticsAtRange(tokenUsage []dailyTokenUsagePoint, workspaceUsag
 			CachedTextInputTokens:   workspacePoint.Totals.CachedTextInputTokens,
 			TextOutputTokens:        workspacePoint.Totals.TextOutputTokens,
 			TextTotalTokens:         workspacePoint.Totals.TextTotalTokens,
-			Models:                  aggregateTokenModels(tokenPoint.Models),
+			Models:                  models,
 		}
 		if day.TokenUsagePercent == 0 {
 			day.TokenUsagePercent = tokenCredits
@@ -179,6 +192,14 @@ func sumTokenCredits(models []dailyTokenModel) float64 {
 	return total
 }
 
+func sumAttributionValues(attribution []dailyTokenAttribution) float64 {
+	var total float64
+	for _, item := range attribution {
+		total += item.Value
+	}
+	return total
+}
+
 func dailyUsageEndpoint(endpoint string, dateRange analyticsDateRange, workspaceUser bool) (string, error) {
 	parsed, err := url.Parse(endpoint)
 	if err != nil {
@@ -203,6 +224,27 @@ func aggregateTokenModels(models []dailyTokenModel) []UsageAnalyticsModel {
 			name = "unknown"
 		}
 		byModel[name] += model.Credits
+	}
+	names := make([]string, 0, len(byModel))
+	for name := range byModel {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	result := make([]UsageAnalyticsModel, 0, len(names))
+	for _, name := range names {
+		result = append(result, UsageAnalyticsModel{Model: name, UsagePercent: byModel[name]})
+	}
+	return result
+}
+
+func aggregateAttributionModels(attribution []dailyTokenAttribution) []UsageAnalyticsModel {
+	byModel := make(map[string]float64, len(attribution))
+	for _, item := range attribution {
+		name := strings.TrimSpace(item.Model)
+		if name == "" {
+			name = "unknown"
+		}
+		byModel[name] += item.Value
 	}
 	names := make([]string, 0, len(byModel))
 	for name := range byModel {
