@@ -39,10 +39,12 @@
     .quota-view-switch button { min-height:32px; padding:0 10px; border:0; border-radius:5px; background:transparent; color:var(--muted); font:inherit; font-size:12px; cursor:pointer; }
     .quota-view-switch button[aria-pressed="true"] { background:var(--card); color:var(--accent); box-shadow:0 1px 3px rgba(0,0,0,.08); }
     .quota-view-switch button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
-    #poolQuota { flex:1 1 auto; min-height:0; overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; }
-    .pool-coverage { margin-top:3px; color:var(--muted); font-size:11px; line-height:1.5; }
+    /* Keep the overview out of scrolling layers that blur text in legacy WebViews. */
+    #poolQuota { flex:0 0 auto; min-height:0; }
+    #poolQuota .meta-subline { margin-top:0; }
+    .pool-coverage { white-space:nowrap; }
     .pool-coverage.incomplete { color:var(--danger); }
-    .pool-status, .pool-members { margin-top:8px; color:var(--muted); font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
+    .pool-status { color:var(--danger); }
     @media (max-width:600px) { .quota-view-switch button { padding:0 6px; font-size:11px; } }
     .detail-card { padding:14px 18px 16px; overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
     .detail-card::-webkit-scrollbar { width:4px; }
@@ -575,14 +577,12 @@
           </div>
           <div class="rule"></div>
           <div class="meta-grid">
-            <div class="meta"><div id="poolFiveTotalLabel" class="meta-label">5小时剩余总量</div><div id="poolFiveFormula" class="meta-value">—</div><div class="meta-subline"><span>号池已用</span><strong id="poolFiveUsed">—%</strong></div><div id="poolFiveCoverage" class="pool-coverage">等待数据</div></div>
-            <div class="meta"><div id="poolWeekTotalLabel" class="meta-label">本周剩余总量</div><div id="poolWeekFormula" class="meta-value">—</div><div class="meta-subline"><span>号池已用</span><strong id="poolWeekUsed">—%</strong></div><div id="poolWeekCoverage" class="pool-coverage">等待数据</div></div>
+            <div class="meta"><div id="poolFiveTotalLabel" class="meta-label">5小时剩余总量</div><div id="poolFiveFormula" class="meta-value">—</div><div class="meta-subline"><span id="poolFiveCoverage" class="pool-coverage">已用</span><strong id="poolFiveUsed">—%</strong></div></div>
+            <div class="meta"><div id="poolWeekTotalLabel" class="meta-label">本周剩余总量</div><div id="poolWeekFormula" class="meta-value">—</div><div class="meta-subline"><span id="poolWeekCoverage" class="pool-coverage">已用</span><strong id="poolWeekUsed">—%</strong></div></div>
           </div>
-          <div id="poolStatus" class="pool-status" role="status">正在读取号池…</div>
-          <div id="poolMembers" class="pool-members">—</div>
         </div>
         <div class="refresh-status" aria-label="自动刷新倒计时">
-          <div class="refresh-head"><span id="refreshLabel">自动刷新</span><strong id="refreshCountdown">05:00</strong></div>
+          <div class="refresh-head"><span id="refreshLabel">自动刷新</span><span id="poolStatus" class="pool-status" role="status" hidden></span><strong id="refreshCountdown">05:00</strong></div>
           <div class="refresh-track"><div id="refreshBar" class="refresh-bar"></div></div>
         </div>
       </div>
@@ -706,6 +706,7 @@
       var selectedAccount = '';
       var accountChoices = [];
       var preferredQuotaView = 'single';
+      var poolStatusMessage = '';
       try { if (localStorage.getItem('codex-quota-view') === 'pool') preferredQuotaView = 'pool'; } catch (_) {}
       var accountsLoading = false;
       var accountSwitching = false;
@@ -808,7 +809,11 @@
       }
       function renderRefreshCountdown() {
         var policy = getRefreshPolicy();
+        var showPoolStatus = !byId('poolQuota').hidden && !!poolStatusMessage;
         setText('refreshLabel', policy.label);
+        byId('refreshLabel').hidden = showPoolStatus;
+        byId('poolStatus').hidden = !showPoolStatus;
+        setText('poolStatus', poolStatusMessage);
         setText('refreshCountdown', refreshEnabled ? formatCountdown(refreshRemaining) : '暂停');
         var refreshBar = byId('refreshBar');
         if (refreshBar) {
@@ -1418,6 +1423,7 @@
         byId('quotaViewSwitch').hidden = !multiple; byId('poolQuota').hidden = !pooled;
         document.querySelector('.overview-card').classList.toggle('pool-mode', pooled);
         Array.prototype.forEach.call(byId('quotaViewSwitch').querySelectorAll('button'), function (button) { button.setAttribute('aria-pressed', String(button.getAttribute('data-quota-view') === (pooled ? 'pool' : 'single'))); });
+        renderRefreshCountdown();
       }
       function renderPoolWindow(window, prefix, label) {
         window = window || {};
@@ -1431,15 +1437,15 @@
         setText(prefix + 'TotalLabel', label + (!complete && count ? '已知剩余总量' : '剩余总量'));
         setText(prefix + 'Formula', count ? formatPercent(window.remaining_total_percent) + ' / ' + formatPercent(window.capacity_percent) : '—');
         setText(prefix + 'Used', complete ? formatPercent(window.used_percent) + '%' : '—%');
-        setText(prefix + 'Coverage', count ? '已读取 ' + (window.available_accounts || 0) + '/' + count + ' 个账号' + (window.stale_accounts ? ' · 含 ' + window.stale_accounts + ' 个最近快照' : '') + (!complete ? ' · 数据不完整' : '') : '暂无号池成员');
+        var coverage = count ? (!complete ? '数据不完整 ' + (window.available_accounts || 0) + '/' + count : '已用') : '暂无号池成员';
+        if (window.stale_accounts) coverage += ' · 快照 ' + window.stale_accounts;
+        setText(prefix + 'Coverage', coverage);
         setClass(prefix + 'Coverage', 'pool-coverage' + (!complete || window.stale_accounts ? ' incomplete' : ''));
       }
       function renderPoolQuota(view) {
         var pool = view.aggregate || {};
         renderPoolWindow(pool.five_hour, 'poolFive', '5小时'); renderPoolWindow(pool.seven_day, 'poolWeek', '本周');
-        setText('poolStatus', pool.fetched_at ? '号池 ' + pool.account_count + ' 个账号 · 汇总 ' + formatDate(pool.fetched_at) : '聚合数据不可用，请刷新');
-        var members = accountChoices.filter(function (account) { return (pool.account_ids || []).indexOf(account.id) >= 0; }).map(function (account) { return account.name; });
-        setText('poolMembers', '号池成员：' + (members.join('、') || '未选择'));
+        poolStatusMessage = pool.fetched_at ? '' : '聚合数据不可用，请刷新';
       }
       function renderAccounts(view) {
         accountChoices = view.accounts || [];
@@ -1486,7 +1492,7 @@
           if (account && account.usage) { renderUsage(account.usage, force); if (account.error) showError(new Error('最近快照 · ' + account.error)); }
           else { clearAccountData(); showError(new Error(account && account.error || '账号数据不可用')); }
           return loadAnalytics(force);
-        }).catch(function (error) { setText('poolStatus', '号池刷新失败，请重试（已有数据未更新）'); showError(error); }).then(function () { accountsLoading = false; setAccountControlsBusy(false); resetRefreshCountdown(); });
+        }).catch(function (error) { poolStatusMessage = '刷新失败 · 数据未更新'; showError(error); }).then(function () { accountsLoading = false; setAccountControlsBusy(false); resetRefreshCountdown(); });
       }
       function switchAccount(id) {
         if (accountsLoading || loading || analyticsLoading || id === selectedAccount) return;

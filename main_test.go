@@ -310,8 +310,17 @@ func TestQuotaPageConfigurationEntriesAndSharedDeviceComponents(t *testing.T) {
 	}{
 		{
 			name: "device", page: indexHTML,
-			required:  []string{`id="quotaViewSwitch"`, `id="poolQuota"`, `id="poolFiveUsed"`, `id="poolWeekUsed"`},
-			forbidden: []string{`href="settings`, `.pool-window`, `.pool-grid`, `class="pool-formula"`},
+			required: []string{
+				`id="quotaViewSwitch"`, `id="poolQuota"`, `id="poolFiveUsed"`, `id="poolWeekUsed"`,
+				`#poolQuota { flex:0 0 auto; min-height:0; }`,
+				`<span id="poolFiveCoverage" class="pool-coverage">已用</span>`,
+				`<span id="poolWeekCoverage" class="pool-coverage">已用</span>`,
+				`id="poolStatus" class="pool-status" role="status" hidden`,
+			},
+			forbidden: []string{
+				`href="settings`, `.pool-window`, `.pool-grid`, `class="pool-formula"`,
+				`id="poolMembers"`, `号池成员：`, `.pool-members`,
+			},
 		},
 		{
 			name: "browser", page: browserHTML,
@@ -332,6 +341,9 @@ func TestQuotaPageConfigurationEntriesAndSharedDeviceComponents(t *testing.T) {
 			}
 			if test.name == "device" && strings.Count(page, `class="hero quota-hero"`) != 2 {
 				t.Error("single and pooled quota views must share the quota hero layout")
+			}
+			if test.name == "device" && strings.Index(page, `id="poolStatus"`) < strings.Index(page, `class="refresh-status"`) {
+				t.Error("pooled quota errors must reuse the refresh footer instead of expanding the overview")
 			}
 		})
 	}
