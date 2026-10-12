@@ -313,6 +313,9 @@ func TestQuotaPageConfigurationEntriesAndSharedDeviceComponents(t *testing.T) {
 			required: []string{
 				`id="quotaViewSwitch"`, `id="poolQuota"`, `id="poolFiveUsed"`, `id="poolWeekUsed"`,
 				`#poolQuota { flex:0 0 auto; min-height:0; }`,
+				`--quota-column-gap:16px;`, `grid-column-gap:var(--quota-column-gap);`,
+				`.meta-grid { gap:0; flex:0 0 auto; align-items:stretch; }`,
+				`.meta + .meta { margin-left:var(--quota-column-gap); }`,
 				`<span id="poolFiveCoverage" class="pool-coverage">已用</span>`,
 				`<span id="poolWeekCoverage" class="pool-coverage">已用</span>`,
 				`id="poolStatus" class="pool-status" role="status" hidden`,
@@ -320,6 +323,7 @@ func TestQuotaPageConfigurationEntriesAndSharedDeviceComponents(t *testing.T) {
 			forbidden: []string{
 				`href="settings`, `.pool-window`, `.pool-grid`, `class="pool-formula"`,
 				`id="poolMembers"`, `号池成员：`, `.pool-members`,
+				`.quota-panel + .quota-panel`,
 			},
 		},
 		{
