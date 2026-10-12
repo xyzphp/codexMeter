@@ -115,6 +115,10 @@ func (s *UsageService) currentConfig() Config {
 	defer s.cfgMu.RUnlock()
 	cfg := s.cfg
 	cfg.Accounts = append([]AccountConfig(nil), cfg.Accounts...)
+	if cfg.QuotaPool != nil {
+		pool := quotaPoolConfig(cfg)
+		cfg.QuotaPool = &pool
+	}
 	return cfg
 }
 
@@ -521,6 +525,7 @@ func proxyTestSuccessMessage(rawProxyURL string) string {
 
 func fileConfigFromConfig(cfg Config) fileConfig {
 	stored := fileConfig{
+		QuotaPool:  cfg.QuotaPool,
 		BindAddr:   cfg.BindAddr,
 		BasePath:   cfg.BasePath,
 		AppAPIKey:  cfg.AppAPIKey,

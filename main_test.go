@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -1761,6 +1762,182 @@ func TestMiddlewareUsesUpdatedBasicAuthConfig(t *testing.T) {
 	}
 }
 
+func TestQuotaPoolAggregation(t *testing.T) {
+	tests := []struct {
+		name               string
+		pool               *QuotaPoolConfig
+		change             func([]AccountUsage)
+		count, available   int
+		stale              int
+		fiveHour, sevenDay float64 // -1 means incomplete, with a null percentage.
+	}{
+		{name: "67 plus 100 remaining", count: 2, available: 2, fiveHour: 83.5, sevenDay: 60},
+		{name: "selected member", pool: &QuotaPoolConfig{AccountIDs: []string{"one"}}, count: 1, available: 1, fiveHour: 67, sevenDay: 80},
+		{name: "empty custom pool", pool: &QuotaPoolConfig{AccountIDs: []string{}}, fiveHour: -1, sevenDay: -1},
+		{name: "missing account keeps denominator", change: func(entries []AccountUsage) { entries[1].Usage = nil }, count: 2, available: 1, fiveHour: -1, sevenDay: -1},
+		{name: "independent windows", change: func(entries []AccountUsage) { entries[1].Usage.SevenDay = nil }, count: 2, available: 2, fiveHour: 83.5, sevenDay: -1},
+		{name: "stale snapshot included explicitly", change: func(entries []AccountUsage) { entries[1].Stale = true; entries[1].Error = "upstream unavailable" }, count: 2, available: 2, stale: 1, fiveHour: 83.5, sevenDay: 60},
+		{name: "clamp outside bounds", change: func(entries []AccountUsage) {
+			entries[0].Usage.FiveHour.UsedPercent = -20
+			entries[1].Usage.FiveHour.UsedPercent = 120
+		}, count: 2, available: 2, fiveHour: 50, sevenDay: 60},
+		{name: "invalid number is not zero", change: func(entries []AccountUsage) { entries[1].Usage.FiveHour.UsedPercent = math.NaN() }, count: 2, available: 1, fiveHour: -1, sevenDay: 60},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := Config{Accounts: []AccountConfig{{ID: "one"}, {ID: "two"}}, QuotaPool: test.pool}
+			entries := []AccountUsage{
+				{ID: "one", Usage: &UsageResponse{FiveHour: &Window{UsedPercent: 33}, SevenDay: &Window{UsedPercent: 20}}},
+				{ID: "two", Usage: &UsageResponse{FiveHour: &Window{UsedPercent: 0}, SevenDay: &Window{UsedPercent: 60}}},
+			}
+			if test.change != nil {
+				test.change(entries)
+			}
+			now := time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)
+			got := aggregateQuotaPool(cfg, entries, now)
+			if got.Source != "account_pool" || got.FetchedAt != now.Format(time.RFC3339) || got.AccountCount != test.count || len(got.AccountIDs) != test.count {
+				t.Fatalf("unexpected aggregate identity: %+v", got)
+			}
+			if got.FiveHour.AvailableAccounts != test.available || got.FiveHour.StaleAccounts != test.stale {
+				t.Fatalf("unexpected coverage: %+v", got.FiveHour)
+			}
+			for _, check := range []struct {
+				window QuotaPoolWindow
+				want   float64
+			}{{got.FiveHour, test.fiveHour}, {got.SevenDay, test.sevenDay}} {
+				if check.window.AccountCount != test.count || check.window.CapacityPercent != float64(test.count)*100 {
+					t.Fatalf("denominator changed: %+v", check.window)
+				}
+				if check.want < 0 {
+					if check.window.Complete || check.window.RemainingPercent != nil || check.window.UsedPercent != nil {
+						t.Fatalf("incomplete quota treated as known: %+v", check.window)
+					}
+					continue
+				}
+				if !check.window.Complete || check.window.RemainingPercent == nil || check.window.UsedPercent == nil || math.Abs(*check.window.RemainingPercent-check.want) > 1e-9 || math.Abs(*check.window.UsedPercent-(100-check.want)) > 1e-9 {
+					t.Fatalf("incorrect equal-weight aggregation: %+v, want remaining %v", check.window, check.want)
+				}
+				if math.Abs(check.window.RemainingTotalPercent+check.window.UsedTotalPercent-check.window.CapacityPercent) > 1e-9 {
+					t.Fatal("totals do not match capacity")
+				}
+			}
+		})
+	}
+}
+
+func TestQuotaPoolConfigurationPersistenceAndIsolation(t *testing.T) {
+	t.Setenv("OPENAI_ACCESS_TOKEN", "")
+	t.Setenv("CHATGPT_ACCOUNT_ID", "")
+	t.Setenv("BASIC_AUTH_ENABLED", "false")
+	service := multiAccountFixture(t, nil)
+	if pool := quotaPoolConfig(service.currentConfig()); !pool.AllAccounts || len(pool.AccountIDs) != 0 {
+		t.Fatal("missing config must include all accounts")
+	}
+	if _, err := service.SaveQuotaPool(QuotaPoolConfig{AccountIDs: []string{" two "}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SwitchAccount("two"); err != nil {
+		t.Fatal(err)
+	}
+	name := "Renamed"
+	if _, err := service.SaveAccount("one", AccountUpdate{Name: &name}); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := loadConfigFile(service.currentConfig().ConfigPath, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := quotaPoolConfig(loaded)
+	if pool.AllAccounts || len(pool.AccountIDs) != 1 || pool.AccountIDs[0] != "two" || loaded.ActiveAccountID != "two" || primaryAccountID(loaded) != "one" || loaded.AccessToken != "fixture-oauth-one" {
+		t.Fatal("pool save changed single-account config or was not persisted")
+	}
+	copy := service.currentConfig()
+	copy.QuotaPool.AccountIDs[0] = "one"
+	if service.currentConfig().QuotaPool.AccountIDs[0] != "two" {
+		t.Fatal("config snapshot shares pool members")
+	}
+	if _, err := service.DeleteAccount("two"); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = loadConfigFile(service.currentConfig().ConfigPath, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool = quotaPoolConfig(loaded)
+	if pool.AllAccounts || len(pool.AccountIDs) != 0 {
+		t.Fatal("deleting final selected member must leave an empty pool, not include every account")
+	}
+	if _, err := service.SaveQuotaPool(QuotaPoolConfig{AllAccounts: true}); err != nil {
+		t.Fatal(err)
+	}
+	name, token, upstreamID := "New account", "fixture-new-token", "fixture-new-upstream"
+	if _, err := service.SaveAccount("", AccountUpdate{Name: &name, ConfigUpdate: ConfigUpdate{AccessToken: &token, ChatGPTAccountID: &upstreamID}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := service.GetAccountsUsage(context.Background(), false).Aggregate; got.AccountCount != 2 {
+		t.Fatal("all-accounts pool did not include newly added member")
+	}
+}
+
+func TestQuotaPoolReusesAccountSnapshots(t *testing.T) {
+	var mu sync.Mutex
+	requests := 0
+	service := multiAccountFixture(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		mu.Lock()
+		requests++
+		mu.Unlock()
+		return multiAccountUpstreamResponse(request), nil
+	}))
+	first := service.GetAccountsUsage(context.Background(), false)
+	if first.Aggregate == nil || *first.Aggregate.FiveHour.RemainingPercent != 60 {
+		t.Fatal("aggregate not attached to existing response")
+	}
+	if _, err := service.SaveQuotaPool(QuotaPoolConfig{AccountIDs: []string{"two"}}); err != nil {
+		t.Fatal(err)
+	}
+	second := service.GetAccountsUsage(context.Background(), false)
+	if second.ActiveAccountID != "one" || second.Aggregate.AccountCount != 1 || *second.Aggregate.FiveHour.RemainingPercent != 30 || second.Accounts[0].Usage.FiveHour.UsedPercent != 10 {
+		t.Fatal("pool changed existing account response or active account")
+	}
+	mu.Lock()
+	count := requests
+	mu.Unlock()
+	if count != 2 {
+		t.Fatalf("pool issued extra upstream requests or invalidated snapshots: %d", count)
+	}
+}
+
+func TestQuotaPoolRoutesBasicAuthAndRootAlias(t *testing.T) {
+	for _, prefix := range []string{"", "/codex"} {
+		for _, method := range []string{http.MethodGet, http.MethodPut} {
+			t.Run(prefix+method, func(t *testing.T) {
+				service := multiAccountFixture(t, nil)
+				service.cfg.BasePath = "/codex"
+				service.cfg.BasicAuthEnabled, service.cfg.BasicAuthUsername, service.cfg.BasicAuthPassword = true, "fixture-admin", "fixture-password"
+				server := NewServer(service.cfg, service)
+				for _, authenticate := range []bool{false, true} {
+					request := httptest.NewRequest(method, prefix+"/api/quota-pool", strings.NewReader(`{"all_accounts":false,"account_ids":["two"]}`))
+					if authenticate {
+						request.SetBasicAuth("fixture-admin", "fixture-password")
+					}
+					response := httptest.NewRecorder()
+					server.handler.ServeHTTP(response, request)
+					want := http.StatusUnauthorized
+					if authenticate {
+						want = http.StatusOK
+					}
+					if response.Code != want {
+						t.Fatalf("status=%d want=%d", response.Code, want)
+					}
+					if !strings.Contains(response.Header().Get("Cache-Control"), "no-store") {
+						t.Fatal("pool endpoint can be cached")
+					}
+				}
+			})
+		}
+	}
+}
+
 func multiAccountFixture(t *testing.T, transport http.RoundTripper) *UsageService {
 	t.Helper()
 	cfg := Config{ConfigPath: filepath.Join(t.TempDir(), "config.json"), CacheTTL: time.Minute, Accounts: []AccountConfig{
@@ -2084,6 +2261,18 @@ func TestMultiAccountRoutesAuthenticationAndErrors(t *testing.T) {
 				{"GET", "/api/accounts", "", 200},
 				{"GET", "/api/accounts/usage", "", 200},
 				{"GET", "/api/accounts/usage?force=invalid", "", 400},
+				{"GET", "/api/quota-pool", "", 200},
+				{"PUT", "/api/quota-pool", `{"all_accounts":false,"account_ids":["two"]}`, 200},
+				{"PUT", "/api/quota-pool", `{"all_accounts":true,"account_ids":[]}`, 200},
+				{"PUT", "/api/quota-pool", `{"all_accounts":false,"account_ids":[]}`, 200},
+				{"PUT", "/api/quota-pool", `{"all_accounts":false,"account_ids":["missing"]}`, 400},
+				{"PUT", "/api/quota-pool", `{"all_accounts":false,"account_ids":["one","one"]}`, 400},
+				{"PUT", "/api/quota-pool", `{"all_accounts":true,"account_ids":["one"]}`, 400},
+				{"PUT", "/api/quota-pool", `{"account_ids":[]}`, 400},
+				{"PUT", "/api/quota-pool", `{"all_accounts":true}`, 400},
+				{"PUT", "/api/quota-pool", `{"all_accounts":true,"account_ids":null}`, 400},
+				{"PUT", "/api/quota-pool", `{"all_accounts":true,"account_ids":[],"unknown":true}`, 400},
+				{"PUT", "/api/quota-pool", `{"all_accounts":true,"account_ids":[]} {}`, 400},
 				{"GET", "/api/usage?account_id=missing", "", 404},
 				{"GET", "/api/usage/analytics?account_id=missing", "", 404},
 				{"POST", "/api/config/test", `{"account_id":"missing"}`, 404},

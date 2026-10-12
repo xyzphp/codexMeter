@@ -4,6 +4,42 @@
 
 页面展示账号保存到 `active_account_id`，重启后继续使用。切换只改变页面展示，旧应用 API 始终使用主账号。后台始终按每 5 分钟的采样周期监控所有凭证完整的账号，未选中的账号也会积累历史。
 
+## 号池聚合监控
+
+配置多个账号后，浏览器和 LX04 设备的额度页会出现“单账号 / 号池聚合”切换。默认保留单账号视图；切换偏好保存在客户端浏览器中，不修改 `active_account_id`。设置页的“号池聚合监控”可选择全部账号或勾选指定成员，保存后回额度页刷新即可生效。
+
+五小时和本周额度分别计算，每个账号按 100% 容量等权汇总：
+
+```text
+账号 1 剩余 67%，账号 2 剩余 100%
+剩余总量 = 67 + 100 = 167
+总容量 = 2 × 100 = 200
+号池剩余 = 167 / 200 × 100% = 83.5%
+号池已用 = 16.5%
+```
+
+这是百分比的等权汇总，不是不同套餐实际 Token 容量的加权。页面展示聚合百分比、进度条、剩余总量 / 总容量以及成员列表。原有单账号额度、历史、重置时间、使用分析与设备提示音不变，仍跟随当前账号；不同账号的重置时间不合并。
+
+聚合复用 `/api/accounts/usage` 的同一批账号结果，不产生额外上游请求。某个成员没有可用窗口（包括凭证未配置、无快照或上游不返回该窗口）时，该窗口显示“数据不完整”和读取数量；不移除该成员缩小分母，也不把未知额度计为 0%。有旧快照则计入汇总并明确显示“最近快照”数量。两个窗口互不影响。
+
+配置默认如下，省略 `quota_pool` 时行为相同：
+
+```json
+"quota_pool": {"all_accounts": true, "account_ids": []}
+```
+
+全部账号模式会自动包含之后新增的账号。自定义示例为 `{"all_accounts":false,"account_ids":["work","personal"]}`，ID 取自账号列表；不接受未知或重复成员。自定义空列表表示空号池。删除账号时自动移出所选成员，即使删掉最后一个成员，也不会自动把其他账号加入。
+
+`GET /api/quota-pool` 读取配置，`PUT /api/quota-pool` 用上述两个必填字段完整保存配置；认证沿用 Basic Auth / App API Key。`GET /api/accounts/usage` 在原响应上新增 `aggregate`，包含 `account_ids`、`account_count`、汇总时间 `fetched_at` 及独立的 `five_hour`、`seven_day`：
+
+- `capacity_percent`：所有成员容量总和，即账号数 × 100。
+- `remaining_total_percent` / `used_total_percent`：已取得窗口的剩余 / 已用百分比之和；不完整时只是已知总量。
+- `remaining_percent` / `used_percent`：总量除以总容量的百分比；不完整或空池时为 `null`。
+- `available_accounts` / `stale_accounts`：有窗口的账号数 / 其中旧快照数。
+- `complete`：非空号池的所有成员都有该窗口时为 `true`，可包含明确标记的旧快照。
+
+汇总时间不是每个成员数据的更新时间；原始时间和错误仍见 `accounts[].usage.fetched_at`、`accounts[].error`。原 `/api/usage` 和 `/api/usage/analytics` 的响应、默认主账号与认证方式均不变。
+
 ## 账号管理
 
 打开设置页的“账号管理”：
@@ -67,6 +103,8 @@
 | DELETE | `/api/accounts/{account_id}` | 删除账号，保留历史归档 |
 | PUT | `/api/accounts/active` | 保存页面展示账号 |
 | GET | `/api/accounts/usage?force=true` | 查询全部账号，逐账号返回状态 |
+| GET | `/api/quota-pool` | 读取号池聚合成员配置 |
+| PUT | `/api/quota-pool` | 保存全部账号模式或自定义成员 |
 | GET | `/api/usage?account_id=work` | 查询指定账号额度与历史 |
 | GET | `/api/usage/analytics?account_id=work` | 查询指定账号统计，日期参数保持原有行为 |
 

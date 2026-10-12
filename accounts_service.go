@@ -63,9 +63,10 @@ type AccountUsage struct {
 }
 
 type AccountsUsageResponse struct {
-	ActiveAccountID  string         `json:"active_account_id"`
-	PrimaryAccountID string         `json:"primary_account_id"`
-	Accounts         []AccountUsage `json:"accounts"`
+	ActiveAccountID  string          `json:"active_account_id"`
+	PrimaryAccountID string          `json:"primary_account_id"`
+	Accounts         []AccountUsage  `json:"accounts"`
+	Aggregate        *QuotaPoolUsage `json:"aggregate,omitempty"`
 }
 
 func accountViews(cfg Config) []AccountView {
@@ -241,6 +242,7 @@ func (s *UsageService) GetAccountsUsage(ctx context.Context, force bool) Account
 			entry.Usage.AccountID, entry.Usage.AccountName = account.ID, account.Name
 		}
 	})
+	result.Aggregate = aggregateQuotaPool(cfg, result.Accounts, time.Now())
 	return result
 }
 
@@ -370,6 +372,16 @@ func (s *UsageService) DeleteAccount(id string) (AccountsView, error) {
 		return AccountsView{}, errPrimaryAccount
 	}
 	next.Accounts = append(next.Accounts[:index], next.Accounts[index+1:]...)
+	if next.QuotaPool != nil && !next.QuotaPool.AllAccounts {
+		pool := quotaPoolConfig(next)
+		pool.AccountIDs = pool.AccountIDs[:0]
+		for _, member := range next.QuotaPool.AccountIDs {
+			if member != id {
+				pool.AccountIDs = append(pool.AccountIDs, member)
+			}
+		}
+		next.QuotaPool = &pool
+	}
 	if next.ActiveAccountID == id {
 		next.ActiveAccountID = next.Accounts[0].ID
 	}

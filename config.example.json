@@ -9,6 +9,10 @@
   },
   "cache_ttl": "10m",
   "active_account_id": "default",
+  "quota_pool": {
+    "all_accounts": true,
+    "account_ids": []
+  },
   "accounts": [
     {
       "id": "default",

@@ -180,7 +180,7 @@ paths:
       tags: [accounts]
       operationId: getAccountsUsage
       summary: 获取所有账号额度
-      description: 最多并发查询 4 个账号，返回各自额度、缓存状态和错误。单个账号失败不会影响其他账号，整体仍返回 200；存在最近快照时返回 usage 并标记 stale=true 与 error。后台每 5 分钟分别采样所有已配置账号。
+      description: 最多并发查询 4 个账号，返回各自额度、缓存状态和错误。单个账号失败不会影响其他账号，整体仍返回 200；存在最近快照时返回 usage 并标记 stale=true 与 error。aggregate 复用这些结果按号池成员等权汇总五小时和本周额度，不额外请求上游，不改变当前或主账号。缺少成员窗口时保留完整分母并返回 null 百分比；旧快照计入并标明数量。后台每 5 分钟分别采样所有已配置账号。
       security:
         - basicAuth: []
         - appApiKey: []
@@ -194,6 +194,55 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AccountsUsageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/quota-pool:
+    get:
+      tags: [accounts]
+      operationId: getQuotaPool
+      summary: 读取号池聚合配置
+      description: 未配置时默认包含全部账号，包括之后新增的账号。不请求上游，也不改变页面展示账号。
+      security:
+        - basicAuth: []
+        - appApiKey: []
+        - appBearer: []
+      responses:
+        '200':
+          description: 当前号池成员模式
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotaPoolConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags: [accounts]
+      operationId: updateQuotaPool
+      summary: 保存号池聚合配置
+      description: 两个字段均必填。全部账号模式要求 account_ids 为空；自定义模式只接受存在且不重复的账号 id，空列表表示空号池。保存不切换账号、不清理缓存；删除成员账号时自动移出号池。
+      security:
+        - basicAuth: []
+        - appApiKey: []
+        - appBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuotaPoolConfig'
+            example:
+              all_accounts: false
+              account_ids: [default, work]
+      responses:
+        '200':
+          description: 已保存并生效的号池配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotaPoolConfig'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1309,6 +1358,98 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AccountUsage'
+        aggregate:
+          $ref: '#/components/schemas/QuotaPoolUsage'
+
+    QuotaPoolConfig:
+      type: object
+      additionalProperties: false
+      required: [all_accounts, account_ids]
+      properties:
+        all_accounts:
+          type: boolean
+          default: true
+          description: true 时包含所有账号和未来新增账号，account_ids 必须为空。
+        account_ids:
+          type: array
+          uniqueItems: true
+          maxItems: 32
+          items:
+            type: string
+          description: 自定义号池的本地账号 id；空数组且 all_accounts=false 表示空号池。
+      example:
+        all_accounts: true
+        account_ids: []
+
+    QuotaPoolUsage:
+      type: object
+      required: [source, fetched_at, account_ids, account_count, five_hour, seven_day]
+      properties:
+        source:
+          type: string
+          enum: [account_pool]
+        fetched_at:
+          type: string
+          format: date-time
+          description: 本次汇总时间；各成员原始数据时间见 accounts[].usage.fetched_at，并不表示所有数据同时刷新。
+        account_ids:
+          type: array
+          items:
+            type: string
+        account_count:
+          type: integer
+          minimum: 0
+        five_hour:
+          $ref: '#/components/schemas/QuotaPoolWindow'
+        seven_day:
+          $ref: '#/components/schemas/QuotaPoolWindow'
+
+    QuotaPoolWindow:
+      type: object
+      description: 每个成员容量为 100%，两种窗口独立汇总。这是百分比的等权池，不是实际 Token 容量加权。缺少任何成员窗口时不缩小分母，百分比为 null。
+      required: [account_count, available_accounts, stale_accounts, capacity_percent, remaining_total_percent, used_total_percent, remaining_percent, used_percent, complete]
+      properties:
+        account_count:
+          type: integer
+          minimum: 0
+        available_accounts:
+          type: integer
+          minimum: 0
+          description: 包含最近快照的可用窗口数量。
+        stale_accounts:
+          type: integer
+          minimum: 0
+          description: 计入汇总的旧快照数量，非零时需展示提示。
+        capacity_percent:
+          type: number
+          description: 号池成员数量 × 100。
+        remaining_total_percent:
+          type: number
+          description: 已取得窗口的剩余百分比之和；不完整时仅为已知剩余总量。
+        used_total_percent:
+          type: number
+          description: 已取得窗口的已用百分比之和。
+        remaining_percent:
+          type: number
+          nullable: true
+          description: 100 × remaining_total_percent / capacity_percent；空号池或数据不完整时为 null。
+        used_percent:
+          type: number
+          nullable: true
+          description: 100 × used_total_percent / capacity_percent；空号池或数据不完整时为 null。
+        complete:
+          type: boolean
+          description: 号池非空且每个成员均有该窗口（可含旧快照）。
+      example:
+        account_count: 2
+        available_accounts: 2
+        stale_accounts: 0
+        capacity_percent: 200
+        remaining_total_percent: 167
+        used_total_percent: 33
+        remaining_percent: 83.5
+        used_percent: 16.5
+        complete: true
 
     AppAPIKeyView:
       type: object

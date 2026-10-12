@@ -135,6 +135,8 @@ chmod 600 config.json
 | `accounts[].openai.user_agent` | 否 | 上游请求 User-Agent；留空时使用项目默认值 |
 | `accounts[].openai.fedramp` | 否 | 仅在明确需要 FedRAMP 请求头时设为 `true` |
 | `accounts[].proxy.url` | 否 | 账号独立代理，支持 HTTP、HTTPS、SOCKS5，空字符串表示直连。设置页可单独填写代理用户名和密码；API 返回时密码脱敏，原文仅保存在服务端。旧顶层 `proxy.url` 兼容迁入已有账号 |
+| `quota_pool.all_accounts` | 否 | 默认 `true`，号池包含所有账号（包括以后新增的账号）。只影响可选聚合视图，不改变单账号逻辑 |
+| `quota_pool.account_ids` | 否 | 默认 `[]`。全部账号模式必须为空；`all_accounts=false` 时指定要聚合的本地账号 id，空列表表示空号池 |
 | `bind_addr` | 否 | 服务监听地址，仅通过配置文件或 `BIND_ADDR` 设置；设置页面不提供此项，修改后需重启服务生效 |
 | `base_path` | 否 | 反向代理前缀，仅通过配置文件或 `BASE_PATH` 设置；设置页面不提供此项，修改后需重启服务生效 |
 | `cache_ttl` | 否 | 缓存时长，例如 `10m`、`30s` 或 `0` |

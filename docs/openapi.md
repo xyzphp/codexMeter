@@ -18,7 +18,7 @@ OpenAI/ChatGPT OAuth 凭证的准备、Account ID 的确认和 `config.json` 填
 - 获取前端内置提示音；
 - 在受保护的接口文档页面中调试上述接口。
 
-新增的 `/api/accounts`、`/api/accounts/usage`、`/api/accounts/active` 和账号更新/删除接口，以及 `account_id` 查询参数，见 [多账号监控说明](multi-account.md)。单个账号失败时总览返回逐账号错误，整体仍返回 200。
+新增的 `/api/accounts`、`/api/accounts/usage`、`/api/accounts/active`、`/api/quota-pool` 和账号更新/删除接口，以及 `account_id` 查询参数，见 [多账号监控说明](multi-account.md)。单个账号失败时总览返回逐账号错误，整体仍返回 200。总览的 `aggregate` 按号池配置复用各账号窗口等权汇总，缺失数据返回 `null` 百分比并保留完整分母，旧快照明确标记；不改变旧单账号接口。
 
 旧应用调用 `/api/usage`、`/api/usage/analytics` 时无需新增参数，默认固定读取主账号，页面切换不会影响账号或响应格式。主账号优先为 `id=default`，自定义列表没有该 id 时使用第一项。显式传 `account_id` 才选择其他账号并返回账号信息；配置读写和测试省略账号时也使用主账号。
 
@@ -97,6 +97,8 @@ GET /openapi.yaml
 | GET | `/healthz` | 健康检查 |
 | GET | `/api/usage` | 当前额度和重置时间 |
 | GET | `/api/usage/analytics` | 日期范围统计，包含模型占比 |
+| GET | `/api/accounts/usage` | 全部账号额度和可选号池聚合结果 |
+| GET / PUT | `/api/quota-pool` | 读取 / 保存号池成员配置 |
 | GET | `/api/prediction` | 公共重置预测 |
 | GET | `/api/config` | 获取脱敏后的运行配置；`setup_required` 表示是否需要首次配置 |
 | GET | `/api/config/app-key` | 在已认证时读取当前管理密钥，供接口调试页使用 |

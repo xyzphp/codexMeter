@@ -33,6 +33,7 @@ SQLite 开启 WAL、`busy_timeout` 和受控连接数，数据库文件、`-wal`
 - `main.go`：进程启动、信号处理和 HTTP Server 装配；
 - `config.go`、`config_service.go`：配置读取、校验、保存和配置 API；
 - `accounts_config.go`、`accounts_service.go`、`accounts_server.go`：账号配置迁移、独立监控运行时、总览和账号管理路由；
+- `quota_pool.go`：号池成员配置、五小时 / 周额度等权聚合及配置路由，复用账号总览快照，不修改采样数据库或单账号历史；
 - `models.go`：API、额度、分析、预测和上游响应模型；
 - `usage_service.go`、`usage_runtime.go`、`usage_analytics.go`：额度查询、缓存、定时采集和统计；
 - `usage_history.go`、`usage_history_store.go`：历史值去重、JSONL 迁移兼容和 SQLite 持久化；

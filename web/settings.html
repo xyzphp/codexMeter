@@ -278,6 +278,12 @@
     .account-manager .account-delete:hover:not(:disabled) { border-color:var(--border); background:var(--soft); }
     .account-manager button:disabled { cursor:not-allowed; }
     .account-manager button[hidden] { display:none; }
+    .pool-member-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:12px; }
+    #pool .check-row { font-weight:500; cursor:pointer; overflow-wrap:anywhere; }
+    #pool .check-row input { min-height:0; padding:0; }
+    #pool .account-manager-copy { max-width:none; }
+    #poolStatus { margin:0; }
+    @media (max-width:600px) { .pool-member-list { grid-template-columns:1fr; } }
     @media (max-width:600px) { .account-manager-fields { grid-template-columns:1fr; } }
     .config-file-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px; }
     .config-file-actions .proxy-status { flex:1 1 280px; margin-top:0; }
@@ -419,6 +425,13 @@
             <div class="field"><label for="accountName">账号名称</label><div class="input-action"><input id="accountName" maxlength="80" autocomplete="off" placeholder="例如：工作账号"><button id="renameAccount" class="small-button" type="button">保存名称</button></div></div>
           </div>
           <div class="account-manager-actions"><button id="activateAccount" class="secondary" type="button">切换到此账号</button><button id="deleteAccount" class="secondary account-delete" type="button">删除账号</button></div>
+        </section>
+        <section id="pool" class="account-manager" aria-labelledby="poolTitle">
+          <div class="account-manager-head"><div><h2 id="poolTitle" class="account-manager-title">号池聚合监控</h2><p class="account-manager-copy">每个账号按 100% 等权汇总，5 小时与本周额度分别计算。例如：剩余 67% + 100% = 167 / 200 = 83.5%。</p></div></div>
+          <label class="check-row"><input id="poolAllAccounts" type="checkbox" checked disabled><span>包含全部账号（新添加的账号自动加入）</span></label>
+          <div id="poolMemberList" class="pool-member-list" aria-label="号池成员"></div>
+          <p class="hint">取消勾选后可自定义成员。不改变当前账号；额度页可随时切回原来的单账号视图。成员数据缺失时不会按 0% 计算。</p>
+          <div class="account-manager-actions"><p id="poolStatus" class="hint" role="status">正在读取号池配置…</p><button id="saveQuotaPool" class="primary" type="button" disabled>保存号池</button></div>
         </section>
         <section id="proxySection" class="form-section tab-panel" role="tabpanel" aria-labelledby="tabProxy">
           <div class="section-head"><div class="section-title">配置上游连接</div><div class="section-hint">步骤 1</div></div>
@@ -620,6 +633,13 @@
       var accountList = [];
       var editingAccount = null;
       var accountBusy = false;
+      var poolConfig = {all_accounts:true, account_ids:[]};
+      var poolLoaded = false;
+      var poolBusy = false;
+      var poolAllAccounts = document.getElementById('poolAllAccounts');
+      var poolMemberList = document.getElementById('poolMemberList');
+      var poolStatus = document.getElementById('poolStatus');
+      var saveQuotaPoolButton = document.getElementById('saveQuotaPool');
       var wizardStatus = document.getElementById('wizardStatus');
       var credentialSummary = document.getElementById('credentialSummary');
       var proxyInput = document.getElementById('proxyUrl');
@@ -969,9 +989,11 @@
         var id = preferred === undefined ? editingAccount : preferred;
         if (id === null || (id && !accountList.some(function (item) { return item.id === id; }))) id = view.active_account_id;
         managedAccount.value = id || ''; renderAccountEditor(id || '');
+        if (poolLoaded) renderPoolMembers();
       }
       function setAccountBusy(busy) {
         accountBusy = busy; managedAccount.disabled = busy; accountName.disabled = busy;
+        setPoolControls();
         document.getElementById('reload').disabled = busy;
         ['newAccount','renameAccount','activateAccount','deleteAccount','testConnection','parseCapture'].forEach(function (id) { document.getElementById(id).disabled = busy; });
         [proxyEnabledInput,proxySchemeInput,proxyHostInput,proxyPortInput,proxyAuthEnabledInput,proxyUsernameInput,proxyPasswordInput].forEach(function (input) { input.disabled = busy; });
@@ -986,6 +1008,40 @@
       function accountRequest(path, method, body) {
         return fetch(path, {method:method, headers:Object.assign({'Content-Type':'application/json'}, headers()), credentials:'same-origin', cache:'no-store', body:body === undefined ? undefined : JSON.stringify(body)}).then(function (response) { return parseResponse(response, '账号操作失败'); });
       }
+      function setPoolStatus(message, error) { poolStatus.textContent = message; poolStatus.style.color = error ? 'var(--danger)' : ''; }
+      function setPoolControls() {
+        var busy = poolBusy || accountBusy || !poolLoaded;
+        poolAllAccounts.disabled = busy; saveQuotaPoolButton.disabled = busy;
+        Array.prototype.forEach.call(poolMemberList.querySelectorAll('input'), function (input) { input.disabled = busy || poolAllAccounts.checked; });
+      }
+      function renderPoolMembers() {
+        poolAllAccounts.checked = poolConfig.all_accounts;
+        poolMemberList.textContent = '';
+        accountList.forEach(function (account) {
+          var label = document.createElement('label'); label.className = 'check-row';
+          var input = document.createElement('input'); input.type = 'checkbox'; input.value = account.id;
+          input.checked = poolConfig.all_accounts || (poolConfig.account_ids || []).indexOf(account.id) >= 0;
+          var name = document.createElement('span'); name.textContent = account.name + (account.setup_required ? '（凭证未配置）' : '');
+          label.appendChild(input); label.appendChild(name); poolMemberList.appendChild(label);
+        });
+        setPoolControls();
+      }
+      function loadQuotaPool() {
+        poolLoaded = false; setPoolControls();
+        return accountRequest('api/quota-pool', 'GET').then(function (config) {
+          poolConfig = config; poolLoaded = true; renderPoolMembers(); setPoolStatus(config.all_accounts ? '已包含全部账号，新账号自动加入。' : '已配置 ' + config.account_ids.length + ' 个号池成员。');
+          if (window.location.hash === '#pool') document.getElementById('pool').scrollIntoView({block:'start'});
+        }).catch(function (error) { setPoolStatus('号池配置读取失败：' + error.message, true); });
+      }
+      function saveQuotaPool() {
+        if (poolBusy || accountBusy || !poolLoaded) return;
+        var ids = [];
+        if (!poolAllAccounts.checked) Array.prototype.forEach.call(poolMemberList.querySelectorAll('input:checked'), function (input) { ids.push(input.value); });
+        poolBusy = true; setPoolControls(); setPoolStatus('正在保存…');
+        accountRequest('api/quota-pool', 'PUT', {all_accounts:poolAllAccounts.checked, account_ids:ids}).then(function (config) {
+          poolConfig = config; renderPoolMembers(); setPoolStatus('号池已保存，额度页下次刷新生效。');
+        }).catch(function (error) { setPoolStatus(error.message, true); }).then(function () { poolBusy = false; setPoolControls(); });
+      }
       function manageAccount(action) {
         if (accountBusy || !editingAccount) return;
         if (action === 'delete' && !window.confirm('删除账号“' + accountName.value + '”？已有历史记录会保留。')) return;
@@ -993,7 +1049,7 @@
         if (action === 'activate') { path = 'api/accounts/active'; body = {account_id:editingAccount}; }
         if (action === 'delete') { method = 'DELETE'; body = undefined; }
         setAccountBusy(true); setWizardStatus('正在保存…');
-        accountRequest(path, method, body).then(function (view) { renderAccountManager(view, action === 'delete' ? view.active_account_id : editingAccount); setWizardStatus(action === 'activate' ? '账号已切换。' : (action === 'delete' ? '账号已删除，历史记录已保留。' : '账号名称已保存。'), 'ok'); }).catch(function (error) { setWizardStatus(error.message, 'error'); }).then(function () { setAccountBusy(false); });
+        accountRequest(path, method, body).then(function (view) { renderAccountManager(view, action === 'delete' ? view.active_account_id : editingAccount); setWizardStatus(action === 'activate' ? '账号已切换。' : (action === 'delete' ? '账号已删除，历史记录已保留。' : '账号名称已保存。'), 'ok'); if (action === 'delete') return loadQuotaPool(); }).catch(function (error) { setWizardStatus(error.message, 'error'); }).then(function () { setAccountBusy(false); });
       }
       function renderParsedSummary(values) {
         var found = [];
@@ -1241,6 +1297,7 @@
           });
       }
       function loadConfig() {
+        poolLoaded = false; setPoolControls();
         setStatus('正在读取配置…');
         return fetch('api/config', { headers: headers(), credentials:'same-origin', cache:'no-store' }).then(function (response) {
           if (!response.ok) throw new Error(response.status === 401 ? '需要填写管理接口密钥' : '读取失败：API ' + response.status);
@@ -1251,6 +1308,7 @@
           renderPageAccess(config);
           setStatus('配置已读取', 'ok');
           if (window.location.hash === '#accounts') showTab('credentials');
+          return loadQuotaPool();
         }).catch(function (error) { setStatus(error.message, 'error'); });
       }
       proxySchemeInput.addEventListener('change', markProxyDraft);
@@ -1356,6 +1414,8 @@
         if (activeTab === 'config-file') saveConfigFile();
       });
       document.getElementById('reload').addEventListener('click', loadConfig);
+      poolAllAccounts.addEventListener('change', function () { if (this.checked) Array.prototype.forEach.call(poolMemberList.querySelectorAll('input'), function (input) { input.checked = true; }); setPoolControls(); });
+      saveQuotaPoolButton.addEventListener('click', saveQuotaPool);
       loadConfig();
     }());
   </script>

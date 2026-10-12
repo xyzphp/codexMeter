@@ -142,11 +142,12 @@ func normalizeAccounts(cfg *Config) error {
 	index = accountIndex(*cfg, primaryAccountID(*cfg))
 	setOpenAIConfig(cfg, cfg.Accounts[index].OpenAI)
 	cfg.UpstreamProxy = cfg.Accounts[index].Proxy.URL
-	return nil
+	return normalizeQuotaPool(cfg)
 }
 
 func configForAccount(cfg Config, account AccountConfig) Config {
 	cfg.Accounts = nil
+	cfg.QuotaPool = nil
 	cfg.ActiveAccountID = account.ID
 	setOpenAIConfig(&cfg, account.OpenAI)
 	if account.Proxy != nil {

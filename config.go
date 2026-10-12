@@ -13,6 +13,7 @@ import (
 
 type Config struct {
 	Accounts          []AccountConfig
+	QuotaPool         *QuotaPoolConfig
 	ActiveAccountID   string
 	BindAddr          string
 	BasePath          string
@@ -39,11 +40,12 @@ type Config struct {
 }
 
 type fileConfig struct {
-	Accounts        []AccountConfig `json:"accounts,omitempty"`
-	ActiveAccountID string          `json:"active_account_id,omitempty"`
-	BindAddr        string          `json:"bind_addr"`
-	BasePath        string          `json:"base_path"`
-	AppAPIKey       string          `json:"app_api_key"`
+	Accounts        []AccountConfig  `json:"accounts,omitempty"`
+	QuotaPool       *QuotaPoolConfig `json:"quota_pool,omitempty"`
+	ActiveAccountID string           `json:"active_account_id,omitempty"`
+	BindAddr        string           `json:"bind_addr"`
+	BasePath        string           `json:"base_path"`
+	AppAPIKey       string           `json:"app_api_key"`
 	BasicAuth       struct {
 		Enabled  bool   `json:"enabled"`
 		Username string `json:"username"`
@@ -164,6 +166,7 @@ func resolveConfigPath(configPath string) (string, error) {
 }
 
 func applyFileConfig(cfg *Config, stored fileConfig) {
+	cfg.QuotaPool = stored.QuotaPool
 	cfg.Accounts = append([]AccountConfig(nil), stored.Accounts...)
 	cfg.ActiveAccountID = strings.TrimSpace(stored.ActiveAccountID)
 	if stored.BindAddr != "" {
