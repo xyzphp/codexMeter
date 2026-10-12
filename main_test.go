@@ -301,6 +301,42 @@ func TestBuildVersionLabels(t *testing.T) {
 	}
 }
 
+func TestQuotaPageConfigurationEntriesAndSharedDeviceComponents(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		page      []byte
+		required  []string
+		forbidden []string
+	}{
+		{
+			name: "device", page: indexHTML,
+			required:  []string{`id="quotaViewSwitch"`, `id="poolQuota"`, `id="poolFiveUsed"`, `id="poolWeekUsed"`},
+			forbidden: []string{`href="settings`, `.pool-window`, `.pool-grid`, `class="pool-formula"`},
+		},
+		{
+			name: "browser", page: browserHTML,
+			required: []string{`href="settings#pool"`, `id="quotaViewSwitch"`, `id="poolQuota"`},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			page := string(test.page)
+			for _, required := range test.required {
+				if !strings.Contains(page, required) {
+					t.Errorf("missing quota page component %q", required)
+				}
+			}
+			for _, forbidden := range test.forbidden {
+				if strings.Contains(page, forbidden) {
+					t.Errorf("unexpected device-only quota markup/style %q", forbidden)
+				}
+			}
+			if test.name == "device" && strings.Count(page, `class="hero quota-hero"`) != 2 {
+				t.Error("single and pooled quota views must share the quota hero layout")
+			}
+		})
+	}
+}
+
 func TestAppAPIKeyEndpointReturnsConfiguredKeyAfterAuthentication(t *testing.T) {
 	const appAPIKey = "test-app-key"
 	cfg := Config{AppAPIKey: appAPIKey}

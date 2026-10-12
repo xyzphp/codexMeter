@@ -40,17 +40,10 @@
     .quota-view-switch button[aria-pressed="true"] { background:var(--card); color:var(--accent); box-shadow:0 1px 3px rgba(0,0,0,.08); }
     .quota-view-switch button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
     #poolQuota { flex:1 1 auto; min-height:0; overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; }
-    .pool-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; color:var(--muted); font-size:11px; line-height:1.5; }
-    .pool-head a { flex:0 0 auto; color:var(--accent); padding:5px 0; }
-    .pool-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
-    .pool-window { min-width:0; }
-    .pool-window + .pool-window { border-left:1px solid var(--border); padding-left:18px; }
-    .pool-window .remaining { font-size:58px; letter-spacing:-3px; margin:6px 0 10px; }
-    .pool-formula { margin-top:10px; font-size:12px; color:var(--text); line-height:1.6; overflow-wrap:anywhere; }
     .pool-coverage { margin-top:3px; color:var(--muted); font-size:11px; line-height:1.5; }
     .pool-coverage.incomplete { color:var(--danger); }
-    .pool-members { margin-top:12px; color:var(--muted); font-size:11px; line-height:1.6; overflow-wrap:anywhere; }
-    @media (max-width:600px) { .quota-view-switch button { padding:0 6px; font-size:11px; } .pool-window .remaining { font-size:42px; } }
+    .pool-status, .pool-members { margin-top:8px; color:var(--muted); font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
+    @media (max-width:600px) { .quota-view-switch button { padding:0 6px; font-size:11px; } }
     .detail-card { padding:14px 18px 16px; overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
     .detail-card::-webkit-scrollbar { width:4px; }
     .detail-card::-webkit-scrollbar-track { background:transparent; }
@@ -568,11 +561,24 @@
           <div class="meta reset-card"><div class="meta-label">下次重置</div><div id="resetAt" class="meta-value">—</div><div class="reset-progress-head"><span>距离重置剩余</span><strong id="resetProgress">—%</strong></div><div class="reset-progress-track"><div id="resetProgressBar" class="reset-progress-bar"></div></div></div>
         </div>
         <div id="poolQuota" hidden>
-          <div class="pool-head"><span id="poolStatus" role="status">正在读取号池…</span><a href="settings#pool">配置号池</a></div>
-          <div class="pool-grid">
-            <article class="pool-window"><div class="eyebrow">号池 · 5小时剩余</div><div id="poolFiveRemaining" class="remaining">—<span>%</span></div><div class="progress-head"><span>聚合剩余</span><strong id="poolFiveProgress">—%</strong></div><div class="progress-track"><div id="poolFiveBar" class="progress-bar"></div></div><div id="poolFiveFormula" class="pool-formula">—</div><div id="poolFiveCoverage" class="pool-coverage">等待数据</div></article>
-            <article class="pool-window"><div class="eyebrow">号池 · 本周剩余</div><div id="poolWeekRemaining" class="remaining">—<span>%</span></div><div class="progress-head"><span>聚合剩余</span><strong id="poolWeekProgress">—%</strong></div><div class="progress-track"><div id="poolWeekBar" class="progress-bar"></div></div><div id="poolWeekFormula" class="pool-formula">—</div><div id="poolWeekCoverage" class="pool-coverage">等待数据</div></article>
+          <div class="hero quota-hero">
+            <div class="quota-panel" aria-label="号池5小时剩余额度">
+              <div class="eyebrow">5小时额度剩余</div>
+              <div id="poolFiveRemaining" class="remaining">—<span>%</span></div>
+              <div class="progress-block" aria-label="号池5小时剩余额度进度"><div class="progress-head"><span>5小时剩余</span><strong id="poolFiveProgress">—%</strong></div><div class="progress-track"><div id="poolFiveBar" class="progress-bar"></div></div></div>
+            </div>
+            <div class="quota-panel" aria-label="号池本周剩余额度">
+              <div class="eyebrow">本周额度剩余</div>
+              <div id="poolWeekRemaining" class="remaining">—<span>%</span></div>
+              <div class="progress-block" aria-label="号池本周剩余额度进度"><div class="progress-head"><span>本周剩余</span><strong id="poolWeekProgress">—%</strong></div><div class="progress-track"><div id="poolWeekBar" class="progress-bar"></div></div></div>
+            </div>
           </div>
+          <div class="rule"></div>
+          <div class="meta-grid">
+            <div class="meta"><div id="poolFiveTotalLabel" class="meta-label">5小时剩余总量</div><div id="poolFiveFormula" class="meta-value">—</div><div class="meta-subline"><span>号池已用</span><strong id="poolFiveUsed">—%</strong></div><div id="poolFiveCoverage" class="pool-coverage">等待数据</div></div>
+            <div class="meta"><div id="poolWeekTotalLabel" class="meta-label">本周剩余总量</div><div id="poolWeekFormula" class="meta-value">—</div><div class="meta-subline"><span>号池已用</span><strong id="poolWeekUsed">—%</strong></div><div id="poolWeekCoverage" class="pool-coverage">等待数据</div></div>
+          </div>
+          <div id="poolStatus" class="pool-status" role="status">正在读取号池…</div>
           <div id="poolMembers" class="pool-members">—</div>
         </div>
         <div class="refresh-status" aria-label="自动刷新倒计时">
@@ -1413,7 +1419,7 @@
         document.querySelector('.overview-card').classList.toggle('pool-mode', pooled);
         Array.prototype.forEach.call(byId('quotaViewSwitch').querySelectorAll('button'), function (button) { button.setAttribute('aria-pressed', String(button.getAttribute('data-quota-view') === (pooled ? 'pool' : 'single'))); });
       }
-      function renderPoolWindow(window, prefix) {
+      function renderPoolWindow(window, prefix, label) {
         window = window || {};
         var complete = window.complete && window.remaining_percent !== null && window.remaining_percent !== undefined && isFinite(Number(window.remaining_percent));
         var remaining = complete ? clamp(Number(window.remaining_percent), 0, 100) : NaN;
@@ -1422,13 +1428,15 @@
         byId(prefix + 'Bar').style.width = complete ? remaining + '%' : '0%';
         setClass(prefix + 'Bar', 'progress-bar' + (complete && remaining <= 10 ? ' critical' : (complete && remaining <= 30 ? ' warning' : '')));
         var count = window.account_count || 0;
-        setText(prefix + 'Formula', count ? (complete ? '剩余总量 ' : '已知剩余 ') + formatPercent(window.remaining_total_percent) + ' / ' + formatPercent(window.capacity_percent) + ' · ' + (complete ? '已用 ' + formatPercent(window.used_percent) + '%' : '总比例待补全') : '暂无号池成员，请先配置');
-        setText(prefix + 'Coverage', '已读取 ' + (window.available_accounts || 0) + '/' + count + ' 个账号' + (window.stale_accounts ? ' · 含 ' + window.stale_accounts + ' 个最近快照' : '') + (!complete && count ? ' · 数据不完整' : ''));
+        setText(prefix + 'TotalLabel', label + (!complete && count ? '已知剩余总量' : '剩余总量'));
+        setText(prefix + 'Formula', count ? formatPercent(window.remaining_total_percent) + ' / ' + formatPercent(window.capacity_percent) : '—');
+        setText(prefix + 'Used', complete ? formatPercent(window.used_percent) + '%' : '—%');
+        setText(prefix + 'Coverage', count ? '已读取 ' + (window.available_accounts || 0) + '/' + count + ' 个账号' + (window.stale_accounts ? ' · 含 ' + window.stale_accounts + ' 个最近快照' : '') + (!complete ? ' · 数据不完整' : '') : '暂无号池成员');
         setClass(prefix + 'Coverage', 'pool-coverage' + (!complete || window.stale_accounts ? ' incomplete' : ''));
       }
       function renderPoolQuota(view) {
         var pool = view.aggregate || {};
-        renderPoolWindow(pool.five_hour, 'poolFive'); renderPoolWindow(pool.seven_day, 'poolWeek');
+        renderPoolWindow(pool.five_hour, 'poolFive', '5小时'); renderPoolWindow(pool.seven_day, 'poolWeek', '本周');
         setText('poolStatus', pool.fetched_at ? '号池 ' + pool.account_count + ' 个账号 · 汇总 ' + formatDate(pool.fetched_at) : '聚合数据不可用，请刷新');
         var members = accountChoices.filter(function (account) { return (pool.account_ids || []).indexOf(account.id) >= 0; }).map(function (account) { return account.name; });
         setText('poolMembers', '号池成员：' + (members.join('、') || '未选择'));
