@@ -34,7 +34,7 @@
     .card { width:100%; height:100%; overflow:hidden; background:var(--card); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); }
     .overview-card, .detail-card { padding:12px 14px 10px; display:flex; flex-direction:column; justify-content:flex-start; }
     .overview-card { position:relative; padding-bottom:48px; }
-    .quota-view-switch { display:inline-flex; flex:0 0 auto; gap:2px; margin-left:auto; padding:3px; border:1px solid var(--border); border-radius:8px; background:var(--card-muted); }
+    .quota-view-switch { display:inline-flex; flex:0 0 auto; gap:2px; margin-left:10px; padding:3px; border:1px solid var(--border); border-radius:8px; background:var(--card-muted); }
     .quota-view-switch[hidden], #poolQuota[hidden], .overview-card.pool-mode > [data-single-quota] { display:none; }
     .quota-view-switch button { min-height:32px; padding:0 10px; border:0; border-radius:5px; background:transparent; color:var(--muted); font:inherit; font-size:12px; cursor:pointer; }
     .quota-view-switch button[aria-pressed="true"] { background:var(--card); color:var(--accent); box-shadow:0 1px 3px rgba(0,0,0,.08); }
@@ -49,7 +49,7 @@
     .pool-formula { margin-top:10px; font-size:12px; color:var(--text); line-height:1.6; overflow-wrap:anywhere; }
     .pool-coverage { margin-top:3px; color:var(--muted); font-size:11px; line-height:1.5; }
     .pool-coverage.incomplete { color:var(--danger); }
-    .pool-members { margin-top:14px; padding:10px 12px; background:var(--card-muted); border:1px solid var(--border); border-radius:10px; color:var(--muted); font-size:11px; line-height:1.6; overflow-wrap:anywhere; }
+    .pool-members { margin-top:12px; color:var(--muted); font-size:11px; line-height:1.6; overflow-wrap:anywhere; }
     @media (max-width:600px) { .quota-view-switch button { padding:0 6px; font-size:11px; } .pool-window .remaining { font-size:42px; } }
     .detail-card { padding:14px 18px 16px; overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
     .detail-card::-webkit-scrollbar { width:4px; }
@@ -573,7 +573,7 @@
             <article class="pool-window"><div class="eyebrow">号池 · 5小时剩余</div><div id="poolFiveRemaining" class="remaining">—<span>%</span></div><div class="progress-head"><span>聚合剩余</span><strong id="poolFiveProgress">—%</strong></div><div class="progress-track"><div id="poolFiveBar" class="progress-bar"></div></div><div id="poolFiveFormula" class="pool-formula">—</div><div id="poolFiveCoverage" class="pool-coverage">等待数据</div></article>
             <article class="pool-window"><div class="eyebrow">号池 · 本周剩余</div><div id="poolWeekRemaining" class="remaining">—<span>%</span></div><div class="progress-head"><span>聚合剩余</span><strong id="poolWeekProgress">—%</strong></div><div class="progress-track"><div id="poolWeekBar" class="progress-bar"></div></div><div id="poolWeekFormula" class="pool-formula">—</div><div id="poolWeekCoverage" class="pool-coverage">等待数据</div></article>
           </div>
-          <div class="pool-members"><div id="poolMembers">—</div><div>各账号等权，按每个 100% 汇总；详情、重置和提示音仍跟随当前账号。</div></div>
+          <div id="poolMembers" class="pool-members">—</div>
         </div>
         <div class="refresh-status" aria-label="自动刷新倒计时">
           <div class="refresh-head"><span id="refreshLabel">自动刷新</span><strong id="refreshCountdown">05:00</strong></div>
