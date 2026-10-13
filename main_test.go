@@ -353,6 +353,32 @@ func TestQuotaPageConfigurationEntriesAndSharedDeviceComponents(t *testing.T) {
 	}
 }
 
+func TestDeviceDetailLayoutSupportsLegacyWebViewSpacing(t *testing.T) {
+	page := string(indexHTML)
+	for _, test := range []struct {
+		name     string
+		required string
+	}{
+		{"two_column_metric_grid", `#detail .metric-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-column-gap:12px; grid-row-gap:8px; margin:8px 0 0; }`},
+		{"metrics_fill_grid_tracks", `#detail .metric { width:auto; min-width:0; }`},
+		{"three_column_analytics_summary", `.analytics-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); grid-column-gap:8px; margin-top:8px; }`},
+		{"account_section_does_not_shrink", `.detail-account { margin:12px 0 0; flex:0 0 auto; }`},
+		{"account_labels_do_not_shrink", `.detail-account .detail-row span { flex:0 0 auto; }`},
+		{"account_value_spacing", `.detail-account .detail-row strong { margin-left:10px; }`},
+		{"four_column_wide_layout", `#detail .metric-grid { grid-template-columns:repeat(4,minmax(0,1fr)); grid-row-gap:12px; margin-top:18px; }`},
+		{"detail_remains_scrollable", `overflow-x:hidden; overflow-y:auto;`},
+		{"token_chart_preserved", `id="dailyTokenChart"`},
+		{"model_chart_preserved", `id="modelUsageChart"`},
+		{"model_share_preserved", `id="yesterdayModelPieChart"`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if !strings.Contains(page, test.required) {
+				t.Errorf("missing device detail layout rule or component %q", test.required)
+			}
+		})
+	}
+}
+
 func TestAppAPIKeyEndpointReturnsConfiguredKeyAfterAuthentication(t *testing.T) {
 	const appAPIKey = "test-app-key"
 	cfg := Config{AppAPIKey: appAPIKey}
