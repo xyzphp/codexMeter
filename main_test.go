@@ -363,8 +363,8 @@ func TestDeviceDetailLayoutSupportsLegacyWebViewSpacing(t *testing.T) {
 		{"metrics_fill_grid_tracks", `#detail .metric { width:auto; min-width:0; }`},
 		{"three_column_analytics_summary", `.analytics-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); grid-column-gap:8px; margin-top:8px; }`},
 		{"account_section_does_not_shrink", `.detail-account { margin:12px 0 0; flex:0 0 auto; }`},
-		{"account_labels_do_not_shrink", `.detail-account .detail-row span { flex:0 0 auto; }`},
-		{"account_value_spacing", `.detail-account .detail-row strong { margin-left:10px; }`},
+		{"account_labels_do_not_shrink", `.detail-row span { flex:0 0 auto; color:var(--muted); }`},
+		{"account_value_spacing", `.detail-row strong { min-width:0; margin-left:10px;`},
 		{"four_column_wide_layout", `#detail .metric-grid { grid-template-columns:repeat(4,minmax(0,1fr)); grid-row-gap:12px; margin-top:18px; }`},
 		{"detail_remains_scrollable", `overflow-x:hidden; overflow-y:auto;`},
 		{"token_chart_preserved", `id="dailyTokenChart"`},
@@ -374,6 +374,35 @@ func TestDeviceDetailLayoutSupportsLegacyWebViewSpacing(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			if !strings.Contains(page, test.required) {
 				t.Errorf("missing device detail layout rule or component %q", test.required)
+			}
+		})
+	}
+}
+
+func TestDevicePredictionAndAccountLayoutSupportsLegacyWebViewSpacing(t *testing.T) {
+	page := string(indexHTML)
+	for _, test := range []struct {
+		name     string
+		required string
+	}{
+		{"prediction_grid", `#prediction .prediction-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-column-gap:12px; grid-row-gap:8px; margin:10px 0 0; }`},
+		{"prediction_cards_fill_tracks", `.prediction-grid .metric { width:auto; min-width:0; }`},
+		{"prediction_grid_wide", `#prediction .prediction-grid { grid-template-columns:repeat(4,minmax(0,1fr)); grid-row-gap:12px; margin-top:12px; }`},
+		{"prediction_hero_does_not_shrink", `.prediction-hero { flex:0 0 auto;`},
+		{"prediction_footer_does_not_shrink", `.prediction-foot { flex:0 0 auto;`},
+		{"countdown_percentage_spacing", `.prediction-scheduled-percent { margin-left:6px;`},
+		{"calendar_does_not_shrink", `.reset-calendar { flex:0 0 auto; margin-top:12px; }`},
+		{"calendar_legend_spacing", `.reset-calendar-legend-item { display:inline-flex; align-items:center; margin-left:6px; }`},
+		{"account_grid", `.device-accounts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-column-gap:12px; grid-row-gap:12px; flex:0 0 auto; margin-top:12px; }`},
+		{"account_grid_small", `#accounts .device-accounts { grid-template-columns:1fr; }`},
+		{"account_name_does_not_overflow", `.device-account-head strong { min-width:0;`},
+		{"account_switch_does_not_shrink", `.device-account-head button { flex:0 0 auto; margin-left:8px; }`},
+		{"account_refresh_on_left", `.device-accounts-refresh { flex:0 0 auto; margin-left:12px; }`},
+		{"account_picker_mark_spacing", `height:22px; margin-left:14px;`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if !strings.Contains(page, test.required) {
+				t.Errorf("missing legacy-compatible prediction or account layout %q", test.required)
 			}
 		})
 	}
